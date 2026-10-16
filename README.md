@@ -1,5 +1,7 @@
 # EasyVFX — Beautiful Roblox Studio effects, zero code
 
+[![CI](https://github.com/VuxSussy/EasyVFX/actions/workflows/ci.yml/badge.svg)](https://github.com/VuxSussy/EasyVFX/actions/workflows/ci.yml) [![Latest release](https://img.shields.io/github/v/release/VuxSussy/EasyVFX)](https://github.com/VuxSussy/EasyVFX/releases/latest) [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
 EasyVFX is a Roblox Studio plugin that lets people **who don't code** make visual effects (VFX) with clicks only:
 pick an object → click an effect → change colors and drag sliders → choose *when* it plays. Done.
 
@@ -199,13 +201,18 @@ tests/      run.luau (builder+runtime), ui.luau (clicks through the whole GUI), 
 tools/      blender_preview.py, render_snapshot.py, view_textures.py, check.sh
 ```
 
-Tools: [Rojo](https://github.com/rojo-rbx/rojo) 7.4, [Lune](https://github.com/lune-org/lune) 0.8, [luau-lsp](https://github.com/JohnnyMorganz/luau-lsp) (with `globalTypes.d.luau`).
+Tools are pinned in `rokit.toml`: [Rojo](https://github.com/rojo-rbx/rojo) 7.7, [Lune](https://github.com/lune-org/lune) 0.8, [luau-lsp](https://github.com/JohnnyMorganz/luau-lsp) 1.69, [selene](https://github.com/Kampfkarren/selene). Install them with [Rokit](https://github.com/rojo-rbx/rokit), and download the Roblox type definitions once for the type check:
+
+```bash
+rokit install
+curl -fsSL -o globalTypes.d.luau https://raw.githubusercontent.com/JohnnyMorganz/luau-lsp/1.69.0/scripts/globalTypes.d.luau
+```
 
 ```bash
 rojo build default.project.json -o build/EasyVFX.rbxmx   # build the plugin
 lune run tests/run.luau        # 1229 checks: create/update/play/clean up every preset, Basic and HD
-lune run tests/ui.luau         # 856 checks: every button, tab, slider, trigger and the HD card
-tools/check.sh                 # all of the above + strict type check
+lune run tests/ui.luau         # 857 checks: every button, tab, slider, trigger and the HD card
+tools/check.sh                 # all of the above + strict type check (what CI runs)
 
 # Blender previews from runtime data (pip install bpy, or run with blender -b -P)
 lune run tests/snapshot.luau snap.json hd                       # or: basic / add "slash 2,4,6" for a timeline
@@ -213,6 +220,18 @@ python tools/blender_preview.py snap.json out/ pack/textures <Roblox built-in te
 ```
 
 Tests run under Lune with real Roblox Instances from the reflection database (wrong property names or types fail). Engine functions (`Emit`, `Raycast`, GUI events) are mocked. Lighting and the real renderer still need to be checked in Studio.
+
+### Releasing
+
+1. Add a `## [x.y.z]` section to `CHANGELOG.md` and bump `Version` in `src/Plugin/Runtime/EasyVFX.luau` if the runtime changed.
+2. Run `tools/check.sh` and commit the rebuilt `build/EasyVFX.rbxmx` (CI fails if it is stale).
+3. Tag and push: `git tag vx.y.z && git push origin vx.y.z`. The Release workflow re-runs every check and publishes `EasyVFX.rbxmx` + `EasyVFX_Pack.fbx` with the changelog section as notes.
+
+---
+
+## License
+
+[MIT](LICENSE)
 
 ---
 
