@@ -74,7 +74,7 @@ do
 	if ok and result then
 		widget = result
 	else
-		widget = plugin:CreateDockWidgetPluginGui("EasyVFX_Main", widgetInfo)
+		widget = (plugin :: any):CreateDockWidgetPluginGui("EasyVFX_Main", widgetInfo)
 	end
 end
 widget.Name = "EasyVFX"
@@ -476,7 +476,7 @@ local function insert(presetId: string, params: Params?): Instance?
 	if not preset then
 		return nil
 	end
-	local p = if params then table.clone(params) else Builder.defaultParams(presetId)
+	local p: Params = if params then table.clone(params) else Builder.defaultParams(presetId)
 	p.preset = presetId
 	if not params and lang() == "vi" then
 		p.promptText = "Kích hoạt"

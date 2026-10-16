@@ -1,0 +1,8 @@
+# Toolchain for building and testing EasyVFX. Run `rokit install` once.
+# https://github.com/rojo-rbx/rokit
+
+[tools]
+rojo = "rojo-rbx/rojo@7.7.0"
+lune = "lune-org/lune@0.8.9"
+luau-lsp = "JohnnyMorganz/luau-lsp@1.69.0"
+selene = "Kampfkarren/selene@0.31.0"

@@ -16,8 +16,12 @@ echo "== type check (strict)"
 "$ROJO" sourcemap default.project.json -o sourcemap.json
 # The two bootstrap scripts require ReplicatedStorage.EasyVFX, which only exists
 # after the plugin installs it into a place, so that one warning is expected.
-if "$LUAU_LSP" analyze --platform=roblox --definitions="$LUAU_DEFS" --sourcemap=sourcemap.json src 2>&1 \
-	| grep -v "Unknown require: game/ReplicatedStorage/EasyVFX" | grep .; then
+# luau-lsp exits non-zero on any diagnostic, so judge by the filtered output instead.
+analysis=$("$LUAU_LSP" analyze --platform=roblox --definitions="$LUAU_DEFS" --sourcemap=sourcemap.json src 2>&1 || true)
+errors=$(printf '%s\n' "$analysis" \
+	| grep -v -e "Unknown require: game/ReplicatedStorage/EasyVFX" -e '^\[INFO\]' -e '^\[WARN\]' | grep . || true)
+if [ -n "$errors" ]; then
+	printf '%s\n' "$errors"
 	echo "type errors found"
 	exit 1
 fi
