@@ -257,6 +257,207 @@ do
 	check(hdCount >= 7, "enough HD presets")
 end
 
+print("== Spiral, Projectile, Impact, Shake, property sequences")
+do
+	local camera = H.workspace.CurrentCamera
+	if not camera then
+		camera = roblox.Instance.new("Camera")
+		camera.Parent = H.workspace
+		H.workspace.CurrentCamera = camera
+	end
+	camera.CFrame = roblox.CFrame.new(0, 5, 20)
+
+	local function shapeRoot(kind: string, attrs: { [string]: any })
+		local root = roblox.Instance.new("Part")
+		root.Anchored = true
+		root.Transparency = 1
+		root.CFrame = roblox.CFrame.new(0, 3, 0)
+		root.Parent = H.workspace
+		local cfg = roblox.Instance.new("Configuration")
+		cfg:SetAttribute("Kind", kind)
+		for k, v in attrs do
+			cfg:SetAttribute(k, v)
+		end
+		cfg.Parent = root
+		return root
+	end
+	local function countIn(parent, class: string): number
+		local n = 0
+		for _, d in parent:GetDescendants() do
+			if d:IsA(class) then
+				n += 1
+			end
+		end
+		return n
+	end
+	local function live()
+		return (H.workspace.CurrentCamera or H.workspace):FindFirstChild("EasyVFX_Live")
+	end
+
+	-- Spiral: strands * segments beams (+ cores), all sharp geometry, cleaned up
+	H.warnings = {}
+	local spiral = shapeRoot("Spiral", { Count = 3, Turns = 2, Height = 8, Duration = 0.6 })
+	local len = EasyVFX.PlayLocal(spiral)
+	check(math.abs(len - 0.6) < 1e-6, "spiral length " .. len)
+	for _ = 1, 6 do
+		task.wait()
+	end
+	local folder = live()
+	check(folder and countIn(folder, "Beam") == 3 * 16 * 2, "spiral beams " .. (folder and countIn(folder, "Beam") or -1))
+	local widest = 0
+	if folder then
+		for _, b in folder:GetDescendants() do
+			if b:IsA("Beam") then
+				widest = math.max(widest, b.Width0, b.Width1)
+			end
+		end
+	end
+	check(widest > 0.1, "spiral strands are visible mid-way")
+	waitForQuiet(200)
+	check(liveCount() == 0, "spiral cleans up")
+	check(#H.warnings == 0, "spiral no warnings: " .. table.concat(H.warnings, " | "))
+	spiral:Destroy()
+
+	-- Projectile: head travels from Offset towards To along an arc
+	H.warnings = {}
+	local shot = shapeRoot("Projectile", { To = roblox.Vector3.new(0, 0, -30), ArcHeight = 5, Duration = 0.6, Ease = "Linear" })
+	EasyVFX.PlayLocal(shot)
+	local function headPos()
+		local f = live()
+		local best = nil
+		if f then
+			for _, d in f:GetDescendants() do
+				if d:IsA("Part") and d.Material == roblox.Enum.Material.Neon then
+					best = d.CFrame.Position
+				end
+			end
+		end
+		return best
+	end
+	for _ = 1, 9 do -- about half way (test frames and runtime frames are loosely synced)
+		task.wait()
+	end
+	local mid = headPos()
+	check(mid ~= nil and mid.Z < -6 and mid.Z > -24, "projectile part way along Z: " .. tostring(mid))
+	check(mid ~= nil and mid.Y > 3 + 3, "projectile arcs up: " .. tostring(mid))
+	waitForQuiet(200)
+	check(liveCount() == 0, "projectile cleans up")
+	check(#H.warnings == 0, "projectile no warnings: " .. table.concat(H.warnings, " | "))
+	shot:Destroy()
+
+	-- Impact: a ColorCorrectionEffect on the camera, gone afterwards
+	H.warnings = {}
+	local hit = shapeRoot("Impact", { Duration = 0.2, Style = "Mono" })
+	EasyVFX.PlayLocal(hit)
+	task.wait()
+	task.wait()
+	local cc = camera:FindFirstChild("EasyVFX_Impact")
+	check(cc ~= nil and cc:IsA("ColorCorrectionEffect"), "impact frame created on camera")
+	check(cc ~= nil and cc.Saturation < -0.5 and cc.Contrast > 0.5, "mono impact desaturates and punches contrast")
+	for _ = 1, 12 do
+		task.wait()
+	end
+	check(camera:FindFirstChild("EasyVFX_Impact") == nil, "impact frame removed")
+	EasyVFX.PlayLocal(hit)
+	EasyVFX.PlayLocal(hit)
+	task.wait()
+	task.wait()
+	local stacked = 0
+	for _, c in camera:GetChildren() do
+		if c.Name == "EasyVFX_Impact" then
+			stacked += 1
+		end
+	end
+	check(stacked == 1, "impact frames do not stack: " .. stacked)
+	for _ = 1, 12 do
+		task.wait()
+	end
+	local far = shapeRoot("Impact", { Duration = 0.2, Range = 5 })
+	EasyVFX.PlayLocal(far)
+	task.wait()
+	task.wait()
+	check(camera:FindFirstChild("EasyVFX_Impact") == nil, "impact frame skipped out of range")
+	check(#H.warnings == 0, "impact no warnings: " .. table.concat(H.warnings, " | "))
+	hit:Destroy()
+	far:Destroy()
+
+	-- Shake: never touches the editor camera; in a running client it binds a render step
+	local bound: ((number) -> ())? = nil
+	roblox.implementMethod("RunService", "BindToRenderStep", function(_rs, _name, _priority, f)
+		bound = f
+	end)
+	roblox.implementMethod("RunService", "UnbindFromRenderStep", function()
+		bound = nil
+	end)
+	local shake = shapeRoot("Shake", { Magnitude = 2, Duration = 0.3 })
+	check(EasyVFX.PlayLocal(shake) > 0 and bound == nil, "no camera shake in edit mode")
+	H.setMode("client")
+	EasyVFX.PlayLocal(shake)
+	check(bound ~= nil, "client shake binds a render step")
+	local start = camera.CFrame
+	local moved = false
+	for _ = 1, 4 do
+		local f = bound
+		if f then
+			camera.CFrame = start
+			f(1 / 30)
+			moved = moved or (camera.CFrame.Position - start.Position).Magnitude > 1e-4
+		end
+	end
+	check(moved, "shake moves the camera")
+	for _ = 1, 20 do
+		local f = bound
+		if f then
+			f(1 / 30)
+		end
+	end
+	check(bound == nil, "shake unbinds when done")
+	H.setMode("edit")
+	shake:Destroy()
+
+	-- <Property>Sequence attributes animate any property, then restore it.
+	-- (Lune's NumberSequence.new(a, b) ignores b, so build keypoints explicitly.)
+	local function ramp(a: number, b: number)
+		return roblox.NumberSequence.new({ roblox.NumberSequenceKeypoint.new(0, a), roblox.NumberSequenceKeypoint.new(1, b) })
+	end
+	H.warnings = {}
+	local holder = roblox.Instance.new("Part")
+	holder.Anchored = true
+	holder.Parent = H.workspace
+	local glowPart = roblox.Instance.new("Part")
+	glowPart.Transparency = 0.2
+	glowPart.Size = roblox.Vector3.new(2, 2, 2)
+	glowPart:SetAttribute("TransparencySequence", ramp(0, 1))
+	glowPart:SetAttribute("ScaleSequence", ramp(1, 3))
+	glowPart:SetAttribute("EmitDuration", 0.6)
+	glowPart.Parent = holder
+	local beamHolder = roblox.Instance.new("Attachment")
+	beamHolder.Parent = holder
+	local light = roblox.Instance.new("PointLight")
+	light.Brightness = 1
+	light:SetAttribute("BrightnessSequence", ramp(10, 0))
+	light.Parent = holder
+	check(EasyVFX.HasBursts(holder), "sequences count as playable layers")
+	local l = EasyVFX.PlayLocal(holder)
+	check(l >= 0.6, "sequence length " .. l)
+	for _ = 1, 9 do
+		task.wait()
+	end
+	check(math.abs(glowPart.Transparency - 0.5) < 0.1, "transparency half way: " .. glowPart.Transparency)
+	check(glowPart.Size.X > 3 and glowPart.Size.X < 5, "scale half way: " .. glowPart.Size.X)
+	check(light.Brightness > 5 and light.Brightness < 9, "light brightness follows curve: " .. light.Brightness)
+	-- playing again mid-way must not take the animated value as the new original
+	EasyVFX.PlayLocal(holder)
+	for _ = 1, 90 do
+		task.wait()
+	end
+	check(math.abs(glowPart.Transparency - 0.2) < 1e-6, "transparency restored: " .. glowPart.Transparency)
+	check(math.abs(glowPart.Size.X - 2) < 1e-6, "size restored: " .. glowPart.Size.X)
+	check(math.abs(light.Brightness - 1) < 1e-6, "brightness restored: " .. light.Brightness)
+	check(#H.warnings == 0, "sequences no warnings: " .. table.concat(H.warnings, " | "))
+	holder:Destroy()
+end
+
 print("== Server mode forwards to clients")
 H.setMode("server")
 do

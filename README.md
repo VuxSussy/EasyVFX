@@ -8,6 +8,9 @@ pick an object → click an effect → change colors and drag sliders → choose
 ![HD demo](docs/demo-hd.gif)
 *Six HD effects running: the EasyVFX runtime plays them in a simulated environment (Lune) and every frame is re-rendered in Blender Cycles, at half speed. This is an approximation, not a Roblox screen recording. The rocks are green because the simulated ground is grass.*
 
+![EasyVFX in Roblox Studio](docs/studio-showcase.png)
+*Real Roblox Studio screenshot: Crescent Slash, Ground Slam, Explosion, Tornado, Lightning Strike and Charge Up playing at once.*
+
 ![Effect geometry preview](docs/preview-shapes.png)
 *Shapes rebuilt from runtime data (rings, slashes, needles, lightning, crater rocks) by `tools/render_snapshot.py`. An approximate preview, not a Roblox screenshot.*
 
@@ -44,11 +47,11 @@ Each effect is **one invisible Part** named `VFX_…` — move, rotate, duplicat
 
 The panel is in English by default; the **VI** button switches it to Vietnamese.
 
-### 30 built-in effects
+### 34 built-in effects
 
-- **Combat:** Crescent Slash, Slash Flurry, Hit Impact, Ground Slam (crater + flying rocks), Energy Blast, Explosion, Lightning Strike, Shockwave, Weapon Trail.
-- **Magic:** Magic Circle, Heal, Level Up, Power Aura, Portal, Energy Shield, Energy Orb, Sparkles.
-- **Elements:** Fire, Smoke, Frost, Fountain.
+- **Combat:** Fireball, Impact Frame, Crescent Slash, Slash Flurry, Hit Impact, Ground Slam (crater + flying rocks), Energy Blast, Explosion, Lightning Strike, Shockwave, Weapon Trail.
+- **Magic:** Magic Circle, Heal, Level Up, Power Aura, Portal, Energy Shield, Energy Orb, Sparkles, Charge Up.
+- **Elements:** Fire, Smoke, Frost, Fountain, Tornado.
 - **World:** Rain, Snow, Fireflies, Ground Fog, Confetti, Bubbles.
 - **Light:** Laser Beam, Soft Glow, Glowing Outline (Highlight).
 
@@ -68,8 +71,14 @@ Roblox's built-in textures are soft, so EasyVFX builds its crisp parts from **ge
 | **Bolt** | Zig-zag lightning that reshapes every ~0.05 s and flickers | lightning |
 | **Orb** | **Neon / ForceField** part that grows and fades (balls, pillars, beam cores) | explosion, level up, energy blast |
 | **Crater / Debris** | Rocks bursting up in a ring then sinking; rocks thrown on a ballistic path, colored and textured like the ground below | ground slam, explosion |
+| **Spiral** | Helix strands climbing and twisting, tapered at both ends | tornado, charge up |
+| **Projectile** | Neon/ForceField head flying along a Bezier arc with a tapered trail; hit layers fire at the end | fireball |
+| **Shake** | Smooth-noise camera shake with distance falloff (client only, never the editor camera) | fireball, ground slam, explosion, lightning, impact frame |
+| **Impact** | Anime impact frame: a few frames of Flash / Mono / Invert color correction, never stacked | fireball, impact frame |
 
-On top of that, sparks use a square texture stretched along their velocity (`VelocityParallel` + `Squash`) with `LightEmission = 1` for additive glow.
+Chained beams don't use `FaceCamera` (each beam would turn on its own and leave a notch at every joint). Instead the runtime turns the shared attachments towards the camera every frame, so a slash, ring, spiral or trail is one seamless ribbon. On top of that, sparks use a square texture stretched along their velocity (`VelocityParallel` + `Squash`) with `LightEmission = 1` for additive glow.
+
+The full set of rules, with Studio screenshots, is in **[docs/sharp-vfx.md](docs/sharp-vfx.md)**. How the VFX Studio plugin works, and which of its ideas EasyVFX re-implemented, is in [docs/vfx-studio-analysis.md](docs/vfx-studio-analysis.md).
 **Tip:** click **Add Bloom to Lighting** (in Advanced or Help) to make Neon and glowing streaks pop like anime.
 
 ## 3b. HD quality with Blender (v2)
@@ -171,6 +180,8 @@ EasyVFX.SetEnabled(workspace.Torch.VFX_Fire, false)          -- turn always-on l
 
 Choosing the **From a script** trigger shows a ready-to-paste line with the correct path. All effect settings are stored in the Part's `VFX_*` attributes and can be edited in the Properties window.
 
+**Animate anything with attributes.** Any instance inside an effect can carry a `NumberSequence` attribute named `<Property>Sequence`, for example `TransparencySequence`, `BrightnessSequence`, `Width0Sequence`, or `ScaleSequence` (part `Size` / `Model:ScaleTo`). When the effect plays, that property follows the curve over `EmitDuration` (or the emitter lifetime / `AnimDuration` / 1 s), then returns to its value. This is the same convention other Roblox emit tools use, so effects made there play here too.
+
 ---
 
 ## 6. Interface
@@ -189,7 +200,7 @@ Designed with the **UI UX Pro Max** skill (design system *Minimalism & Swiss Sty
 ```
 src/Plugin/
   init.server.luau        plugin: toolbar, dock panel, inserting effects, undo, runtime install
-  Shared/Presets.luau     30 presets (plain data)
+  Shared/Presets.luau     34 presets (plain data)
   Shared/Builder.luau     preset + settings -> instances (updated in place, no flicker)
   Shared/Strings.luau     English / Vietnamese text
   Runtime/EasyVFX.luau    runtime: emit, Ring/Slash/Lines/Bolt/Orb/Debris/Crater, triggers
@@ -210,8 +221,8 @@ curl -fsSL -o globalTypes.d.luau https://raw.githubusercontent.com/JohnnyMorganz
 
 ```bash
 rojo build default.project.json -o build/EasyVFX.rbxmx   # build the plugin
-lune run tests/run.luau        # 1229 checks: create/update/play/clean up every preset, Basic and HD
-lune run tests/ui.luau         # 857 checks: every button, tab, slider, trigger and the HD card
+lune run tests/run.luau        # 1382 checks: create/update/play/clean up every preset, Basic and HD, new shapes
+lune run tests/ui.luau         # 965 checks: every button, tab, slider, trigger and the HD card
 tools/check.sh                 # all of the above + strict type check (what CI runs)
 
 # Blender previews from runtime data (pip install bpy, or run with blender -b -P)

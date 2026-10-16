@@ -200,9 +200,27 @@ def make_canvas(scene, width, height, build):
     return mat
 
 
+def whiten(px):
+    """Every texture is white with the shape in alpha. Cycles writes black RGB into
+    transparent pixels, which Roblox's bilinear filtering and mipmaps smear into a
+    dark rim around every soft edge, so force RGB to white (see
+    tools/fix_texture_edges.py for colored textures)."""
+    px = px.reshape(-1, 4)
+    px[:, :3] = 1.0
+    return px.ravel()
+
+
 def render_to(scene, path):
     scene.render.filepath = path
     bpy.ops.render.render(write_still=True)
+    img = bpy.data.images.load(path)
+    px = np.empty(len(img.pixels), dtype=np.float32)
+    img.pixels.foreach_get(px)
+    img.pixels.foreach_set(whiten(px))
+    img.filepath_raw = path
+    img.file_format = "PNG"
+    img.save()
+    bpy.data.images.remove(img)
 
 
 # --------------------------------------------------------------------------- shapes
@@ -406,7 +424,7 @@ def flipbook(scene, name, tile, grid, frame_builder):
         sheet[y0 : y0 + tile, col * tile : (col + 1) * tile] = px
         bpy.data.images.remove(img)
     out = bpy.data.images.new(name, tile * grid, tile * grid, alpha=True)
-    out.pixels.foreach_set(sheet.ravel())
+    out.pixels.foreach_set(whiten(sheet.ravel()))
     out.filepath_raw = os.path.join(TEX_DIR, f"{name}.png")
     out.file_format = "PNG"
     out.save()

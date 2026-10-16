@@ -28,7 +28,7 @@ local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 
 local EasyVFX = {}
-EasyVFX.Version = 4
+EasyVFX.Version = 5
 EasyVFX.Tag = "EasyVFX"
 -- 0.25 .. 1. Multiplies particle, line and rock counts. Lowered automatically on the
 -- client when the player picks a low graphics level.
@@ -277,7 +277,11 @@ local function newBeam(parent: Instance, a0: Attachment, a1: Attachment, style: 
 	b.Archivable = false
 	b.Attachment0 = a0
 	b.Attachment1 = a1
-	b.FaceCamera = true
+	-- Not FaceCamera: each Beam would turn to the camera on its own, so chained
+	-- beams show a notch at every joint. Instead every step orients the shared
+	-- attachments towards the camera (ribbonFrame), which gives one seamless,
+	-- camera-facing ribbon. Its width follows the attachments' Y axes.
+	b.FaceCamera = false
 	b.Segments = 12
 	b.LightEmission = style.glow
 	b.LightInfluence = 0
@@ -290,6 +294,26 @@ local function newBeam(parent: Instance, a0: Attachment, a1: Attachment, style: 
 	end
 	b.Parent = parent
 	return b
+end
+
+-- Where the camera is, in a carrier's local space.
+local function eyeIn(carrier: BasePart): Vector3
+	local camera = Workspace.CurrentCamera
+	local world = if camera then camera.CFrame.Position else carrier.Position + Vector3.new(0, 1000, 0)
+	return carrier.CFrame:PointToObjectSpace(world)
+end
+
+-- Attachment frame for a camera-facing ribbon: X follows the path (the axis Beam
+-- curves bend along), Y (the width) is perpendicular to both the path and the
+-- view direction. Neighbouring beams share the attachment, so they meet exactly.
+local function ribbonFrame(p: Vector3, tangent: Vector3, eye: Vector3): CFrame
+	local x = if tangent.Magnitude > 1e-5 then tangent.Unit else Vector3.xAxis
+	local y = x:Cross(eye - p)
+	if y.Magnitude < 1e-5 then
+		y = x:Cross(if math.abs(x.Y) < 0.99 then Vector3.yAxis else Vector3.zAxis)
+	end
+	y = y.Unit
+	return CFrame.fromMatrix(p, x, y, x:Cross(y))
 end
 
 -- Random perpendicular basis for a direction.
@@ -398,11 +422,12 @@ Shapes.Ring = function(cfg, ctx)
 			local r = math.max(0.01, lerp(r0, r1, e))
 			local w = math.max(0, lerp(w0, w1, e))
 			local rot = math.rad(spin) * alpha
+			local eye = eyeIn(carrier)
 			for k = 1, 4 do
 				local th = (k - 1) * math.pi / 2 + rot
 				local p = Vector3.new(math.cos(th) * r, 0, math.sin(th) * r)
 				local t = Vector3.new(-math.sin(th), 0, math.cos(th))
-				atts[k].CFrame = CFrame.fromMatrix(p, t, Vector3.yAxis)
+				atts[k].CFrame = ribbonFrame(p, t, eye)
 			end
 			local c = r * KAPPA * math.tan(math.pi / 8)
 			local tr = NumberSequence.new(fadeAt(style, alpha))
@@ -474,14 +499,14 @@ Shapes.Slash = function(cfg, ctx)
 			local s = span / N
 			local c = r * KAPPA * math.tan(s / 4)
 			carrier.CFrame = cf * CFrame.Angles(0, lerp(-sweep / 2, sweep / 2, e), 0)
+			local eye = eyeIn(carrier)
 			for k = 0, N do
 				local th = start + s * k
 				local p = Vector3.new(math.cos(th) * r, 0, math.sin(th) * r)
 				local t = Vector3.new(-math.sin(th), 0, math.cos(th))
-				atts[k + 1].CFrame = CFrame.fromMatrix(p, t, Vector3.yAxis)
+				atts[k + 1].CFrame = ribbonFrame(p, t, eye)
 			end
 			local base_t = fadeAt(style, alpha)
-			local color = ColorSequence.new(style.color0, style.color1)
 			for k = 1, N do
 				-- k = N is the leading edge: widest near the head, sharp at both tips
 				local f0 = (k - 1) / N
@@ -494,7 +519,8 @@ Shapes.Slash = function(cfg, ctx)
 				b.CurveSize0, b.CurveSize1 = c, c
 				b.Width0, b.Width1 = w0, w1
 				b.Transparency = NumberSequence.new(t0, t1)
-				b.Color = color
+				-- One gradient across all segments; a full gradient per segment shows bands.
+				b.Color = ColorSequence.new(style.color1:Lerp(style.color0, f0), style.color1:Lerp(style.color0, f1))
 				local cb = cores[k]
 				if cb then
 					cb.CurveSize0, cb.CurveSize1 = c, c
@@ -552,9 +578,10 @@ Shapes.Lines = function(cfg, ctx)
 			local e = ease(alpha, style.ease)
 			local tail = lerp(d0, far, e)
 			local head = tail + len * (1 - alpha) ^ 0.6
-			a0.CFrame = CFrame.new(dir * tail)
-			a1.CFrame = CFrame.new(dir * ((tail + head) / 2))
-			a2.CFrame = CFrame.new(dir * head)
+			local eye = eyeIn(carrier)
+			a0.CFrame = ribbonFrame(dir * tail, dir, eye)
+			a1.CFrame = ribbonFrame(dir * ((tail + head) / 2), dir, eye)
+			a2.CFrame = ribbonFrame(dir * head, dir, eye)
 			local tr = NumberSequence.new(fadeAt(style, alpha))
 			local color = ColorSequence.new(style.color0:Lerp(style.color1, e))
 			b1.Width0, b1.Width1 = 0, width
@@ -623,13 +650,14 @@ Shapes.Bolt = function(cfg, ctx)
 		end
 		local timer = math.huge
 		local sideOffset = (u * ctx.rng:NextNumber(-1, 1) + v * ctx.rng:NextNumber(-1, 1)) * jitter * i
+		local pts: { Vector3 } = {}
 		local function reshape()
 			for k = 0, segments do
 				local f = k / segments
 				local p = from:Lerp(to, f)
 				local amount = math.sin(math.pi * f) * jitter
 				local off = (u * ctx.rng:NextNumber(-1, 1) + v * ctx.rng:NextNumber(-1, 1)) * amount
-				atts[k + 1].CFrame = CFrame.new(p + off + sideOffset * math.sin(math.pi * f))
+				pts[k + 1] = p + off + sideOffset * math.sin(math.pi * f)
 			end
 		end
 		local function step(alpha: number, dt: number)
@@ -637,6 +665,13 @@ Shapes.Bolt = function(cfg, ctx)
 			if timer >= flicker then
 				timer = 0
 				reshape()
+			end
+			-- Mitered joints: each corner faces halfway between its two segments.
+			local eye = eyeIn(carrier)
+			for k = 1, segments + 1 do
+				local prev = pts[math.max(1, k - 1)]
+				local nxt = pts[math.min(segments + 1, k + 1)]
+				atts[k].CFrame = ribbonFrame(pts[k], nxt - prev, eye)
 			end
 			local tr = fadeAt(style, alpha)
 			if ctx.rng:NextNumber() < 0.15 then
@@ -802,6 +837,437 @@ Shapes.Crater = function(cfg, ctx)
 		end
 	end)
 	return delay + duration
+end
+
+-- 0 outside [lo, hi], 1 inside, with a soft edge of `soft` on both sides.
+local function window(f: number, lo: number, hi: number, soft: number): number
+	local a = math.clamp((f - lo) / soft, 0, 1)
+	local b = math.clamp((hi - f) / soft, 0, 1)
+	return math.min(a, b)
+end
+
+-- Twisting strands climbing a helix: tornadoes, charge-ups, vortex portals.
+-- Pure geometry (curved Beams), so it stays razor sharp at any distance.
+Shapes.Spiral = function(cfg, ctx)
+	local strands = math.clamp(math.floor(num(cfg, "Count", 3)), 1, 8)
+	local delay = num(cfg, "Delay", 0)
+	local duration = num(cfg, "Duration", 0.9)
+	local turns = math.clamp(num(cfg, "Turns", 2), 0.25, 8)
+	local height = num(cfg, "Height", 8)
+	local r0, r1 = num(cfg, "Radius0", 1), num(cfg, "Radius1", 3)
+	local width = num(cfg, "Width", 0.5)
+	local spin = math.rad(num(cfg, "Spin", 360))
+	local trail = math.clamp(num(cfg, "TrailLength", 0.55), 0.05, 1)
+	local style = readStyle(cfg)
+	local base = ctx.origin * CFrame.new(vec(cfg, "Offset", Vector3.zero))
+	if bool(cfg, "Ground", false) then
+		base = snapToGround(base, ctx.ignore)
+	end
+	base *= rad(vec(cfg, "Tilt", Vector3.zero))
+	local N = math.clamp(math.floor(turns * 8 + 0.5), 4, 32)
+	local dTheta = turns * 2 * math.pi / N
+
+	local carrier = newPart(base)
+	local strandsData = {}
+	for s = 1, strands do
+		local atts: { Attachment } = {}
+		local beams: { Beam } = {}
+		local cores: { Beam } = {}
+		for k = 0, N do
+			atts[k + 1] = newAttachment(carrier)
+		end
+		for k = 1, N do
+			beams[k] = newBeam(carrier, atts[k], atts[k + 1], style, false)
+			if style.core then
+				cores[k] = newBeam(carrier, atts[k], atts[k + 1], style, true)
+			end
+		end
+		table.insert(strandsData, { atts = atts, beams = beams, cores = cores, phase = (s - 1) / strands * 2 * math.pi })
+	end
+
+	local function step(alpha: number)
+		local e = ease(alpha, style.ease)
+		-- The head climbs to the top, then the tail follows and the strand is gone.
+		local head = math.min(1, alpha / 0.6) * (1 + trail)
+		local tail = head - trail
+		local rot = spin * e
+		local tr = fadeAt(style, alpha)
+		local color = ColorSequence.new(style.color0:Lerp(style.color1, e))
+		local eye = eyeIn(carrier)
+		for _, sd in strandsData do
+			for k = 0, N do
+				local f = k / N
+				local th = sd.phase + rot + dTheta * k
+				local r = lerp(r0, r1, f)
+				local p = Vector3.new(math.cos(th) * r, height * f, math.sin(th) * r)
+				local dr = (r1 - r0) / N
+				local tangent = Vector3.new(
+					-math.sin(th) * r * dTheta + math.cos(th) * dr,
+					height / N,
+					math.cos(th) * r * dTheta + math.sin(th) * dr
+				)
+				sd.atts[k + 1].CFrame = ribbonFrame(p, tangent, eye)
+			end
+			local c = lerp(r0, r1, 0.5) * KAPPA * math.tan(dTheta / 4)
+			for k = 1, N do
+				local f0, f1 = (k - 1) / N, k / N
+				local v0 = window(f0, tail, head, 0.12)
+				local v1 = window(f1, tail, head, 0.12)
+				-- Taper towards the strand's tail and head, and to a point at the top.
+				local w0 = width * math.sin(math.pi * math.clamp((f0 - tail) / trail, 0, 1)) * v0 * math.min(1, (1 - f0) / 0.15)
+				local w1 = width * math.sin(math.pi * math.clamp((f1 - tail) / trail, 0, 1)) * v1 * math.min(1, (1 - f1) / 0.15)
+				local t0, t1 = lerp(1, tr, v0), lerp(1, tr, v1)
+				local b = sd.beams[k]
+				b.CurveSize0, b.CurveSize1 = c * lerp(r0, r1, f0) / lerp(r0, r1, 0.5), c * lerp(r0, r1, f1) / lerp(r0, r1, 0.5)
+				b.Width0, b.Width1 = w0, w1
+				b.Transparency = NumberSequence.new(t0, t1)
+				b.Color = color
+				local cb = sd.cores[k]
+				if cb then
+					cb.CurveSize0, cb.CurveSize1 = b.CurveSize0, b.CurveSize1
+					cb.Width0, cb.Width1 = w0 * 0.3, w1 * 0.3
+					cb.Transparency = b.Transparency
+				end
+			end
+		end
+	end
+	step(0)
+	addAnim(delay, duration, function()
+		carrier.Parent = liveFolder()
+	end, step, function()
+		carrier:Destroy()
+	end)
+	return delay + duration
+end
+
+-- A glowing ball flying along an arc with a tapered ribbon behind it (fireballs,
+-- thrown energy, homing shots). Pair it with Ring/Lines layers whose Delay equals
+-- this Duration and whose Offset equals To for the hit.
+Shapes.Projectile = function(cfg, ctx)
+	local delay = num(cfg, "Delay", 0)
+	local duration = num(cfg, "Duration", 0.6)
+	local from = vec(cfg, "Offset", Vector3.zero)
+	local to = vec(cfg, "To", Vector3.new(0, 0, -30))
+	local arcHeight = num(cfg, "ArcHeight", 4)
+	local headSize = num(cfg, "HeadSize", 1.2)
+	local width = num(cfg, "Width", 0.9)
+	local span = math.clamp(num(cfg, "TrailLength", 0.25), 0.02, 0.9)
+	local K = 10
+	local style = readStyle(cfg)
+	local cf = ctx.origin * rad(vec(cfg, "Tilt", Vector3.zero))
+	local mid = from:Lerp(to, 0.5)
+	local dir = to - from
+	local upish = if dir.Magnitude > 0.01 and math.abs(dir.Unit.Y) > 0.95 then Vector3.xAxis else Vector3.yAxis
+	local control = mid + upish * arcHeight * 2 -- quadratic Bezier peak = arcHeight
+	local function at(t: number): Vector3
+		local u = 1 - t
+		return from * (u * u) + control * (2 * u * t) + to * (t * t)
+	end
+
+	local carrier = newPart(cf)
+	local core = newPart(cf)
+	core.Shape = Enum.PartType.Ball
+	core.Material = Enum.Material.Neon
+	core.Color = style.coreColor
+	core.Parent = carrier
+	local halo = newPart(cf)
+	halo.Shape = Enum.PartType.Ball
+	halo.Material = Enum.Material.ForceField
+	halo.Color = style.color0
+	halo.Parent = carrier
+	local atts: { Attachment } = {}
+	local beams: { Beam } = {}
+	local cores: { Beam } = {}
+	for j = 0, K do
+		atts[j + 1] = newAttachment(carrier)
+	end
+	for j = 1, K do
+		beams[j] = newBeam(carrier, atts[j], atts[j + 1], style, false)
+		if style.core then
+			cores[j] = newBeam(carrier, atts[j], atts[j + 1], style, true)
+		end
+	end
+
+	local total = duration * (1 + span)
+	local function step(alpha: number)
+		local s = alpha * (1 + span)
+		local headT = ease(math.min(1, s), style.ease)
+		local arrived = s >= 1
+		local p = at(headT)
+		core.CFrame = cf * CFrame.new(p)
+		halo.CFrame = core.CFrame
+		local pulse = 1 + 0.12 * math.sin(alpha * 60)
+		core.Size = Vector3.one * (if arrived then 0.05 else headSize * 0.55 * pulse)
+		halo.Size = Vector3.one * (if arrived then 0.05 else headSize * pulse)
+		core.Transparency = if arrived then 1 else style.fade0
+		halo.Transparency = if arrived then 1 else lerp(style.fade0, 1, 0.35)
+		local eye = eyeIn(carrier)
+		for j = 0, K do
+			local t = math.clamp(s - span * j / K, 0, 1)
+			local pt = at(ease(t, style.ease))
+			local ahead = at(ease(math.min(1, t + 0.01), style.ease))
+			local behind = at(ease(math.max(0, t - 0.01), style.ease))
+			atts[j + 1].CFrame = ribbonFrame(pt, ahead - behind, eye)
+		end
+		local fade = fadeAt(style, math.max(0, s - 1) / span)
+		for j = 1, K do
+			local f0, f1 = (j - 1) / K, j / K
+			local b = beams[j]
+			b.Width0, b.Width1 = width * (1 - f0) ^ 1.5, width * (1 - f1) ^ 1.5
+			b.Transparency = NumberSequence.new(lerp(fade, 1, f0), lerp(fade, 1, f1))
+			b.Color = ColorSequence.new(style.color0:Lerp(style.color1, f0), style.color0:Lerp(style.color1, f1))
+			local cb = cores[j]
+			if cb then
+				cb.Width0, cb.Width1 = b.Width0 * 0.35, b.Width1 * 0.35
+				cb.Transparency = b.Transparency
+			end
+		end
+	end
+	step(0)
+	addAnim(delay, total, function()
+		carrier.Parent = liveFolder()
+	end, step, function()
+		carrier:Destroy()
+	end)
+	return delay + total
+end
+
+-- Camera shake. Every running shake adds smooth noise to the camera right after
+-- the camera scripts move it, and fades with distance from the effect.
+type Shake = { t: number, delay: number, duration: number, magnitude: number, roughness: number,
+	fadeIn: number, fadeOut: number, position: Vector3, range: number, seed: number, rotation: number }
+local shakes: { Shake } = {}
+local shakeBound = false
+
+local function shakeOffset(dt: number): CFrame
+	local camera = Workspace.CurrentCamera
+	if not camera then
+		return CFrame.identity
+	end
+	local pos, rot = Vector3.zero, Vector3.zero
+	local i = 1
+	while i <= #shakes do
+		local s = shakes[i]
+		s.t += dt
+		local life = s.t - s.delay
+		if life >= s.duration then
+			shakes[i] = shakes[#shakes]
+			shakes[#shakes] = nil
+		else
+			if life >= 0 then
+				local env = math.min(1, life / math.max(1e-3, s.fadeIn))
+				env = math.min(env, math.clamp((s.duration - life) / math.max(1e-3, s.fadeOut), 0, 1))
+				local dist = (camera.CFrame.Position - s.position).Magnitude
+				local fall = math.clamp(1 - dist / s.range, 0, 1)
+				local amount = s.magnitude * env * fall * fall
+				local x = life * s.roughness
+				local n = Vector3.new(
+					math.noise(x, s.seed, 0.5),
+					math.noise(s.seed, x, 1.5),
+					math.noise(2.5, s.seed, x)
+				)
+				pos += n * amount * 0.15
+				rot += n * amount * s.rotation
+			end
+			i += 1
+		end
+	end
+	return CFrame.new(pos) * CFrame.Angles(math.rad(rot.X), math.rad(rot.Y), math.rad(rot.Z))
+end
+
+local function ensureShakeLoop()
+	if shakeBound then
+		return
+	end
+	shakeBound = true
+	RunService:BindToRenderStep("EasyVFX_Shake", Enum.RenderPriority.Camera.Value + 1, function(dt)
+		local camera = Workspace.CurrentCamera
+		if #shakes == 0 then
+			RunService:UnbindFromRenderStep("EasyVFX_Shake")
+			shakeBound = false
+			return
+		end
+		if camera then
+			camera.CFrame *= shakeOffset(dt)
+		end
+	end)
+end
+
+Shapes.Shake = function(cfg, ctx)
+	local delay = num(cfg, "Delay", 0)
+	local duration = num(cfg, "Duration", 0.5)
+	-- Never shake the Studio editor camera: only in a running game, on a client.
+	if RunService:IsRunning() and RunService:IsClient() then
+		table.insert(shakes, {
+			t = 0,
+			delay = delay,
+			duration = duration,
+			magnitude = num(cfg, "Magnitude", 1) * ctx.quality ^ 0.5,
+			roughness = num(cfg, "Roughness", 14),
+			fadeIn = num(cfg, "FadeIn", 0.04),
+			fadeOut = num(cfg, "FadeOut", duration * 0.7),
+			position = (ctx.origin * CFrame.new(vec(cfg, "Offset", Vector3.zero))).Position,
+			range = num(cfg, "Range", 80),
+			seed = ctx.rng:NextNumber(0, 1000),
+			rotation = num(cfg, "Rotation", 1),
+		})
+		ensureShakeLoop()
+	end
+	return delay + duration
+end
+
+-- Impact frame: a few frames of full-screen color correction on the hit, the
+-- anime "flash". Style = Flash (bright tint), Mono (black & white punch) or
+-- Invert (negative frame).
+local impactToken = 0
+
+Shapes.Impact = function(cfg, ctx)
+	local delay = num(cfg, "Delay", 0)
+	local duration = num(cfg, "Duration", 0.12)
+	local styleName = str(cfg, "Style", "Flash")
+	local strength = math.clamp(num(cfg, "Strength", 1), 0, 2)
+	local tint = if bool(cfg, "UseColor", true) then col(cfg, "Color0", Color3.new(1, 1, 1)) else Color3.new(1, 1, 1)
+	local range = num(cfg, "Range", 120)
+	local origin = (ctx.origin * CFrame.new(vec(cfg, "Offset", Vector3.zero))).Position
+	local target = { brightness = 0.25, contrast = 0.3, saturation = 0.2 }
+	if styleName == "Mono" then
+		target = { brightness = 0.1, contrast = 1.2, saturation = -1 }
+	elseif styleName == "Invert" then
+		target = { brightness = 0, contrast = -2, saturation = -1 }
+		tint = Color3.new(1, 1, 1)
+	end
+	local cc: ColorCorrectionEffect? = nil
+	local myToken = 0
+	local function current(): ColorCorrectionEffect?
+		return if impactToken == myToken then cc else nil
+	end
+	addAnim(delay, duration, function()
+		local camera = Workspace.CurrentCamera
+		if not camera or (camera.CFrame.Position - origin).Magnitude > range then
+			return
+		end
+		-- Impact frames never stack: the newest one replaces any still showing.
+		local previous = camera:FindFirstChild("EasyVFX_Impact")
+		if previous then
+			previous:Destroy()
+		end
+		local effect = Instance.new("ColorCorrectionEffect")
+		effect.Name = "EasyVFX_Impact"
+		effect.Archivable = false
+		effect.Parent = camera
+		cc = effect
+		impactToken += 1
+		myToken = impactToken
+	end, function(alpha)
+		local effect = current()
+		if not effect then
+			return -- not shown (out of range) or replaced by a newer impact
+		end
+		-- Hold for the first 60%, then snap back quickly.
+		local k = strength * (if alpha < 0.6 then 1 else (1 - (alpha - 0.6) / 0.4) ^ 2)
+		effect.Brightness = target.brightness * k
+		effect.Contrast = target.contrast * (if styleName == "Invert" then (if alpha < 0.6 then 1 else 0) else k)
+		effect.Saturation = target.saturation * k
+		effect.TintColor = Color3.new(1, 1, 1):Lerp(tint, math.min(1, k))
+	end, function()
+		local effect = current()
+		if effect then
+			effect:Destroy()
+		end
+	end)
+	return delay + duration
+end
+
+------------------------------------------------------------------------------------
+-- Property sequences: any instance inside an effect can carry a NumberSequence
+-- attribute named <Property>Sequence (TransparencySequence, BrightnessSequence,
+-- Width0Sequence, ScaleSequence...). When the effect plays, that property follows
+-- the curve over EmitDuration (or the emitter lifetime / AnimDuration / 1 s) and
+-- then goes back to its value. Same convention as other Roblox emit tools.
+------------------------------------------------------------------------------------
+
+local function sampleSequence(seq: NumberSequence, t: number, jitter: number): number
+	local kps = seq.Keypoints
+	if t <= kps[1].Time then
+		return kps[1].Value + kps[1].Envelope * jitter
+	end
+	for i = 1, #kps - 1 do
+		local a, b = kps[i], kps[i + 1]
+		if t <= b.Time then
+			local f = if b.Time - a.Time > 1e-6 then (t - a.Time) / (b.Time - a.Time) else 1
+			return lerp(a.Value, b.Value, f) + lerp(a.Envelope, b.Envelope, f) * jitter
+		end
+	end
+	local last = kps[#kps]
+	return last.Value + last.Envelope * jitter
+end
+
+local function playSequences(inst: Instance, ctx: Ctx): number
+	local longest = 0
+	for attrName, value in inst:GetAttributes() do
+		if typeof(value) ~= "NumberSequence" or #attrName <= 8 or attrName:sub(-8) ~= "Sequence" then
+			continue
+		end
+		local prop = attrName:sub(1, -9)
+		local isScale = prop == "Scale"
+		local okRead, current = pcall(function()
+			return if isScale then nil else (inst :: any)[prop]
+		end)
+		if not isScale and (not okRead or (type(current) ~= "number" and typeof(current) ~= "NumberRange")) then
+			continue
+		end
+		-- The untouched value and a play counter live in attributes, so overlapping
+		-- plays (or a preview cut short) never mistake a mid-animation value for it.
+		local baseName, tokenName = "VFXBase_" .. prop, "VFXSeq_" .. prop
+		local original: any = inst:GetAttribute(baseName)
+		if original == nil then
+			original = if isScale then (if inst:IsA("BasePart") then inst.Size elseif inst:IsA("Model") then inst:GetScale() else nil) else current
+			if original == nil then
+				continue
+			end
+			inst:SetAttribute(baseName, original)
+		end
+		local token = num(inst, tokenName, 0) + 1
+		inst:SetAttribute(tokenName, token)
+		local function mine(): boolean
+			return inst.Parent ~= nil and inst:GetAttribute(tokenName) == token
+		end
+		local delay = num(inst, "EmitDelay", 0)
+		local duration = num(inst, "EmitDuration", 0)
+		if duration <= 0 then
+			duration = if inst:IsA("ParticleEmitter") then inst.Lifetime.Max else num(inst, "AnimDuration", 1)
+		end
+		local jitter = ctx.rng:NextNumber(-1, 1)
+		local seq = value :: NumberSequence
+		local function apply(v: number?)
+			pcall(function()
+				if isScale then
+					if inst:IsA("BasePart") then
+						inst.Size = if v then (original :: Vector3) * math.max(0.001, v) else original
+					elseif inst:IsA("Model") then
+						inst:ScaleTo(if v then (original :: number) * math.max(0.001, v) else original)
+					end
+				elseif typeof(original) == "NumberRange" then
+					(inst :: any)[prop] = if v then NumberRange.new(v) else original
+				else
+					(inst :: any)[prop] = if v then v else original
+				end
+			end)
+		end
+		addAnim(delay, duration, nil, function(alpha)
+			if mine() then
+				apply(sampleSequence(seq, alpha, jitter))
+			end
+		end, function()
+			if mine() then
+				apply(nil)
+				inst:SetAttribute(baseName, nil)
+				inst:SetAttribute(tokenName, nil)
+			end
+		end)
+		longest = math.max(longest, delay + duration)
+	end
+	return longest
 end
 
 ------------------------------------------------------------------------------------
@@ -971,8 +1437,9 @@ function EasyVFX.PlayLocal(target: Instance | string, at: CFrame?): number
 		end
 	end
 
-	local length = 0
+	local length = playSequences(root, ctx)
 	for _, d in root:GetDescendants() do
+		length = math.max(length, playSequences(d, ctx))
 		local delay = num(d, "EmitDelay", 0)
 		local duration = d:GetAttribute("EmitDuration")
 		if d:IsA("ParticleEmitter") then
@@ -1013,7 +1480,7 @@ function EasyVFX.PlayLocal(target: Instance | string, at: CFrame?): number
 		elseif d:IsA("BasePart") then
 			if d:GetAttribute("VFX_Mesh") then
 				length = math.max(length, playMesh(d, ctx))
-			elseif type(duration) == "number" and duration > 0 then
+			elseif type(duration) == "number" and duration > 0 and d:GetAttribute("TransparencySequence") == nil then
 				pulse(d, delay, duration)
 				length = math.max(length, delay + duration)
 			end
@@ -1053,6 +1520,11 @@ function EasyVFX.HasBursts(root: Instance): boolean
 		end
 		if d:IsA("Configuration") and d:GetAttribute("Kind") ~= nil then
 			return true
+		end
+		for name, value in d:GetAttributes() do
+			if typeof(value) == "NumberSequence" and name:sub(-8) == "Sequence" then
+				return true
+			end
 		end
 	end
 	return false

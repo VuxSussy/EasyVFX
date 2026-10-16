@@ -68,9 +68,10 @@ Builder.Attributes = ATTRS
 local SIZE_KEYS = {
 	"Radius0", "Radius1", "Width0", "Width1", "Radius", "Width", "Distance0", "Distance1",
 	"Length", "Jitter", "Size0", "Size1", "SizeMin", "SizeMax", "Force",
+	"Height", "ArcHeight", "HeadSize",
 }
 local VECTOR_SIZE_KEYS = { "Step", "Offset", "From", "To" }
-local TIME_KEYS = { "Delay", "Duration", "Stagger" }
+local TIME_KEYS = { "Delay", "Duration", "Stagger", "FadeIn", "FadeOut" }
 local COUNTED_KINDS = { Lines = true, Debris = true, Crater = true }
 
 ------------------------------------------------------------------------------------

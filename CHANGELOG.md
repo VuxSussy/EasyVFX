@@ -2,6 +2,28 @@
 
 All notable changes to EasyVFX are listed here. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### New ways to make effects
+- `Spiral` shape: twisting helix strands made of beams (tornadoes, charge-ups, vortexes).
+- `Projectile` shape: a glowing head flying along an arc with a tapered trail; pair it with hit layers.
+- `Shake` shape: camera shake with fade in/out and distance falloff. Client only; never moves the Studio editor camera.
+- `Impact` shape: anime impact frames (`Flash`, `Mono`, `Invert`), local to each client and never stacked.
+- `<Property>Sequence` attributes: any instance inside an effect can animate a numeric property (or `Scale`) with a NumberSequence. This is the same convention VFX Studio uses, so its effects play in EasyVFX.
+- New presets: Fireball, Impact Frame, Tornado, Charge Up. Ground Slam, Explosion and Lightning Strike now shake the camera.
+
+### Sharper effects
+- Chained beams no longer use `FaceCamera`. The runtime turns their shared attachments towards the camera every frame, which removes the notch at every joint of slashes, rings, needles, lightning (now with mitered corners), spirals and trails.
+- Slash and projectile gradients run across the whole ribbon instead of restarting on every segment.
+- Pack textures are edge-padded: no more black RGB under transparent pixels bleeding into soft edges (`tools/fix_texture_edges.py`; the Blender script now writes clean textures). The PNGs also shrank from 3.5 MB to 1.5 MB. `pack/EasyVFX_Pack.fbx` still embeds the old textures until it is re-rendered with Blender; use the PNGs (Bulk Import + Paste IDs) for the clean ones.
+
+### Fixes
+- The template copies of `EasyVFXServer` / `EasyVFXClient` inside the plugin ran during playtests despite `Enabled = false`. They started the runtime a second time on clients and errored on the server. They now do nothing while inside the plugin.
+
+### Docs
+- `docs/sharp-vfx.md`: rules for crisp, non-pixelated Roblox VFX, with Studio screenshots.
+- `docs/vfx-studio-analysis.md`: how the VFX Studio plugin works and what EasyVFX re-implemented.
+
 ## [1.0.0] - 2026-10-16
 
 First public release.
