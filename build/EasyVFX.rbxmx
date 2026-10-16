@@ -1,0 +1,5700 @@
+<roblox version="4">
+  <Item class="Script" referent="0">
+    <Properties>
+      <string name="Name">EasyVFX</string>
+      <token name="RunContext">0</token>
+      <string name="Source"><![CDATA[--!strict
+--[[
+	EasyVFX — no-code visual effects for Roblox Studio.
+
+	Plugin entry point: toolbar button, dock panel, inserting effects where the user
+	is looking or onto the selected object, undo/redo, and installing the small
+	runtime that plays effects in game.
+]]
+
+local ChangeHistoryService = game:GetService("ChangeHistoryService")
+local Lighting = game:GetService("Lighting")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local Selection = game:GetService("Selection")
+local ServerScriptService = game:GetService("ServerScriptService")
+local StarterPlayer = game:GetService("StarterPlayer")
+local Workspace = game:GetService("Workspace")
+
+if not RunService:IsEdit() then
+	return -- only in edit mode, not in Play test sessions
+end
+
+local Presets = require(script.Shared.Presets)
+local Builder = require(script.Shared.Builder)
+local Strings = require(script.Shared.Strings)
+local Runtime = require(script.Runtime.EasyVFX)
+local App = require(script.UI.App)
+
+type Params = Builder.Params
+
+local HUGE_PART = 64 -- parts bigger than this (baseplates, terrain-like floors) are treated as ground
+
+local function setting(key: string): any
+	local ok, value = pcall(function()
+		return plugin:GetSetting(key)
+	end)
+	return if ok then value else nil
+end
+
+local function setSetting(key: string, value: any)
+	pcall(function()
+		plugin:SetSetting(key, value)
+	end)
+end
+
+local function lang(): string
+	return if setting("EasyVFX_Lang") == "en" then "en" else "vi"
+end
+
+local function L(key: string): string
+	local table_ = (Strings :: any)[lang()] or Strings.vi
+	return table_[key] or key
+end
+
+------------------------------------------------------------------------------------
+-- Toolbar + panel
+------------------------------------------------------------------------------------
+
+local toolbar = plugin:CreateToolbar("EasyVFX")
+local button = toolbar:CreateButton("EasyVFXOpen", L("toolbarTip"), "", L("toolbar"))
+button.ClickableWhenViewportHidden = true
+
+local widgetInfo = DockWidgetPluginGuiInfo.new(Enum.InitialDockState.Right, false, false, 340, 640, 300, 420)
+local widget: DockWidgetPluginGui
+do
+	local ok, result = pcall(function()
+		return (plugin :: any):CreateDockWidgetPluginGuiAsync("EasyVFX_Main", widgetInfo)
+	end)
+	if ok and result then
+		widget = result
+	else
+		widget = plugin:CreateDockWidgetPluginGui("EasyVFX_Main", widgetInfo)
+	end
+end
+widget.Name = "EasyVFX"
+widget.Title = "EasyVFX"
+widget.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+------------------------------------------------------------------------------------
+-- Undo / redo
+------------------------------------------------------------------------------------
+
+local openRecording: string? = nil
+
+local function finishEdit(commit: boolean)
+	if openRecording then
+		ChangeHistoryService:FinishRecording(
+			openRecording,
+			if commit then Enum.FinishRecordingOperation.Commit else Enum.FinishRecordingOperation.Cancel
+		)
+		openRecording = nil
+	end
+end
+
+local function beginEdit(name: string)
+	if openRecording then
+		return
+	end
+	openRecording = ChangeHistoryService:TryBeginRecording("EasyVFX: " .. name)
+end
+
+local function record(name: string, fn: () -> any): any
+	finishEdit(true)
+	local id = ChangeHistoryService:TryBeginRecording("EasyVFX: " .. name)
+	local ok, result = pcall(fn)
+	if id then
+		ChangeHistoryService:FinishRecording(
+			id,
+			if ok then Enum.FinishRecordingOperation.Commit else Enum.FinishRecordingOperation.Cancel
+		)
+	end
+	if not ok then
+		warn("[EasyVFX] " .. tostring(result))
+		return nil
+	end
+	return result
+end
+
+------------------------------------------------------------------------------------
+-- Runtime install (one time per place)
+------------------------------------------------------------------------------------
+
+local function ensureRuntime(): string?
+	local message: string? = nil
+	local template = script.Runtime
+	local existing = ReplicatedStorage:FindFirstChild("EasyVFX")
+	if not existing or existing:GetAttribute("EasyVFXVersion") ~= Runtime.Version then
+		message = if existing then "runtimeUpdated" else "runtimeInstalled"
+		if existing then
+			existing:Destroy()
+		end
+		local module = template.EasyVFX:Clone()
+		module:SetAttribute("EasyVFXVersion", Runtime.Version)
+		module.Parent = ReplicatedStorage
+	end
+	if not ServerScriptService:FindFirstChild("EasyVFXServer") then
+		local server = template.EasyVFXServer:Clone() :: Script
+		server.Enabled = true
+		server.Parent = ServerScriptService
+		message = message or "runtimeInstalled"
+	end
+	local playerScripts = StarterPlayer:FindFirstChildOfClass("StarterPlayerScripts")
+		or StarterPlayer:WaitForChild("StarterPlayerScripts", 5)
+	if playerScripts and not playerScripts:FindFirstChild("EasyVFXClient") then
+		local client = template.EasyVFXClient:Clone() :: LocalScript
+		client.Enabled = true
+		client.Parent = playerScripts
+		message = message or "runtimeInstalled"
+	end
+	return message
+end
+
+------------------------------------------------------------------------------------
+-- Where a new effect goes
+------------------------------------------------------------------------------------
+
+local function isHuge(part: BasePart): boolean
+	return part:IsA("Terrain") or math.max(part.Size.X, part.Size.Y, part.Size.Z) > HUGE_PART
+end
+
+local function clampSize(size: Vector3): Vector3
+	return Vector3.new(math.min(size.X, 24), math.min(size.Y, 24), math.min(size.Z, 24))
+end
+
+local function usableTarget(): Instance?
+	local selected = Selection:Get()[1]
+	if not selected then
+		return nil
+	end
+	local root = Builder.findRoot(selected)
+	if root then
+		selected = root.Parent
+	end
+	if not selected or selected == Workspace then
+		return nil
+	end
+	if selected:IsA("BasePart") then
+		return if isHuge(selected) then nil else selected
+	elseif selected:IsA("Model") or selected:IsA("Attachment") then
+		return selected
+	end
+	return nil
+end
+
+local function cameraPlacement(preset: Presets.Preset): Builder.Placement
+	local camera = Workspace.CurrentCamera
+	local area = preset.area or Vector3.new(4, 4, 4)
+	local camCF = if camera then camera.CFrame else CFrame.new(0, 10, 20)
+	local look = camCF.LookVector
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	params.FilterDescendantsInstances = if camera then { camera } else {}
+	local hit = Workspace:Raycast(camCF.Position, look * 400, params)
+	local point = if hit then hit.Position else camCF.Position + look * 25
+	local placement = preset.placement or "ground"
+	local lift = if placement == "sky" then 30 elseif placement == "air" then 3.5 else area.Y / 2
+	local position = point + Vector3.new(0, lift, 0)
+	local flat = Vector3.new(look.X, 0, look.Z)
+	if flat.Magnitude < 0.01 then
+		flat = Vector3.new(0, 0, -1)
+	end
+	return {
+		cframe = CFrame.lookAt(position, position + flat.Unit),
+		size = area,
+		parent = Workspace,
+		weldTo = nil,
+	}
+end
+
+local function placementFor(preset: Presets.Preset): Builder.Placement
+	local target = usableTarget()
+	local useArea = preset.category == "world" and preset.area ~= nil
+	if target and target:IsA("BasePart") then
+		return {
+			cframe = target.CFrame,
+			size = if useArea then preset.area :: Vector3 else clampSize(target.Size),
+			parent = target,
+			weldTo = target,
+		}
+	elseif target and target:IsA("Model") then
+		local anchor = target.PrimaryPart or target:FindFirstChildWhichIsA("BasePart", true)
+		if anchor then
+			local cf, size = target:GetBoundingBox()
+			return {
+				cframe = cf,
+				size = if useArea then preset.area :: Vector3 else clampSize(size),
+				parent = target,
+				weldTo = anchor,
+			}
+		end
+	elseif target and target:IsA("Attachment") and target.Parent and target.Parent:IsA("BasePart") then
+		local part = target.Parent :: BasePart
+		return {
+			cframe = target.WorldCFrame,
+			size = preset.area or Vector3.new(4, 4, 4),
+			parent = part,
+			weldTo = part,
+		}
+	end
+	return cameraPlacement(preset)
+end
+
+local function selectionInfo(): App.SelectionInfo
+	local selected = Selection:Get()[1]
+	if selected then
+		local root = Builder.findRoot(selected)
+		if root then
+			return { kind = "effect", name = root.Name, root = root }
+		end
+	end
+	local target = usableTarget()
+	if target then
+		return { kind = "part", name = target.Name }
+	end
+	return { kind = "none", name = "" }
+end
+
+------------------------------------------------------------------------------------
+-- Favorites (stored in plugin settings; colors as hex)
+------------------------------------------------------------------------------------
+
+local function encodeParams(p: Params): { [string]: any }
+	local out = table.clone(p) :: any
+	out.color1 = p.color1:ToHex()
+	out.color2 = p.color2:ToHex()
+	return out
+end
+
+local function decodeParams(raw: any): Params?
+	if type(raw) ~= "table" or type(raw.preset) ~= "string" or not Presets.ById[raw.preset] then
+		return nil
+	end
+	local p = Builder.defaultParams(raw.preset)
+	local dict = p :: any
+	for key, value in raw do
+		if key == "color1" or key == "color2" then
+			if type(value) == "string" then
+				local ok, color = pcall(Color3.fromHex, value)
+				if ok then
+					dict[key] = color
+				end
+			end
+		elseif dict[key] ~= nil and type(value) == type(dict[key]) then
+			dict[key] = value
+		end
+	end
+	return p
+end
+
+local function loadFavorites(): { App.Favorite }
+	local raw = setting("EasyVFX_Favorites")
+	local out = {}
+	if type(raw) == "table" then
+		for _, item in raw do
+			if type(item) == "table" and type(item.name) == "string" then
+				local params = decodeParams(item.params)
+				if params then
+					table.insert(out, { name = item.name, params = params })
+				end
+			end
+		end
+	end
+	return out
+end
+
+local function saveFavorites(favorites: { App.Favorite })
+	local raw = {}
+	for _, fav in favorites do
+		table.insert(raw, { name = fav.name, params = encodeParams(fav.params) })
+	end
+	setSetting("EasyVFX_Favorites", raw)
+end
+
+------------------------------------------------------------------------------------
+-- Actions used by the panel
+------------------------------------------------------------------------------------
+
+local app: any = nil
+
+local queued: { root: Instance, params: Params }? = nil
+local applyScheduled = false
+
+local function applyNow(root: Instance, params: Params)
+	if root.Parent and root:IsA("BasePart") then
+		local ok, err = pcall(Builder.apply :: any, root, params)
+		if not ok then
+			warn("[EasyVFX] " .. tostring(err))
+		end
+	end
+end
+
+local function apply(root: Instance, params: Params, final: boolean)
+	beginEdit("Edit effect")
+	if final then
+		queued = nil
+		applyNow(root, params)
+		finishEdit(true)
+		if app and not app.state.autoPreview and Runtime.HasBursts(root) then
+			Runtime.PlayLocal(root)
+		end
+		return
+	end
+	-- Live slider drags: apply at most ~20 times per second.
+	queued = { root = root, params = table.clone(params) }
+	if not applyScheduled then
+		applyScheduled = true
+		task.delay(0.05, function()
+			applyScheduled = false
+			local job = queued
+			queued = nil
+			if job then
+				applyNow(job.root, job.params)
+			end
+		end)
+	end
+end
+
+local function insert(presetId: string, params: Params?): Instance?
+	local preset = Presets.ById[presetId]
+	if not preset then
+		return nil
+	end
+	local p = if params then table.clone(params) else Builder.defaultParams(presetId)
+	p.preset = presetId
+	if not params and lang() == "vi" then
+		p.promptText = "Kích hoạt"
+	end
+	local runtimeMessage: string? = nil
+	local root = record("Add " .. preset.name.en, function()
+		local placement = placementFor(preset)
+		local created = Builder.create(p, placement)
+		runtimeMessage = ensureRuntime()
+		return created
+	end)
+	if root then
+		Selection:Set({ root })
+		if app then
+			local text = L("added"):format((preset.name :: any)[lang()])
+			if runtimeMessage then
+				text ..= "\n" .. L(runtimeMessage)
+			end
+			app:toastMessage(text, "success")
+		end
+	end
+	return root
+end
+
+local api: App.Api = {
+	widget = widget,
+	getSetting = setting,
+	setSetting = setSetting,
+	insert = insert,
+	apply = apply,
+	beginEdit = beginEdit,
+	preview = function(root)
+		return Runtime.PlayLocal(root)
+	end,
+	hasBursts = function(root)
+		return Runtime.HasBursts(root)
+	end,
+	duplicate = function(root)
+		local copy = record("Duplicate effect", function()
+			local c = root:Clone()
+			c.Parent = root.Parent
+			if c:IsA("BasePart") and c.Anchored then
+				c.CFrame += c.CFrame.RightVector * (c.Size.X + 2)
+			end
+			return c
+		end)
+		if copy then
+			Selection:Set({ copy })
+		end
+	end,
+	delete = function(root)
+		record("Delete effect", function()
+			root.Parent = nil
+			return nil
+		end)
+		Selection:Set({})
+		if app then
+			app:toastMessage(L("deleted"), "success")
+		end
+	end,
+	rename = function(root, name)
+		record("Rename effect", function()
+			root.Name = name
+			return nil
+		end)
+	end,
+	addBloom = function()
+		if Lighting:FindFirstChildOfClass("BloomEffect") then
+			return false
+		end
+		record("Add Bloom", function()
+			local bloom = Instance.new("BloomEffect")
+			bloom.Name = "EasyVFX_Bloom"
+			bloom.Intensity = 0.9
+			bloom.Size = 28
+			bloom.Threshold = 0.85
+			bloom.Parent = Lighting
+			return nil
+		end)
+		return true
+	end,
+	selectionInfo = selectionInfo,
+	loadFavorites = loadFavorites,
+	saveFavorites = saveFavorites,
+}
+
+app = App.new(api)
+app:setSelection(selectionInfo())
+
+------------------------------------------------------------------------------------
+-- Wiring
+------------------------------------------------------------------------------------
+
+button.Click:Connect(function()
+	widget.Enabled = not widget.Enabled
+end)
+
+widget:GetPropertyChangedSignal("Enabled"):Connect(function()
+	button:SetActive(widget.Enabled)
+	if widget.Enabled then
+		app:restartPreview()
+	end
+end)
+button:SetActive(widget.Enabled)
+
+Selection.SelectionChanged:Connect(function()
+	app:setSelection(selectionInfo())
+end)
+
+local function afterHistory()
+	finishEdit(true)
+	app:setSelection(selectionInfo())
+	app:refresh()
+end
+ChangeHistoryService.OnUndo:Connect(afterHistory)
+ChangeHistoryService.OnRedo:Connect(afterHistory)
+
+pcall(function()
+	(settings().Studio :: any).ThemeChanged:Connect(function()
+		app:render()
+	end)
+end)
+
+-- First time: open the panel so the 3-step guide is seen.
+if not setting("EasyVFX_Onboarded") then
+	widget.Enabled = true
+end
+
+plugin.Unloading:Connect(function()
+	finishEdit(true)
+	app:destroy()
+end)
+]]></string>
+    </Properties>
+    <Item class="Folder" referent="1">
+      <Properties>
+        <string name="Name">Runtime</string>
+      </Properties>
+      <Item class="ModuleScript" referent="2">
+        <Properties>
+          <string name="Name">EasyVFX</string>
+          <string name="Source"><![CDATA[--!strict
+--[[
+	EasyVFX runtime  (installed by the EasyVFX plugin as ReplicatedStorage.EasyVFX)
+
+	Plays effects made with the EasyVFX plugin. You never have to edit this file.
+
+	For scripters:
+		local EasyVFX = require(game.ReplicatedStorage.EasyVFX)
+		EasyVFX.Play(workspace.Part.VFX_Explosion)          -- play an effect where it is
+		EasyVFX.Play("VFX_Explosion", CFrame.new(0, 5, 0))  -- play a copy somewhere else
+		EasyVFX.SetEnabled(effect, false)                    -- turn looping layers off
+
+	How it works:
+	  * Called on the server, Play() asks every client to play the effect (one small
+	    RemoteEvent). Particles, beams and meshes are then created and animated on each
+	    client, which is what the Roblox DevForum recommends for smooth, lag-free VFX.
+	  * Called on a client (or in Studio edit mode for previews) it plays locally.
+	  * Emitters follow the community attribute convention: EmitCount, EmitDelay and
+	    EmitDuration, so effects stay compatible with other emit tools.
+	  * "Shape" layers (Configuration objects with a Kind attribute) are crisp,
+	    procedural pieces built from Beams and Neon parts: Ring, Slash, Lines, Bolt,
+	    Orb, Debris and Crater.
+]]
+
+local CollectionService = game:GetService("CollectionService")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+
+local EasyVFX = {}
+EasyVFX.Version = 3
+EasyVFX.Tag = "EasyVFX"
+-- 0.25 .. 1. Multiplies particle, line and rock counts. Lowered automatically on the
+-- client when the player picks a low graphics level.
+EasyVFX.Quality = 1
+
+local KAPPA = 4 / 3 -- Bezier arc factor, used as KAPPA * tan(angle / 4)
+local GRAVITY = 70
+local MAX_SHAPE_COUNT = 64
+
+------------------------------------------------------------------------------------
+-- Small helpers
+------------------------------------------------------------------------------------
+
+local function num(inst: Instance, name: string, default: number): number
+	local v = inst:GetAttribute(name)
+	return if type(v) == "number" then v else default
+end
+
+local function vec(inst: Instance, name: string, default: Vector3): Vector3
+	local v = inst:GetAttribute(name)
+	return if typeof(v) == "Vector3" then v else default
+end
+
+local function col(inst: Instance, name: string, default: Color3): Color3
+	local v = inst:GetAttribute(name)
+	return if typeof(v) == "Color3" then v else default
+end
+
+local function str(inst: Instance, name: string, default: string): string
+	local v = inst:GetAttribute(name)
+	return if type(v) == "string" and v ~= "" then v else default
+end
+
+local function bool(inst: Instance, name: string, default: boolean): boolean
+	local v = inst:GetAttribute(name)
+	return if type(v) == "boolean" then v else default
+end
+
+local function lerp(a: number, b: number, t: number): number
+	return a + (b - a) * t
+end
+
+local function ease(alpha: number, style: string): number
+	if style == "Linear" then
+		return alpha
+	elseif style == "In" then
+		return alpha * alpha * alpha
+	elseif style == "InOut" then
+		return if alpha < 0.5 then 4 * alpha ^ 3 else 1 - (-2 * alpha + 2) ^ 3 / 2
+	elseif style == "Back" then
+		local c1, c3 = 1.70158, 2.70158
+		return 1 + c3 * (alpha - 1) ^ 3 + c1 * (alpha - 1) ^ 2
+	end
+	return 1 - (1 - alpha) ^ 3 -- "Out"
+end
+
+local function rad(v: Vector3): CFrame
+	return CFrame.Angles(math.rad(v.X), math.rad(v.Y), math.rad(v.Z))
+end
+
+local function originOf(root: Instance): CFrame
+	if root:IsA("BasePart") then
+		return root.CFrame
+	elseif root:IsA("Attachment") then
+		return root.WorldCFrame
+	elseif root:IsA("Model") then
+		return root:GetPivot()
+	end
+	return CFrame.identity
+end
+
+------------------------------------------------------------------------------------
+-- Animation driver: one loop for every running piece of every effect
+------------------------------------------------------------------------------------
+
+type Anim = {
+	t: number,
+	delay: number,
+	duration: number,
+	started: boolean,
+	start: (() -> ())?,
+	step: (alpha: number, dt: number) -> (),
+	finish: (() -> ())?,
+}
+
+local active: { Anim } = {}
+local driverRunning = false
+
+local function finishAnim(a: Anim)
+	if a.finish then
+		local ok, err = pcall(a.finish :: any)
+		if not ok then
+			warn("[EasyVFX] " .. tostring(err))
+		end
+	end
+end
+
+local function runDriver()
+	if driverRunning then
+		return
+	end
+	driverRunning = true
+	task.spawn(function()
+		while #active > 0 do
+			local dt = task.wait()
+			local i = 1
+			while i <= #active do
+				local a = active[i]
+				a.t += dt
+				local keep = true
+				if a.t >= a.delay then
+					if not a.started then
+						a.started = true
+						if a.start then
+							local ok, err = pcall(a.start :: any)
+							if not ok then
+								warn("[EasyVFX] " .. tostring(err))
+								keep = false
+							end
+						end
+					end
+					if keep then
+						local alpha = math.clamp((a.t - a.delay) / a.duration, 0, 1)
+						local ok, err = pcall(a.step :: any, alpha, dt)
+						if not ok then
+							warn("[EasyVFX] " .. tostring(err))
+						end
+						keep = ok and alpha < 1
+					end
+				end
+				if keep then
+					i += 1
+				else
+					active[i] = active[#active]
+					active[#active] = nil
+					finishAnim(a)
+				end
+			end
+		end
+		driverRunning = false
+	end)
+end
+
+local function addAnim(
+	delay: number,
+	duration: number,
+	start: (() -> ())?,
+	step: (alpha: number, dt: number) -> (),
+	finish: (() -> ())?
+)
+	table.insert(active, {
+		t = 0,
+		delay = math.max(0, delay),
+		duration = math.max(0.016, duration),
+		started = false,
+		start = start,
+		step = step,
+		finish = finish,
+	})
+	runDriver()
+end
+
+------------------------------------------------------------------------------------
+-- Where temporary pieces live. Inside the camera they are local-only, are never
+-- saved with the place and never get in the way of gameplay raycasts.
+------------------------------------------------------------------------------------
+
+local function liveFolder(): Instance
+	local parent: Instance = Workspace.CurrentCamera or Workspace
+	local existing = parent:FindFirstChild("EasyVFX_Live")
+	if existing then
+		return existing
+	end
+	local folder = Instance.new("Folder")
+	folder.Name = "EasyVFX_Live"
+	folder.Archivable = false
+	folder.Parent = parent
+	return folder
+end
+
+local function newPart(cf: CFrame): Part
+	local p = Instance.new("Part")
+	p.Name = "VFXPiece"
+	p.Anchored = true
+	p.CanCollide = false
+	p.CanTouch = false
+	p.CanQuery = false
+	p.CastShadow = false
+	p.Locked = true
+	p.Archivable = false
+	p.Transparency = 1
+	p.Size = Vector3.new(0.2, 0.2, 0.2)
+	p.TopSurface = Enum.SurfaceType.Smooth
+	p.BottomSurface = Enum.SurfaceType.Smooth
+	p.CFrame = cf
+	return p
+end
+
+local function newAttachment(parent: Instance): Attachment
+	local a = Instance.new("Attachment")
+	a.Archivable = false
+	a.Parent = parent
+	return a
+end
+
+type Style = {
+	color0: Color3,
+	color1: Color3,
+	glow: number,
+	brightness: number,
+	fade0: number,
+	fadeStart: number,
+	ease: string,
+	core: boolean,
+	coreColor: Color3,
+	texture: string,
+	zOffset: number,
+}
+
+local function readStyle(cfg: Instance): Style
+	return {
+		color0 = col(cfg, "Color0", Color3.new(1, 1, 1)),
+		color1 = col(cfg, "Color1", col(cfg, "Color0", Color3.new(1, 1, 1))),
+		glow = math.clamp(num(cfg, "Glow", 1), 0, 1),
+		brightness = num(cfg, "Brightness", 1),
+		fade0 = math.clamp(num(cfg, "Transparency", 0), 0, 1),
+		fadeStart = math.clamp(num(cfg, "FadeStart", 0.35), 0, 0.99),
+		ease = str(cfg, "Ease", "Out"),
+		core = bool(cfg, "Core", true),
+		coreColor = col(cfg, "CoreColor", Color3.new(1, 1, 1)),
+		texture = str(cfg, "Texture", ""),
+		zOffset = num(cfg, "ZOffset", 0),
+	}
+end
+
+local function fadeAt(style: Style, alpha: number): number
+	if alpha <= style.fadeStart then
+		return style.fade0
+	end
+	local f = (alpha - style.fadeStart) / (1 - style.fadeStart)
+	return lerp(style.fade0, 1, f * f)
+end
+
+local function newBeam(parent: Instance, a0: Attachment, a1: Attachment, style: Style, isCore: boolean): Beam
+	local b = Instance.new("Beam")
+	b.Archivable = false
+	b.Attachment0 = a0
+	b.Attachment1 = a1
+	b.FaceCamera = true
+	b.Segments = 12
+	b.LightEmission = style.glow
+	b.LightInfluence = 0
+	b.Brightness = if isCore then style.brightness * 1.5 else style.brightness
+	b.Color = ColorSequence.new(if isCore then style.coreColor else style.color0)
+	b.ZOffset = style.zOffset + (if isCore then 0.05 else 0)
+	if style.texture ~= "" and not isCore then
+		b.Texture = style.texture
+		b.TextureMode = Enum.TextureMode.Stretch
+	end
+	b.Parent = parent
+	return b
+end
+
+-- Random perpendicular basis for a direction.
+local function basis(dir: Vector3): (Vector3, Vector3)
+	local up = if math.abs(dir.Y) < 0.95 then Vector3.yAxis else Vector3.xAxis
+	local u = dir:Cross(up).Unit
+	local v = dir:Cross(u).Unit
+	return u, v
+end
+
+local function randomDir(rng: Random, mode: string, cone: number): Vector3
+	if mode == "Ring" then
+		local a = rng:NextNumber(0, math.pi * 2)
+		return Vector3.new(math.cos(a), 0, math.sin(a))
+	elseif mode == "Up" or mode == "Forward" or mode == "Down" then
+		local axis = if mode == "Up" then Vector3.yAxis elseif mode == "Down" then -Vector3.yAxis else -Vector3.zAxis
+		local u, v = basis(axis)
+		local a = rng:NextNumber(0, math.pi * 2)
+		local spread = math.rad(cone) * math.sqrt(rng:NextNumber())
+		return (axis * math.cos(spread) + (u * math.cos(a) + v * math.sin(a)) * math.sin(spread)).Unit
+	end
+	local d = Vector3.new(rng:NextNumber(-1, 1), rng:NextNumber(-1, 1), rng:NextNumber(-1, 1))
+	return if d.Magnitude > 0.01 then d.Unit else Vector3.yAxis
+end
+
+local function scaledCount(cfg: Instance, name: string, default: number, quality: number): number
+	return math.clamp(math.floor(num(cfg, name, default) * quality + 0.5), 1, MAX_SHAPE_COUNT)
+end
+
+local function groundBelow(position: Vector3, ignore: { Instance }): (Vector3, Enum.Material, Color3)
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	params.FilterDescendantsInstances = ignore
+	params.IgnoreWater = true
+	local hit = Workspace:Raycast(position + Vector3.new(0, 3, 0), Vector3.new(0, -60, 0), params)
+	if hit then
+		local color = Color3.fromRGB(110, 110, 115)
+		local inst = hit.Instance
+		if inst:IsA("BasePart") and not inst:IsA("Terrain") then
+			color = inst.Color
+		elseif inst:IsA("Terrain") then
+			local ok, c = pcall(function()
+				return (inst :: Terrain):GetMaterialColor(hit.Material)
+			end)
+			if ok then
+				color = c
+			end
+		end
+		local material = hit.Material
+		if material == Enum.Material.Air or material == Enum.Material.Water then
+			material = Enum.Material.Slate
+		end
+		return hit.Position, material, color
+	end
+	return position - Vector3.new(0, 3, 0), Enum.Material.Slate, Color3.fromRGB(110, 110, 115)
+end
+
+-- Moves a CFrame down onto the ground under it (keeps its rotation).
+local function snapToGround(cf: CFrame, ignore: { Instance }): CFrame
+	local hit = groundBelow(cf.Position, ignore)
+	return cf.Rotation + hit + Vector3.new(0, 0.15, 0)
+end
+
+------------------------------------------------------------------------------------
+-- Shape layers. Each returns how long it runs (delay included).
+------------------------------------------------------------------------------------
+
+type Ctx = { root: Instance, origin: CFrame, quality: number, rng: Random, ignore: { Instance } }
+
+local Shapes: { [string]: (cfg: Instance, ctx: Ctx) -> number } = {}
+
+-- Expanding circle(s) made of 4 curved beams. Count + Step make tunnels of rings.
+Shapes.Ring = function(cfg, ctx)
+	local count = math.clamp(math.floor(num(cfg, "Count", 1)), 1, 16)
+	local stagger = num(cfg, "Stagger", 0.06)
+	local stepOffset = vec(cfg, "Step", Vector3.zero)
+	local delay = num(cfg, "Delay", 0)
+	local duration = num(cfg, "Duration", 0.5)
+	local r0, r1 = num(cfg, "Radius0", 0.5), num(cfg, "Radius1", 8)
+	local w0, w1 = num(cfg, "Width0", 1), num(cfg, "Width1", 0.1)
+	local spin = num(cfg, "Spin", 0)
+	local style = readStyle(cfg)
+	local base = ctx.origin * CFrame.new(vec(cfg, "Offset", Vector3.zero))
+	if bool(cfg, "Ground", false) then
+		base = snapToGround(base, ctx.ignore)
+	end
+	local tilt = rad(vec(cfg, "Tilt", Vector3.zero))
+
+	for i = 0, count - 1 do
+		local cf = base * CFrame.new(stepOffset * i) * tilt
+		local carrier = newPart(cf)
+		local atts: { Attachment } = {}
+		local beams: { Beam } = {}
+		local cores: { Beam } = {}
+		for k = 1, 4 do
+			atts[k] = newAttachment(carrier)
+		end
+		for k = 1, 4 do
+			beams[k] = newBeam(carrier, atts[k], atts[k % 4 + 1], style, false)
+			if style.core then
+				cores[k] = newBeam(carrier, atts[k], atts[k % 4 + 1], style, true)
+			end
+		end
+		local function step(alpha: number)
+			local e = ease(alpha, style.ease)
+			local r = math.max(0.01, lerp(r0, r1, e))
+			local w = math.max(0, lerp(w0, w1, e))
+			local rot = math.rad(spin) * alpha
+			for k = 1, 4 do
+				local th = (k - 1) * math.pi / 2 + rot
+				local p = Vector3.new(math.cos(th) * r, 0, math.sin(th) * r)
+				local t = Vector3.new(-math.sin(th), 0, math.cos(th))
+				atts[k].CFrame = CFrame.fromMatrix(p, t, Vector3.yAxis)
+			end
+			local c = r * KAPPA * math.tan(math.pi / 8)
+			local tr = NumberSequence.new(fadeAt(style, alpha))
+			local color = ColorSequence.new(style.color0:Lerp(style.color1, e))
+			for k = 1, 4 do
+				local b = beams[k]
+				b.CurveSize0, b.CurveSize1 = c, c
+				b.Width0, b.Width1 = w, w
+				b.Transparency = tr
+				b.Color = color
+				local cb = cores[k]
+				if cb then
+					cb.CurveSize0, cb.CurveSize1 = c, c
+					cb.Width0, cb.Width1 = w * 0.35, w * 0.35
+					cb.Transparency = tr
+				end
+			end
+		end
+		step(0)
+		addAnim(delay + stagger * i, duration, function()
+			carrier.Parent = liveFolder()
+		end, step, function()
+			carrier:Destroy()
+		end)
+	end
+	return delay + stagger * (count - 1) + duration
+end
+
+-- Anime crescent slash: a curved, tapered ribbon that sweeps and fades.
+Shapes.Slash = function(cfg, ctx)
+	local count = math.clamp(math.floor(num(cfg, "Count", 1)), 1, 12)
+	local stagger = num(cfg, "Stagger", 0.07)
+	local delay = num(cfg, "Delay", 0)
+	local duration = num(cfg, "Duration", 0.45)
+	local radius = num(cfg, "Radius", 5)
+	local arc = math.rad(math.clamp(num(cfg, "Arc", 160), 10, 300))
+	local width = num(cfg, "Width", 1.5)
+	local sweep = math.rad(num(cfg, "Sweep", 50))
+	local randomTilt = num(cfg, "RandomTilt", 0)
+	local tailFade = math.clamp(num(cfg, "TailFade", 0.75), 0, 1)
+	local style = readStyle(cfg)
+	local base = ctx.origin * CFrame.new(vec(cfg, "Offset", Vector3.zero)) * rad(vec(cfg, "Tilt", Vector3.zero))
+	local N = 6
+
+	for i = 0, count - 1 do
+		local roll = if randomTilt > 0 then ctx.rng:NextNumber(-randomTilt, randomTilt) else 0
+		local yaw = if randomTilt > 0 then ctx.rng:NextNumber(-randomTilt, randomTilt) * 0.4 else 0
+		local cf = base * CFrame.Angles(0, math.rad(yaw), math.rad(roll))
+		local carrier = newPart(cf)
+		local atts: { Attachment } = {}
+		local beams: { Beam } = {}
+		local cores: { Beam } = {}
+		for k = 0, N do
+			atts[k + 1] = newAttachment(carrier)
+		end
+		for k = 1, N do
+			beams[k] = newBeam(carrier, atts[k], atts[k + 1], style, false)
+			if style.core then
+				cores[k] = newBeam(carrier, atts[k], atts[k + 1], style, true)
+			end
+		end
+		local function step(alpha: number)
+			local e = ease(alpha, style.ease)
+			local reveal = math.min(1, alpha / 0.3)
+			reveal = 1 - (1 - reveal) ^ 2
+			local span = arc * math.max(0.02, reveal)
+			local r = radius * (1 + 0.15 * e)
+			local start = -math.pi / 2 - arc / 2
+			local s = span / N
+			local c = r * KAPPA * math.tan(s / 4)
+			carrier.CFrame = cf * CFrame.Angles(0, lerp(-sweep / 2, sweep / 2, e), 0)
+			for k = 0, N do
+				local th = start + s * k
+				local p = Vector3.new(math.cos(th) * r, 0, math.sin(th) * r)
+				local t = Vector3.new(-math.sin(th), 0, math.cos(th))
+				atts[k + 1].CFrame = CFrame.fromMatrix(p, t, Vector3.yAxis)
+			end
+			local base_t = fadeAt(style, alpha)
+			local color = ColorSequence.new(style.color0, style.color1)
+			for k = 1, N do
+				-- k = N is the leading edge: widest near the head, sharp at both tips
+				local f0 = (k - 1) / N
+				local f1 = k / N
+				local w0 = width * math.sin(math.pi * f0 ^ 0.8)
+				local w1 = width * math.sin(math.pi * f1 ^ 0.8)
+				local t0 = lerp(base_t, 1, (1 - f0) * tailFade)
+				local t1 = lerp(base_t, 1, (1 - f1) * tailFade)
+				local b = beams[k]
+				b.CurveSize0, b.CurveSize1 = c, c
+				b.Width0, b.Width1 = w0, w1
+				b.Transparency = NumberSequence.new(t0, t1)
+				b.Color = color
+				local cb = cores[k]
+				if cb then
+					cb.CurveSize0, cb.CurveSize1 = c, c
+					cb.Width0, cb.Width1 = w0 * 0.3, w1 * 0.3
+					cb.Transparency = NumberSequence.new(t0, t1)
+				end
+			end
+		end
+		step(0)
+		addAnim(delay + stagger * i, duration, function()
+			carrier.Parent = liveFolder()
+		end, step, function()
+			carrier:Destroy()
+		end)
+	end
+	return delay + stagger * (count - 1) + duration
+end
+
+-- Sharp needle streaks that shoot out (impact lines, speed lines, sparks).
+Shapes.Lines = function(cfg, ctx)
+	local count = scaledCount(cfg, "Count", 12, ctx.quality)
+	local delay = num(cfg, "Delay", 0)
+	local duration = num(cfg, "Duration", 0.35)
+	local stagger = num(cfg, "Stagger", 0.05)
+	local mode = str(cfg, "Mode", "Sphere")
+	local cone = num(cfg, "Cone", 30)
+	local d0, d1 = num(cfg, "Distance0", 0.5), num(cfg, "Distance1", 10)
+	local length = num(cfg, "Length", 5)
+	local width = num(cfg, "Width", 0.35)
+	local style = readStyle(cfg)
+	local base = ctx.origin * CFrame.new(vec(cfg, "Offset", Vector3.zero))
+	if bool(cfg, "Ground", false) then
+		base = snapToGround(base, ctx.ignore)
+	end
+	local cf = base * rad(vec(cfg, "Tilt", Vector3.zero))
+	local carrier = newPart(cf)
+	local longest = 0
+	local remaining = count
+
+	for _ = 1, count do
+		local dir = randomDir(ctx.rng, mode, cone)
+		local len = length * ctx.rng:NextNumber(0.6, 1.2)
+		local far = d1 * ctx.rng:NextNumber(0.7, 1.1)
+		local myDelay = delay + ctx.rng:NextNumber(0, stagger)
+		local myDuration = duration * ctx.rng:NextNumber(0.8, 1.2)
+		local a0, a1, a2 = newAttachment(carrier), newAttachment(carrier), newAttachment(carrier)
+		local b1 = newBeam(carrier, a0, a1, style, false)
+		local b2 = newBeam(carrier, a1, a2, style, false)
+		local c1 = if style.core then newBeam(carrier, a0, a1, style, true) else nil
+		local c2 = if style.core then newBeam(carrier, a1, a2, style, true) else nil
+		for _, b in { b1, b2, c1, c2 } :: { any } do
+			b.Enabled = false
+		end
+		local function step(alpha: number)
+			local e = ease(alpha, style.ease)
+			local tail = lerp(d0, far, e)
+			local head = tail + len * (1 - alpha) ^ 0.6
+			a0.CFrame = CFrame.new(dir * tail)
+			a1.CFrame = CFrame.new(dir * ((tail + head) / 2))
+			a2.CFrame = CFrame.new(dir * head)
+			local tr = NumberSequence.new(fadeAt(style, alpha))
+			local color = ColorSequence.new(style.color0:Lerp(style.color1, e))
+			b1.Width0, b1.Width1 = 0, width
+			b2.Width0, b2.Width1 = width, 0
+			b1.Transparency, b2.Transparency = tr, tr
+			b1.Color, b2.Color = color, color
+			if c1 and c2 then
+				c1.Width0, c1.Width1 = 0, width * 0.35
+				c2.Width0, c2.Width1 = width * 0.35, 0
+				c1.Transparency, c2.Transparency = tr, tr
+			end
+		end
+		step(0)
+		addAnim(myDelay, myDuration, function()
+			for _, b in { b1, b2, c1, c2 } :: { any } do
+				b.Enabled = true
+			end
+		end, step, function()
+			remaining -= 1
+			if remaining <= 0 then
+				carrier:Destroy() -- last line done: remove everything at once
+			else
+				for _, inst in { b1, b2, c1, c2, a0, a1, a2 } :: { any } do
+					inst:Destroy()
+				end
+			end
+		end)
+		longest = math.max(longest, myDelay + myDuration)
+	end
+	carrier.Parent = liveFolder()
+	return longest
+end
+
+-- Zig-zag lightning that re-shapes itself every few frames.
+Shapes.Bolt = function(cfg, ctx)
+	local count = math.clamp(math.floor(num(cfg, "Count", 1)), 1, 8)
+	local stagger = num(cfg, "Stagger", 0.08)
+	local delay = num(cfg, "Delay", 0)
+	local duration = num(cfg, "Duration", 0.35)
+	local from = vec(cfg, "From", Vector3.new(0, 30, 0))
+	local to = vec(cfg, "To", Vector3.zero)
+	local segments = math.clamp(math.floor(num(cfg, "Segments", 8)), 2, 24)
+	local jitter = num(cfg, "Jitter", 2)
+	local width = num(cfg, "Width", 0.6)
+	local flicker = math.max(0.02, num(cfg, "Flicker", 0.05))
+	local style = readStyle(cfg)
+	local cf = ctx.origin * CFrame.new(vec(cfg, "Offset", Vector3.zero))
+	local dir = to - from
+	local u, v = basis(if dir.Magnitude > 0.01 then dir.Unit else Vector3.yAxis)
+
+	for i = 0, count - 1 do
+		local carrier = newPart(cf)
+		local atts: { Attachment } = {}
+		local beams: { Beam } = {}
+		local cores: { Beam } = {}
+		for k = 0, segments do
+			atts[k + 1] = newAttachment(carrier)
+		end
+		for k = 1, segments do
+			beams[k] = newBeam(carrier, atts[k], atts[k + 1], style, false)
+			beams[k].Segments = 1
+			if style.core then
+				cores[k] = newBeam(carrier, atts[k], atts[k + 1], style, true)
+				cores[k].Segments = 1
+			end
+		end
+		local timer = math.huge
+		local sideOffset = (u * ctx.rng:NextNumber(-1, 1) + v * ctx.rng:NextNumber(-1, 1)) * jitter * i
+		local function reshape()
+			for k = 0, segments do
+				local f = k / segments
+				local p = from:Lerp(to, f)
+				local amount = math.sin(math.pi * f) * jitter
+				local off = (u * ctx.rng:NextNumber(-1, 1) + v * ctx.rng:NextNumber(-1, 1)) * amount
+				atts[k + 1].CFrame = CFrame.new(p + off + sideOffset * math.sin(math.pi * f))
+			end
+		end
+		local function step(alpha: number, dt: number)
+			timer += dt
+			if timer >= flicker then
+				timer = 0
+				reshape()
+			end
+			local tr = fadeAt(style, alpha)
+			if ctx.rng:NextNumber() < 0.15 then
+				tr = math.min(1, tr + 0.5)
+			end
+			local seq = NumberSequence.new(tr)
+			local color = ColorSequence.new(style.color0:Lerp(style.color1, alpha))
+			local w = width * (1 - alpha * 0.5)
+			for k = 1, segments do
+				local b = beams[k]
+				b.Width0, b.Width1 = w, w
+				b.Transparency = seq
+				b.Color = color
+				local cb = cores[k]
+				if cb then
+					cb.Width0, cb.Width1 = w * 0.35, w * 0.35
+					cb.Transparency = seq
+				end
+			end
+		end
+		step(0, math.huge)
+		addAnim(delay + stagger * i, duration, function()
+			carrier.Parent = liveFolder()
+		end, step, function()
+			carrier:Destroy()
+		end)
+	end
+	return delay + stagger * (count - 1) + duration
+end
+
+-- A glowing Neon (or ForceField) part that grows and fades: flashes, pillars, shields.
+Shapes.Orb = function(cfg, ctx)
+	local delay = num(cfg, "Delay", 0)
+	local duration = num(cfg, "Duration", 0.3)
+	local s0, s1 = num(cfg, "Size0", 0.5), num(cfg, "Size1", 6)
+	local stretch = vec(cfg, "Stretch", Vector3.one)
+	local length = num(cfg, "Length", 0) -- fixed X size (cylinder pillars)
+	local shapeName = str(cfg, "Shape", "Ball")
+	local materialName = str(cfg, "Material", "Neon")
+	local spin = vec(cfg, "SpinDeg", Vector3.zero)
+	local style = readStyle(cfg)
+	local cf = ctx.origin * CFrame.new(vec(cfg, "Offset", Vector3.zero)) * rad(vec(cfg, "Tilt", Vector3.zero))
+
+	local part = newPart(cf)
+	local okShape, shape = pcall(function()
+		return (Enum.PartType :: any)[shapeName]
+	end)
+	part.Shape = if okShape and shape then shape else Enum.PartType.Ball
+	local okMat, material = pcall(function()
+		return (Enum.Material :: any)[materialName]
+	end)
+	part.Material = if okMat and material then material else Enum.Material.Neon
+	part.Color = style.color0
+	local function step(alpha: number)
+		local e = ease(alpha, style.ease)
+		local s = math.max(0.05, lerp(s0, s1, e))
+		local size = stretch * s
+		part.Size = if length > 0 then Vector3.new(length, size.Y, size.Z) else size
+		part.CFrame = cf * CFrame.Angles(math.rad(spin.X * alpha), math.rad(spin.Y * alpha), math.rad(spin.Z * alpha))
+		part.Transparency = fadeAt(style, alpha)
+		part.Color = style.color0:Lerp(style.color1, e)
+	end
+	step(0)
+	addAnim(delay, duration, function()
+		part.Parent = liveFolder()
+	end, step, function()
+		part:Destroy()
+	end)
+	return delay + duration
+end
+
+-- Rocks thrown out of the ground. Simple ballistic motion (no physics cost).
+Shapes.Debris = function(cfg, ctx)
+	local count = scaledCount(cfg, "Count", 10, ctx.quality)
+	local delay = num(cfg, "Delay", 0)
+	local duration = num(cfg, "Duration", 2)
+	local sizeMin, sizeMax = num(cfg, "SizeMin", 0.4), num(cfg, "SizeMax", 1.2)
+	local force = num(cfg, "Force", 30)
+	local radius = num(cfg, "Radius", 2)
+	local origin = (ctx.origin * CFrame.new(vec(cfg, "Offset", Vector3.zero))).Position
+
+	addAnim(delay, 0.016, nil, function()
+		local ground, material, color = groundBelow(origin, ctx.ignore)
+		for _ = 1, count do
+			local a = ctx.rng:NextNumber(0, math.pi * 2)
+			local out = Vector3.new(math.cos(a), 0, math.sin(a))
+			local size = ctx.rng:NextNumber(sizeMin, sizeMax)
+			local rock = newPart(CFrame.new(ground + out * ctx.rng:NextNumber(0, radius) + Vector3.new(0, size / 2, 0)))
+			rock.Transparency = 0
+			rock.Size = Vector3.new(size, size * ctx.rng:NextNumber(0.6, 1), size * ctx.rng:NextNumber(0.7, 1.1))
+			rock.Material = material
+			rock.Color = color
+			local pos = rock.CFrame.Position
+			local vel = out * force * ctx.rng:NextNumber(0.3, 0.7) + Vector3.new(0, force * ctx.rng:NextNumber(0.6, 1.1), 0)
+			local rot = rock.CFrame.Rotation
+			local spinAxis = randomDir(ctx.rng, "Sphere", 0)
+			local spinSpeed = ctx.rng:NextNumber(4, 12)
+			local landed = false
+			local baseSize = rock.Size
+			addAnim(0, duration * ctx.rng:NextNumber(0.85, 1.15), function()
+				rock.Parent = liveFolder()
+			end, function(alpha, dt)
+				if not landed then
+					vel -= Vector3.new(0, GRAVITY * dt, 0)
+					pos += vel * dt
+					rot = CFrame.fromAxisAngle(spinAxis, spinSpeed * dt) * rot
+					if pos.Y <= ground.Y + baseSize.Y / 2 and vel.Y < 0 then
+						pos = Vector3.new(pos.X, ground.Y + baseSize.Y / 2, pos.Z)
+						landed = true
+					end
+				end
+				local shrink = if alpha > 0.75 then 1 - (alpha - 0.75) / 0.25 else 1
+				rock.Size = baseSize * math.max(0.05, shrink)
+				rock.CFrame = CFrame.new(pos) * rot
+			end, function()
+				rock:Destroy()
+			end)
+		end
+	end)
+	return delay + duration * 1.15
+end
+
+-- A ring of rocks bursting out of the ground, then sinking back.
+Shapes.Crater = function(cfg, ctx)
+	local count = scaledCount(cfg, "Count", 12, ctx.quality)
+	local delay = num(cfg, "Delay", 0)
+	local duration = num(cfg, "Duration", 2.5)
+	local radius = num(cfg, "Radius", 6)
+	local sizeMin, sizeMax = num(cfg, "SizeMin", 1.2), num(cfg, "SizeMax", 2.4)
+	local lean = num(cfg, "Lean", 35)
+	local origin = (ctx.origin * CFrame.new(vec(cfg, "Offset", Vector3.zero))).Position
+
+	addAnim(delay, 0.016, nil, function()
+		local ground, material, color = groundBelow(origin, ctx.ignore)
+		for k = 1, count do
+			local a = (k / count) * math.pi * 2 + ctx.rng:NextNumber(-0.15, 0.15)
+			local out = Vector3.new(math.cos(a), 0, math.sin(a))
+			local s = ctx.rng:NextNumber(sizeMin, sizeMax)
+			local size = Vector3.new(s * 1.2, s * ctx.rng:NextNumber(0.8, 1.3), s * 0.9)
+			local pos = ground + out * radius * ctx.rng:NextNumber(0.85, 1.1)
+			local final = CFrame.lookAt(pos, pos + out)
+				* CFrame.Angles(math.rad(-lean + ctx.rng:NextNumber(-10, 10)), 0, math.rad(ctx.rng:NextNumber(-15, 15)))
+			local rock = newPart(final)
+			rock.Transparency = 0
+			rock.Size = size
+			rock.Material = material
+			rock.Color = color
+			addAnim(k * 0.004, duration, function()
+				rock.Parent = liveFolder()
+			end, function(alpha)
+				local rise
+				if alpha < 0.08 then
+					rise = ease(alpha / 0.08, "Back")
+				elseif alpha > 0.8 then
+					rise = 1 - ease((alpha - 0.8) / 0.2, "In")
+				else
+					rise = 1
+				end
+				rock.CFrame = final - Vector3.new(0, size.Y * (1 - rise), 0)
+			end, function()
+				rock:Destroy()
+			end)
+		end
+	end)
+	return delay + duration
+end
+
+------------------------------------------------------------------------------------
+-- Playing an effect
+------------------------------------------------------------------------------------
+
+local pulseTokens: { [Instance]: number } = setmetatable({}, { __mode = "k" }) :: any
+
+local function setOn(inst: Instance, on: boolean)
+	if inst:IsA("ParticleEmitter") or inst:IsA("Beam") or inst:IsA("Trail") or inst:IsA("Light") or inst:IsA("Highlight") then
+		(inst :: any).Enabled = on
+	elseif inst:IsA("BasePart") then
+		inst.Transparency = if on then num(inst, "BaseTransparency", 0) else 1
+	end
+end
+
+-- Turn something on for `duration` seconds after `delay`, handling overlapping plays.
+local function pulse(inst: Instance, delay: number, duration: number)
+	local token = (pulseTokens[inst] or 0) + 1
+	pulseTokens[inst] = token
+	if inst:IsA("Light") and bool(inst, "FlashFade", true) then
+		local light = inst :: Light
+		local baseBrightness = num(light, "BaseBrightness", light.Brightness)
+		light:SetAttribute("BaseBrightness", baseBrightness)
+		addAnim(delay, duration, function()
+			light.Enabled = true
+		end, function(alpha)
+			if pulseTokens[light] == token then
+				light.Brightness = baseBrightness * (1 - alpha) ^ 2
+			end
+		end, function()
+			if pulseTokens[light] == token then
+				light.Enabled = false
+				light.Brightness = baseBrightness
+			end
+		end)
+		return
+	end
+	task.delay(delay, function()
+		if pulseTokens[inst] == token and inst.Parent then
+			setOn(inst, true)
+		end
+	end)
+	task.delay(delay + duration, function()
+		if pulseTokens[inst] == token and inst.Parent then
+			setOn(inst, false)
+		end
+	end)
+end
+
+-- Your own Blender/Studio mesh: a hidden template part that gets copied and animated.
+local function playMesh(template: BasePart, ctx: Ctx): number
+	local delay = num(template, "EmitDelay", 0)
+	local duration = num(template, "AnimDuration", 0.5)
+	local scale0, scale1 = num(template, "Scale0", 0.6), num(template, "Scale1", 1.4)
+	local spin = vec(template, "SpinDeg", Vector3.new(0, 90, 0))
+	local fade0 = num(template, "BaseTransparency", 0)
+	local local_ = originOf(ctx.root):ToObjectSpace(template.CFrame)
+	local baseSize = template.Size
+	local copy = template:Clone()
+	for _, d in copy:GetDescendants() do
+		if d:IsA("BaseScript") then
+			d:Destroy()
+		end
+	end
+	copy.Archivable = false
+	copy.Anchored = true
+	copy.CanCollide = false
+	copy.CanTouch = false
+	copy.CanQuery = false
+	copy.CastShadow = false
+	local cf = ctx.origin * local_
+	local function step(alpha: number)
+		local e = ease(alpha, "Out")
+		copy.Size = baseSize * lerp(scale0, scale1, e)
+		copy.CFrame = cf * CFrame.Angles(math.rad(spin.X * e), math.rad(spin.Y * e), math.rad(spin.Z * e))
+		copy.Transparency = if alpha < 0.35 then fade0 else lerp(fade0, 1, ((alpha - 0.35) / 0.65) ^ 2)
+	end
+	step(0)
+	addAnim(delay, duration, function()
+		copy.Parent = liveFolder()
+	end, step, function()
+		copy:Destroy()
+	end)
+	return delay + duration
+end
+
+local function findByName(name: string): Instance?
+	for _, inst in CollectionService:GetTagged(EasyVFX.Tag) do
+		if inst.Name == name then
+			return inst
+		end
+	end
+	return nil
+end
+
+-- Plays an effect on this machine only. Returns how long it lasts.
+function EasyVFX.PlayLocal(target: Instance | string, at: CFrame?): number
+	local root: Instance? = if typeof(target) == "string" then findByName(target) else target
+	if not root or not root.Parent then
+		return 0
+	end
+	if at then
+		-- Play a temporary copy somewhere else.
+		local copy = root:Clone()
+		for _, d in copy:GetDescendants() do
+			if d:IsA("JointInstance") or d:IsA("WeldConstraint") or d:IsA("BaseScript") then
+				d:Destroy()
+			end
+		end
+		copy:RemoveTag(EasyVFX.Tag)
+		copy.Archivable = false
+		if copy:IsA("BasePart") then
+			copy.Anchored = true
+			copy.CFrame = at
+		elseif copy:IsA("Model") then
+			copy:PivotTo(at)
+		end
+		copy.Parent = liveFolder()
+		local length = EasyVFX.PlayLocal(copy)
+		local maxLife = 0
+		for _, d in copy:GetDescendants() do
+			if d:IsA("ParticleEmitter") then
+				maxLife = math.max(maxLife, d.Lifetime.Max)
+			end
+		end
+		task.delay(length + maxLife + 0.5, function()
+			copy:Destroy()
+		end)
+		return length
+	end
+
+	local ignore: { Instance } = { liveFolder(), root }
+	local model = root:FindFirstAncestorOfClass("Model")
+	if model then
+		table.insert(ignore, model)
+	end
+	for _, p in Players:GetPlayers() do
+		if p.Character then
+			table.insert(ignore, p.Character)
+		end
+	end
+	local ctx: Ctx = {
+		root = root,
+		origin = originOf(root),
+		quality = math.clamp(EasyVFX.Quality, 0.25, 1),
+		rng = Random.new(),
+		ignore = ignore,
+	}
+
+	local length = 0
+	for _, d in root:GetDescendants() do
+		local delay = num(d, "EmitDelay", 0)
+		local duration = d:GetAttribute("EmitDuration")
+		if d:IsA("ParticleEmitter") then
+			local count = d:GetAttribute("EmitCount")
+			if type(count) == "number" and count > 0 then
+				local n = math.max(1, math.floor(count * ctx.quality + 0.5))
+				if delay > 0 then
+					task.delay(delay, function()
+						if d.Parent then
+							d:Emit(n)
+						end
+					end)
+				else
+					d:Emit(n)
+				end
+				length = math.max(length, delay + d.Lifetime.Max)
+			end
+			if type(duration) == "number" and duration > 0 then
+				pulse(d, delay, duration)
+				length = math.max(length, delay + duration + d.Lifetime.Max)
+			end
+		elseif d:IsA("Beam") or d:IsA("Trail") or d:IsA("Light") or d:IsA("Highlight") then
+			if type(duration) == "number" and duration > 0 then
+				pulse(d, delay, duration)
+				length = math.max(length, delay + duration)
+			end
+		elseif d:IsA("Configuration") then
+			local kind = d:GetAttribute("Kind")
+			local shape = if type(kind) == "string" then Shapes[kind] else nil
+			if shape then
+				local ok, result = pcall(shape, d, ctx)
+				if ok then
+					length = math.max(length, result)
+				else
+					warn("[EasyVFX] " .. d:GetFullName() .. ": " .. tostring(result))
+				end
+			end
+		elseif d:IsA("BasePart") then
+			if d:GetAttribute("VFX_Mesh") then
+				length = math.max(length, playMesh(d, ctx))
+			elseif type(duration) == "number" and duration > 0 then
+				pulse(d, delay, duration)
+				length = math.max(length, delay + duration)
+			end
+		end
+	end
+	return length
+end
+
+local playEvent: RemoteEvent? = nil
+
+-- Plays an effect for everyone (server) or locally (client / Studio preview).
+function EasyVFX.Play(target: Instance | string, at: CFrame?): number
+	if RunService:IsRunning() and RunService:IsServer() then
+		local root: Instance? = if typeof(target) == "string" then findByName(target) else target
+		if root and playEvent then
+			playEvent:FireAllClients(root, at)
+		end
+		return 0
+	end
+	return EasyVFX.PlayLocal(target, at)
+end
+
+-- Turns the always-on layers (looping emitters, beams, lights...) on or off.
+function EasyVFX.SetEnabled(root: Instance, on: boolean)
+	for _, d in root:GetDescendants() do
+		if d:GetAttribute("EmitCount") == nil and d:GetAttribute("EmitDuration") == nil and d:GetAttribute("VFX_Layer") ~= nil then
+			setOn(d, on)
+		end
+	end
+end
+
+-- True when the effect has pieces that only show when played (bursts, shapes...).
+function EasyVFX.HasBursts(root: Instance): boolean
+	for _, d in root:GetDescendants() do
+		if d:GetAttribute("EmitCount") ~= nil or d:GetAttribute("EmitDuration") ~= nil or d:GetAttribute("VFX_Mesh") then
+			return true
+		end
+		if d:IsA("Configuration") and d:GetAttribute("Kind") ~= nil then
+			return true
+		end
+	end
+	return false
+end
+
+------------------------------------------------------------------------------------
+-- No-code triggers. Started by the two tiny scripts the plugin installs.
+------------------------------------------------------------------------------------
+
+local function triggerPart(root: Instance): BasePart?
+	local parent = root.Parent
+	if parent and parent:IsA("BasePart") then
+		return parent
+	elseif parent and parent:IsA("Model") then
+		return parent.PrimaryPart or parent:FindFirstChildWhichIsA("BasePart")
+	elseif root:IsA("BasePart") then
+		return root
+	end
+	return nil
+end
+
+local function watchTagged(setup: (root: Instance) -> (() -> ())?)
+	local cleanups: { [Instance]: () -> () } = {}
+	local function stop(root: Instance)
+		local c = cleanups[root]
+		cleanups[root] = nil
+		if c then
+			c()
+		end
+	end
+	local function start(root: Instance)
+		stop(root)
+		local c = setup(root)
+		if c then
+			cleanups[root] = c
+		end
+	end
+	local function added(root: Instance)
+		start(root)
+		root:GetAttributeChangedSignal("VFX_Trigger"):Connect(function()
+			if CollectionService:HasTag(root, EasyVFX.Tag) then
+				start(root)
+			end
+		end)
+	end
+	CollectionService:GetInstanceAddedSignal(EasyVFX.Tag):Connect(added)
+	CollectionService:GetInstanceRemovedSignal(EasyVFX.Tag):Connect(stop)
+	for _, root in CollectionService:GetTagged(EasyVFX.Tag) do
+		task.spawn(added, root)
+	end
+end
+
+function EasyVFX.InitServer()
+	local existing = script:FindFirstChild("PlayEvent")
+	if existing and existing:IsA("RemoteEvent") then
+		playEvent = existing
+	else
+		local remote = Instance.new("RemoteEvent")
+		remote.Name = "PlayEvent"
+		remote.Parent = script
+		playEvent = remote
+	end
+
+	watchTagged(function(root)
+		local trigger = str(root, "VFX_Trigger", "Always")
+		local part = triggerPart(root)
+		if not part then
+			return nil
+		end
+		local cooldown = num(root, "VFX_Cooldown", 1)
+		local last = -math.huge
+		local function fire(player: Player?)
+			if os.clock() - last < cooldown then
+				return
+			end
+			last = os.clock()
+			EasyVFX.Play(root)
+		end
+
+		if trigger == "Touch" then
+			local playersOnly = bool(root, "VFX_PlayersOnly", true)
+			if part == root then
+				part.CanTouch = true
+			end
+			local conn = part.Touched:Connect(function(hit)
+				local character = hit:FindFirstAncestorOfClass("Model")
+				local player = character and Players:GetPlayerFromCharacter(character)
+				if playersOnly and not player then
+					return
+				end
+				fire(player)
+			end)
+			return function()
+				conn:Disconnect()
+			end
+		elseif trigger == "Click" then
+			local detector = Instance.new("ClickDetector")
+			detector.Name = "EasyVFX_Click"
+			detector.MaxActivationDistance = num(root, "VFX_Distance", 32)
+			detector.Parent = part
+			local conn = detector.MouseClick:Connect(fire)
+			return function()
+				conn:Disconnect()
+				detector:Destroy()
+			end
+		elseif trigger == "Prompt" then
+			local prompt = Instance.new("ProximityPrompt")
+			prompt.Name = "EasyVFX_Prompt"
+			prompt.ActionText = str(root, "VFX_PromptText", "Use")
+			prompt.ObjectText = ""
+			prompt.HoldDuration = 0
+			prompt.RequiresLineOfSight = false
+			prompt.MaxActivationDistance = num(root, "VFX_Distance", 12)
+			prompt.Parent = if root:IsA("BasePart") then root else part
+			local conn = prompt.Triggered:Connect(fire)
+			return function()
+				conn:Disconnect()
+				prompt:Destroy()
+			end
+		end
+		return nil
+	end)
+end
+
+function EasyVFX.InitClient()
+	local function readQuality()
+		local ok, level = pcall(function()
+			return UserSettings():GetService("UserGameSettings").SavedQualityLevel.Value
+		end)
+		if ok and type(level) == "number" and level > 0 then
+			EasyVFX.Quality = math.clamp(level / 7, 0.35, 1)
+		else
+			EasyVFX.Quality = 1
+		end
+	end
+	readQuality()
+	pcall(function()
+		UserSettings():GetService("UserGameSettings"):GetPropertyChangedSignal("SavedQualityLevel"):Connect(readQuality)
+	end)
+
+	local remote = script:WaitForChild("PlayEvent", 30)
+	if remote and remote:IsA("RemoteEvent") then
+		remote.OnClientEvent:Connect(function(root: Instance?, at: CFrame?)
+			if root then
+				EasyVFX.PlayLocal(root, at)
+			end
+		end)
+	end
+
+	-- Looping effects run on each client so the network stays quiet.
+	watchTagged(function(root)
+		local trigger = str(root, "VFX_Trigger", "Always")
+		local loops = trigger == "Loop" or (trigger == "Always" and EasyVFX.HasBursts(root))
+		if not loops then
+			return nil
+		end
+		local running = true
+		task.spawn(function()
+			task.wait(math.random() * 0.3)
+			while running and root.Parent do
+				local length = EasyVFX.PlayLocal(root)
+				task.wait(math.max(0.2, num(root, "VFX_Interval", math.max(1, length))))
+			end
+		end)
+		return function()
+			running = false
+		end
+	end)
+end
+
+return EasyVFX
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="LocalScript" referent="3">
+        <Properties>
+          <string name="Name">EasyVFXClient</string>
+          <bool name="Enabled">false</bool>
+          <string name="Source"><![CDATA[-- Installed by the EasyVFX plugin. Plays effects on each player's device
+-- (smoother and lighter on the network). You don't need to edit this.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local EasyVFX = require(ReplicatedStorage:WaitForChild("EasyVFX"))
+EasyVFX.InitClient()
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="Script" referent="4">
+        <Properties>
+          <string name="Name">EasyVFXServer</string>
+          <bool name="Enabled">false</bool>
+          <token name="RunContext">0</token>
+          <string name="Source"><![CDATA[-- Installed by the EasyVFX plugin. Wires up the no-code triggers
+-- (touch, click, proximity prompt). You don't need to edit this.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local EasyVFX = require(ReplicatedStorage:WaitForChild("EasyVFX"))
+EasyVFX.InitServer()
+]]></string>
+        </Properties>
+      </Item>
+    </Item>
+    <Item class="Folder" referent="5">
+      <Properties>
+        <string name="Name">Shared</string>
+      </Properties>
+      <Item class="ModuleScript" referent="6">
+        <Properties>
+          <string name="Name">Builder</string>
+          <string name="Source"><![CDATA[--!strict
+--[[
+	Builder: turns a preset + the user's settings into real Roblox instances.
+
+	An effect is one invisible, non-colliding Part (the "effect part") tagged "EasyVFX".
+	Its settings live in VFX_* attributes, so selecting it later lets the plugin show
+	the same sliders again. Layers are updated in place (matched by their VFX_Layer
+	attribute) so dragging a slider doesn't restart the effect.
+]]
+
+local Presets = require(script.Parent.Presets)
+
+local Builder = {}
+
+Builder.TAG = "EasyVFX"
+Builder.LAYER_ATTR = "VFX_Layer"
+Builder.MAX_RATE = 400
+
+export type Params = {
+	preset: string,
+	color1: Color3,
+	color2: Color3,
+	size: number,
+	amount: number,
+	speed: number,
+	lifetime: number,
+	glow: number,
+	trigger: string, -- Always | Loop | Touch | Click | Prompt | Script
+	interval: number,
+	cooldown: number,
+	duration: number,
+	promptText: string,
+	texture: string,
+}
+
+export type Placement = {
+	cframe: CFrame,
+	size: Vector3,
+	parent: Instance,
+	weldTo: BasePart?,
+}
+
+Builder.Triggers = { "Always", "Loop", "Touch", "Click", "Prompt", "Script" }
+
+local ATTRS: { [string]: string } = {
+	preset = "VFX_Preset",
+	color1 = "VFX_Color1",
+	color2 = "VFX_Color2",
+	size = "VFX_Size",
+	amount = "VFX_Amount",
+	speed = "VFX_Speed",
+	lifetime = "VFX_Lifetime",
+	glow = "VFX_Glow",
+	trigger = "VFX_Trigger",
+	interval = "VFX_Interval",
+	cooldown = "VFX_Cooldown",
+	duration = "VFX_Duration",
+	promptText = "VFX_PromptText",
+	texture = "VFX_Texture",
+}
+Builder.Attributes = ATTRS
+
+local SIZE_KEYS = {
+	"Radius0", "Radius1", "Width0", "Width1", "Radius", "Width", "Distance0", "Distance1",
+	"Length", "Jitter", "Size0", "Size1", "SizeMin", "SizeMax", "Force",
+}
+local VECTOR_SIZE_KEYS = { "Step", "Offset", "From", "To" }
+local TIME_KEYS = { "Delay", "Duration", "Stagger" }
+local COUNTED_KINDS = { Lines = true, Debris = true, Crater = true }
+
+------------------------------------------------------------------------------------
+-- Params
+------------------------------------------------------------------------------------
+
+function Builder.defaultParams(presetId: string): Params
+	local preset = Presets.ById[presetId]
+	assert(preset, "Unknown preset " .. tostring(presetId))
+	local d = preset.defaults
+	return {
+		preset = presetId,
+		color1 = d.color1 or Color3.new(1, 1, 1),
+		color2 = d.color2 or Color3.new(1, 1, 1),
+		size = d.size or 1,
+		amount = d.amount or 1,
+		speed = d.speed or 1,
+		lifetime = d.lifetime or 1,
+		glow = d.glow or 1,
+		trigger = d.trigger or (if preset.kind == "burst" then "Loop" else "Always"),
+		interval = d.interval or 2,
+		cooldown = d.cooldown or 1,
+		duration = d.duration or 2,
+		promptText = d.promptText or "Use",
+		texture = "",
+	}
+end
+
+function Builder.isRoot(inst: Instance?): boolean
+	return inst ~= nil and inst:HasTag(Builder.TAG) and type(inst:GetAttribute(ATTRS.preset)) == "string"
+end
+
+function Builder.findRoot(inst: Instance?): Instance?
+	local current = inst
+	while current do
+		if Builder.isRoot(current) then
+			return current
+		end
+		current = current.Parent
+	end
+	return nil
+end
+
+function Builder.readParams(root: Instance): Params?
+	local presetId = root:GetAttribute(ATTRS.preset)
+	if type(presetId) ~= "string" or not Presets.ById[presetId] then
+		return nil
+	end
+	local params = Builder.defaultParams(presetId)
+	local p = params :: any
+	for key, attr in ATTRS do
+		local v = root:GetAttribute(attr)
+		if v ~= nil and typeof(v) == typeof(p[key]) then
+			p[key] = v
+		end
+	end
+	return params
+end
+
+function Builder.writeParams(root: Instance, params: Params)
+	local p = params :: any
+	for key, attr in ATTRS do
+		root:SetAttribute(attr, p[key])
+	end
+	root:SetAttribute("VFX_PlayersOnly", if root:GetAttribute("VFX_PlayersOnly") == nil then true else root:GetAttribute("VFX_PlayersOnly"))
+end
+
+------------------------------------------------------------------------------------
+-- Value helpers
+------------------------------------------------------------------------------------
+
+local function resolveColor(token: any, params: Params): Color3
+	if typeof(token) == "Color3" then
+		return token
+	elseif token == "p" then
+		return params.color1
+	elseif token == "s" then
+		return params.color2
+	elseif token == "k" then
+		return Color3.fromRGB(28, 26, 26)
+	elseif token == "g" then
+		return Color3.fromRGB(150, 145, 140)
+	elseif token == "d" then
+		return params.color1:Lerp(Color3.new(0, 0, 0), 0.65)
+	end
+	return Color3.new(1, 1, 1)
+end
+
+local function colorSequence(spec: any, params: Params): ColorSequence
+	local list = if type(spec) == "table" then spec else { spec or "p" }
+	if #list <= 1 then
+		return ColorSequence.new(resolveColor(list[1], params))
+	end
+	local points = {}
+	for i, token in list do
+		table.insert(points, ColorSequenceKeypoint.new((i - 1) / (#list - 1), resolveColor(token, params)))
+	end
+	return ColorSequence.new(points)
+end
+
+local function numberSequence(spec: any, mul: number, minValue: number?, maxValue: number?): NumberSequence
+	if type(spec) == "number" then
+		local v = spec * mul
+		return NumberSequence.new(v)
+	end
+	local points = {}
+	for _, kp in spec :: { { number } } do
+		local v = kp[2] * mul
+		if minValue then
+			v = math.max(minValue, v)
+		end
+		if maxValue then
+			v = math.min(maxValue, v)
+		end
+		table.insert(points, NumberSequenceKeypoint.new(kp[1], v, (kp[3] or 0) * mul))
+	end
+	return NumberSequence.new(points)
+end
+
+local function range(spec: any, mul: number, default: number): NumberRange
+	if type(spec) == "number" then
+		return NumberRange.new(spec * mul)
+	elseif type(spec) == "table" then
+		local a, b = spec[1] * mul, spec[2] * mul
+		return NumberRange.new(math.min(a, b), math.max(a, b))
+	end
+	return NumberRange.new(default)
+end
+
+local function enumItem(enum: any, name: any, default: EnumItem): EnumItem
+	if type(name) ~= "string" then
+		return default
+	end
+	local ok, item = pcall(function()
+		return enum[name]
+	end)
+	return if ok and item then item else default
+end
+
+------------------------------------------------------------------------------------
+-- Instance helpers
+------------------------------------------------------------------------------------
+
+type Existing = { [string]: Instance }
+
+local function collectExisting(root: Instance): Existing
+	local existing: Existing = {}
+	for _, d in root:GetDescendants() do
+		local key = d:GetAttribute(Builder.LAYER_ATTR)
+		if type(key) == "string" then
+			if existing[key] then
+				d:Destroy() -- duplicate (e.g. after a manual copy/paste)
+			else
+				existing[key] = d
+			end
+		end
+	end
+	return existing
+end
+
+local function getOrCreate(existing: Existing, wanted: { [string]: boolean }, key: string, className: string, parent: Instance): Instance
+	wanted[key] = true
+	local found: Instance? = existing[key]
+	if found and found.ClassName ~= className then
+		found:Destroy()
+		found = nil
+	end
+	local inst: Instance
+	if found then
+		inst = found
+	else
+		inst = Instance.new(className)
+		inst:SetAttribute(Builder.LAYER_ATTR, key)
+		existing[key] = inst
+	end
+	if inst.Parent ~= parent then
+		inst.Parent = parent
+	end
+	return inst
+end
+
+local function attachment(ctx: any, key: string, position: Vector3): Attachment
+	local a = getOrCreate(ctx.existing, ctx.wanted, key, "Attachment", ctx.root) :: Attachment
+	a.Name = "VFX_Point"
+	a.CFrame = CFrame.new(position)
+	return a
+end
+
+-- Turns a layer on now (Always) or makes it wait for a trigger (EmitDuration).
+local function setStreaming(inst: Instance, ctx: any, onProperty: () -> (), offProperty: () -> ())
+	if ctx.alwaysOn then
+		onProperty()
+		inst:SetAttribute("EmitDuration", nil)
+	else
+		offProperty()
+		inst:SetAttribute("EmitDuration", ctx.params.duration)
+	end
+	inst:SetAttribute("EmitCount", nil)
+	inst:SetAttribute("EmitDelay", nil)
+end
+
+local function layerParent(ctx: any, key: string, at: any): Instance
+	if at == nil or at == "part" then
+		return ctx.root
+	elseif at == "center" then
+		return attachment(ctx, key .. ":a", Vector3.zero)
+	elseif typeof(at) == "Vector3" then
+		return attachment(ctx, key .. ":a", at * ctx.params.size)
+	end
+	return ctx.root
+end
+
+------------------------------------------------------------------------------------
+-- Layer builders
+------------------------------------------------------------------------------------
+
+local LayerBuilders: { [string]: (ctx: any, key: string, layer: { [string]: any }) -> () } = {}
+
+LayerBuilders.particles = function(ctx, key, layer)
+	local params: Params = ctx.params
+	local parent = layerParent(ctx, key, layer.at)
+	local e = getOrCreate(ctx.existing, ctx.wanted, key, "ParticleEmitter", parent) :: ParticleEmitter
+	e.Name = layer.name or (if layer.burst then "Burst" else "Stream")
+	local texture = if params.texture ~= "" then params.texture else layer.texture
+	e.Texture = texture or Presets.Textures.Glow
+	e.Color = colorSequence(layer.color, params)
+	e.Size = numberSequence(layer.size or 1, params.size, 0)
+	e.Transparency = numberSequence(layer.transparency or 0, 1, 0, 1)
+	e.Squash = numberSequence(layer.squash or 0, 1, -3, 3)
+	e.Lifetime = range(layer.lifetime, params.lifetime, 1)
+	e.Speed = range(layer.speed, params.speed * math.sqrt(params.size), 5)
+	local spread = layer.spread or { 0, 0 }
+	e.SpreadAngle = Vector2.new(spread[1], spread[2])
+	e.Acceleration = (layer.accel or Vector3.zero) * params.speed * math.sqrt(params.size)
+	e.Drag = layer.drag or 0
+	e.Rotation = range(layer.rotation or 0, 1, 0)
+	e.RotSpeed = range(layer.rotSpeed or 0, params.speed, 0)
+	e.Orientation = enumItem(Enum.ParticleOrientation, layer.orientation, Enum.ParticleOrientation.FacingCamera) :: any
+	e.EmissionDirection = enumItem(Enum.NormalId, layer.direction, Enum.NormalId.Top) :: any
+	e.Shape = enumItem(Enum.ParticleEmitterShape, layer.shape, Enum.ParticleEmitterShape.Box) :: any
+	e.ShapeStyle = enumItem(Enum.ParticleEmitterShapeStyle, layer.shapeStyle, Enum.ParticleEmitterShapeStyle.Volume) :: any
+	e.ShapeInOut = enumItem(Enum.ParticleEmitterShapeInOut, layer.shapeInOut, Enum.ParticleEmitterShapeInOut.Outward) :: any
+	e.LightEmission = math.clamp((layer.lightEmission or 1) * params.glow, 0, 1)
+	e.LightInfluence = layer.lightInfluence or 0
+	e.Brightness = (layer.brightness or 1) * params.glow
+	e.ZOffset = layer.zOffset or 0
+	e.LockedToPart = layer.locked == true
+	e.WindAffectsDrag = layer.windDrag == true
+	if layer.burst then
+		e.Rate = 20
+		e.Enabled = false
+		e:SetAttribute("EmitCount", math.max(1, math.floor(layer.burst * params.amount + 0.5)))
+		e:SetAttribute("EmitDelay", if layer.delay then layer.delay * params.lifetime else nil)
+		e:SetAttribute("EmitDuration", nil)
+	else
+		e.Rate = math.min(Builder.MAX_RATE, (layer.rate or 10) * params.amount)
+		setStreaming(e, ctx, function()
+			e.Enabled = true
+		end, function()
+			e.Enabled = false
+		end)
+	end
+end
+
+LayerBuilders.shape = function(ctx, key, layer)
+	local params: Params = ctx.params
+	local cfg = getOrCreate(ctx.existing, ctx.wanted, key, "Configuration", ctx.root)
+	cfg.Name = "Shape_" .. tostring(layer.kind)
+	for name in cfg:GetAttributes() do
+		if name ~= Builder.LAYER_ATTR then
+			cfg:SetAttribute(name, nil)
+		end
+	end
+	local attrs: { [string]: any } = table.clone(layer.attrs or {})
+	local timeScale = params.lifetime / math.max(0.05, params.speed)
+	for _, k in SIZE_KEYS do
+		if type(attrs[k]) == "number" then
+			attrs[k] *= params.size
+		end
+	end
+	for _, k in VECTOR_SIZE_KEYS do
+		if typeof(attrs[k]) == "Vector3" then
+			attrs[k] *= params.size
+		end
+	end
+	for _, k in TIME_KEYS do
+		if type(attrs[k]) == "number" then
+			attrs[k] *= timeScale
+		end
+	end
+	if COUNTED_KINDS[layer.kind] and type(attrs.Count) == "number" then
+		attrs.Count = math.max(1, math.floor(attrs.Count * params.amount + 0.5))
+	end
+	attrs.Glow = math.clamp((attrs.Glow or 1) * params.glow, 0, 1)
+	attrs.Brightness = (attrs.Brightness or 1) * params.glow
+	attrs.Color0 = resolveColor(layer.color0 or "p", params)
+	attrs.Color1 = resolveColor(layer.color1 or layer.color0 or "s", params)
+	if params.texture ~= "" then
+		attrs.Texture = params.texture
+	end
+	attrs.Kind = layer.kind
+	for name, value in attrs do
+		cfg:SetAttribute(name, value)
+	end
+end
+
+LayerBuilders.light = function(ctx, key, layer)
+	local params: Params = ctx.params
+	local parent = layerParent(ctx, key, layer.at or "center")
+	local light = getOrCreate(ctx.existing, ctx.wanted, key, "PointLight", parent) :: PointLight
+	light.Name = "Light"
+	local brightness = (layer.brightness or 1) * params.glow
+	light.Brightness = brightness
+	light.Range = math.min(60, (layer.range or 12) * params.size)
+	light.Color = resolveColor(layer.color or "p", params)
+	light.Shadows = false
+	light:SetAttribute("BaseBrightness", brightness)
+	if layer.flash then
+		light.Enabled = false
+		light:SetAttribute("EmitDuration", layer.flash * params.lifetime)
+		light:SetAttribute("EmitDelay", layer.delay)
+		light:SetAttribute("FlashFade", true)
+	else
+		light:SetAttribute("FlashFade", false)
+		setStreaming(light, ctx, function()
+			light.Enabled = true
+		end, function()
+			light.Enabled = false
+		end)
+	end
+end
+
+LayerBuilders.beam = function(ctx, key, layer)
+	local params: Params = ctx.params
+	local a0 = attachment(ctx, key .. ":a", (layer.from or Vector3.zero) * params.size)
+	local a1 = attachment(ctx, key .. ":b", (layer.to or Vector3.new(0, 0, -10)) * params.size)
+	local beam = getOrCreate(ctx.existing, ctx.wanted, key, "Beam", ctx.root) :: Beam
+	beam.Name = "Beam"
+	beam.Attachment0 = a0
+	beam.Attachment1 = a1
+	local width = (layer.width or 1) * params.size
+	beam.Width0 = width
+	beam.Width1 = width
+	beam.Color = colorSequence(layer.color, params)
+	beam.Transparency = numberSequence(layer.transparency or 0, 1, 0, 1)
+	beam.LightEmission = math.clamp((layer.lightEmission or 1) * params.glow, 0, 1)
+	beam.LightInfluence = 0
+	beam.Brightness = (layer.brightness or 1) * params.glow
+	beam.FaceCamera = true
+	beam.Segments = 1
+	beam.Texture = params.texture
+	setStreaming(beam, ctx, function()
+		beam.Enabled = true
+	end, function()
+		beam.Enabled = false
+	end)
+end
+
+LayerBuilders.trail = function(ctx, key, layer)
+	local params: Params = ctx.params
+	local size: Vector3 = ctx.root.Size
+	local axis
+	if size.Y >= size.X and size.Y >= size.Z then
+		axis = Vector3.new(0, size.Y / 2, 0)
+	elseif size.X >= size.Z then
+		axis = Vector3.new(size.X / 2, 0, 0)
+	else
+		axis = Vector3.new(0, 0, size.Z / 2)
+	end
+	local a0 = attachment(ctx, key .. ":a", axis * 0.95)
+	local a1 = attachment(ctx, key .. ":b", -axis * 0.95)
+	local trail = getOrCreate(ctx.existing, ctx.wanted, key, "Trail", ctx.root) :: Trail
+	trail.Name = "Trail"
+	trail.Attachment0 = a0
+	trail.Attachment1 = a1
+	trail.Color = colorSequence(layer.color, params)
+	trail.Transparency = numberSequence(layer.transparency or 0, 1, 0, 1)
+	trail.WidthScale = numberSequence(layer.widthScale or 1, 1, 0)
+	trail.Lifetime = (layer.lifetime or 0.3) * params.lifetime
+	trail.LightEmission = math.clamp((layer.lightEmission or 1) * params.glow, 0, 1)
+	trail.LightInfluence = 0
+	trail.Brightness = (layer.brightness or 1) * params.glow
+	trail.MinLength = 0.05
+	trail.FaceCamera = false
+	trail.Texture = params.texture
+	setStreaming(trail, ctx, function()
+		trail.Enabled = true
+	end, function()
+		trail.Enabled = false
+	end)
+end
+
+LayerBuilders.part = function(ctx, key, layer)
+	local params: Params = ctx.params
+	local root: BasePart = ctx.root
+	local part = getOrCreate(ctx.existing, ctx.wanted, key, "Part", root) :: Part
+	part.Name = "Glow" .. (layer.shape or "Ball")
+	part.Shape = enumItem(Enum.PartType, layer.shape, Enum.PartType.Ball) :: any
+	part.Material = enumItem(Enum.Material, layer.material, Enum.Material.Neon) :: any
+	part.Color = resolveColor(layer.color or "p", params)
+	local d = math.max(root.Size.X, root.Size.Y, root.Size.Z) * (layer.scale or 1) * params.size
+	part.Size = Vector3.new(d, d, d)
+	part.CFrame = root.CFrame
+	part.Anchored = false
+	part.Massless = true
+	part.CanCollide = false
+	part.CanTouch = false
+	part.CanQuery = false
+	part.CastShadow = false
+	local weld = part:FindFirstChildOfClass("WeldConstraint") or Instance.new("WeldConstraint")
+	weld.Part0 = part
+	weld.Part1 = root
+	weld.Parent = part
+	local base = layer.transparency or 0
+	part:SetAttribute("BaseTransparency", base)
+	setStreaming(part, ctx, function()
+		part.Transparency = base
+	end, function()
+		part.Transparency = 1
+	end)
+end
+
+LayerBuilders.highlight = function(ctx, key, layer)
+	local params: Params = ctx.params
+	local h = getOrCreate(ctx.existing, ctx.wanted, key, "Highlight", ctx.root) :: Highlight
+	h.Name = "Outline"
+	local target = ctx.root.Parent
+	h.Adornee = if target and (target:IsA("BasePart") or target:IsA("Model")) then target else nil
+	h.FillColor = resolveColor(layer.fill or "p", params)
+	h.OutlineColor = resolveColor(layer.outline or "s", params)
+	h.FillTransparency = math.clamp((layer.fillTransparency or 0.5) / math.max(0.2, params.glow), 0, 1)
+	h.OutlineTransparency = layer.outlineTransparency or 0
+	h.DepthMode = Enum.HighlightDepthMode.Occluded
+	setStreaming(h, ctx, function()
+		h.Enabled = true
+	end, function()
+		h.Enabled = false
+	end)
+end
+
+------------------------------------------------------------------------------------
+-- Public
+------------------------------------------------------------------------------------
+
+-- Creates or updates every layer of the effect to match `params`.
+function Builder.apply(root: BasePart, params: Params)
+	local preset = Presets.ById[params.preset]
+	assert(preset, "Unknown preset " .. tostring(params.preset))
+	Builder.writeParams(root, params)
+	local ctx = {
+		root = root,
+		params = params,
+		alwaysOn = params.trigger == "Always",
+		existing = collectExisting(root),
+		wanted = {} :: { [string]: boolean },
+	}
+	for i, layer in preset.layers do
+		local build = LayerBuilders[layer.type]
+		if build then
+			build(ctx, tostring(i), layer)
+		else
+			warn("[EasyVFX] Unknown layer type " .. tostring(layer.type))
+		end
+	end
+	-- Remove layers the preset no longer has (attachments last so children go first).
+	local staleAttachments = {}
+	for key, inst in ctx.existing do
+		if not ctx.wanted[key] then
+			if inst:IsA("Attachment") then
+				table.insert(staleAttachments, inst)
+			else
+				inst:Destroy()
+			end
+		end
+	end
+	for _, inst in staleAttachments do
+		inst:Destroy()
+	end
+end
+
+function Builder.effectName(presetId: string): string
+	local preset = Presets.ById[presetId]
+	local name = if preset then preset.name.en else presetId
+	return "VFX_" .. (name:gsub("[^%w]", ""))
+end
+
+-- Makes a brand new effect part.
+function Builder.create(params: Params, placement: Placement): BasePart
+	local root = Instance.new("Part")
+	root.Name = Builder.effectName(params.preset)
+	root.Size = Vector3.new(
+		math.max(0.2, placement.size.X),
+		math.max(0.2, placement.size.Y),
+		math.max(0.2, placement.size.Z)
+	)
+	root.CFrame = placement.cframe
+	root.Transparency = 1
+	root.CanCollide = false
+	root.CanTouch = false
+	root.CanQuery = false
+	root.CastShadow = false
+	root.Massless = true
+	root.TopSurface = Enum.SurfaceType.Smooth
+	root.BottomSurface = Enum.SurfaceType.Smooth
+	if placement.weldTo then
+		root.Anchored = false
+		local weld = Instance.new("WeldConstraint")
+		weld.Name = "VFX_Weld"
+		weld.Part0 = root
+		weld.Part1 = placement.weldTo
+		weld.Parent = root
+	else
+		root.Anchored = true
+	end
+	root:AddTag(Builder.TAG)
+	root.Parent = placement.parent
+	Builder.apply(root, params)
+	return root
+end
+
+return Builder
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="7">
+        <Properties>
+          <string name="Name">Presets</string>
+          <string name="Source"><![CDATA[--!nonstrict
+--[[
+	Ready-made effects. Every preset is plain data that Builder turns into instances.
+
+	Layer types
+	  particles  ParticleEmitter. `burst = n` makes it a one-shot (EmitCount), otherwise
+	             it streams with `rate`. `at` = "part" (whole effect volume),
+	             "center", or a Vector3 offset in studs.
+	  shape      Crisp procedural piece played by the runtime (Ring, Slash, Lines, Bolt,
+	             Orb, Debris, Crater). `attrs` are written as attributes.
+	  light      PointLight. `flash = seconds` makes it a quick fading flash.
+	  beam       Static Beam between two offsets (lasers).
+	  trail      Trail along the longest side of the effect part (weapon swings).
+	  part       Static visible part (shield bubble, energy core).
+	  highlight  Outline glow on the object the effect is attached to.
+
+	Colors: "p" = main color, "s" = second color, "w" = white, "k" = soot black,
+	"d" = dark version of main color, or any Color3.
+	Sizes / times / counts are multiplied by the Size, Speed, Lifetime and Amount
+	sliders in the plugin.
+]]
+
+local Presets = {}
+
+Presets.Textures = {
+	Glow = "rbxasset://textures/particles/explosion01_implosion_main.dds",
+	Ring = "rbxasset://textures/particles/explosion01_shockwave_main.dds",
+	Smoke = "rbxasset://textures/particles/smoke_main.dds",
+	Star = "rbxasset://textures/particles/sparkles_main.dds",
+	Fire = "rbxasset://textures/particles/fire_main.dds",
+	Blast = "rbxasset://textures/particles/explosion01_core_main.dds",
+	Bubble = "rbxasset://textures/particles/forcefield_vortex_main.dds",
+	Square = "rbxasset://textures/particles/SquareParticle.png",
+}
+
+local T = Presets.Textures
+
+export type Layer = { [string]: any }
+export type Preset = {
+	id: string,
+	category: string,
+	name: { vi: string, en: string },
+	desc: { vi: string, en: string },
+	kind: string, -- "loop" | "burst"
+	placement: string?, -- "ground" | "sky" | "air"
+	area: Vector3?,
+	defaults: { [string]: any },
+	layers: { Layer },
+}
+
+Presets.Categories = {
+	{ id = "all", vi = "Tất cả", en = "All" },
+	{ id = "combat", vi = "Chiến đấu", en = "Combat" },
+	{ id = "magic", vi = "Phép thuật", en = "Magic" },
+	{ id = "elements", vi = "Nguyên tố", en = "Elements" },
+	{ id = "world", vi = "Môi trường", en = "World" },
+	{ id = "light", vi = "Ánh sáng", en = "Light" },
+}
+
+local function rgb(r: number, g: number, b: number): Color3
+	return Color3.fromRGB(r, g, b)
+end
+
+-- Reusable sharp spark streaks (crisp square texture stretched along velocity).
+local function sparks(count: number, speed: number, at: any?): Layer
+	return {
+		type = "particles",
+		at = at or "center",
+		texture = T.Square,
+		burst = count,
+		color = { "w", "p" },
+		size = { { 0, 0.22 }, { 1, 0 } },
+		squash = { { 0, -2.5 }, { 1, -2.5 } },
+		orientation = "VelocityParallel",
+		lifetime = { 0.35, 0.7 },
+		speed = { speed * 0.6, speed },
+		spread = { 180, 180 },
+		drag = 5,
+		accel = Vector3.new(0, -25, 0),
+		lightEmission = 1,
+		brightness = 2,
+	}
+end
+
+local function dust(count: number, at: any?): Layer
+	return {
+		type = "particles",
+		at = at or Vector3.new(0, -1.5, 0),
+		texture = T.Smoke,
+		burst = count,
+		color = { "g" },
+		size = { { 0, 2 }, { 1, 5 } },
+		transparency = { { 0, 0.4 }, { 1, 1 } },
+		lifetime = { 1, 1.8 },
+		speed = { 10, 18 },
+		spread = { 90, 90 },
+		direction = "Top",
+		drag = 5,
+		rotation = { 0, 360 },
+		rotSpeed = { -40, 40 },
+		lightEmission = 0,
+		lightInfluence = 1,
+	}
+end
+
+Presets.List = ({
+	------------------------------------------------------------------ Combat
+	{
+		id = "slash",
+		category = "combat",
+		name = { vi = "Chém lưỡi liềm", en = "Crescent Slash" },
+		desc = { vi = "Vệt chém sắc nét kiểu anime", en = "Crisp anime sword slash" },
+		kind = "burst",
+		placement = "air",
+		defaults = { color1 = rgb(255, 214, 64), color2 = rgb(255, 120, 20), trigger = "Loop", interval = 1.5 },
+		layers = {
+			{
+				type = "shape",
+				kind = "Slash",
+				attrs = { Radius = 5, Arc = 170, Width = 1.6, Sweep = 60, Duration = 0.4, Brightness = 2, TailFade = 0.8 },
+				color0 = "p",
+				color1 = "s",
+			},
+			{
+				type = "shape",
+				kind = "Lines",
+				attrs = { Count = 8, Mode = "Ring", Distance0 = 3, Distance1 = 9, Length = 3, Width = 0.18, Duration = 0.3, Delay = 0.05 },
+				color0 = "p",
+				color1 = "s",
+			},
+			sparks(14, 35),
+			{ type = "light", brightness = 3, range = 14, color = "p", flash = 0.25 },
+		},
+	},
+	{
+		id = "multi_slash",
+		category = "combat",
+		name = { vi = "Liên hoàn trảm", en = "Slash Flurry" },
+		desc = { vi = "Nhiều nhát chém xoay ngẫu nhiên", en = "Many slashes at random angles" },
+		kind = "burst",
+		placement = "air",
+		defaults = { color1 = rgb(170, 90, 255), color2 = rgb(90, 200, 255), trigger = "Loop", interval = 2 },
+		layers = {
+			{
+				type = "shape",
+				kind = "Slash",
+				attrs = { Count = 5, Stagger = 0.07, RandomTilt = 70, Radius = 4.5, Arc = 150, Width = 1.2, Sweep = 40, Duration = 0.35, Brightness = 2 },
+				color0 = "p",
+				color1 = "s",
+			},
+			{
+				type = "shape",
+				kind = "Orb",
+				attrs = { Size0 = 1, Size1 = 7, Duration = 0.2, Transparency = 0.3, FadeStart = 0 },
+				color0 = "w",
+				color1 = "p",
+			},
+			sparks(24, 40),
+			{ type = "light", brightness = 3, range = 16, color = "p", flash = 0.5 },
+		},
+	},
+	{
+		id = "impact",
+		category = "combat",
+		name = { vi = "Va chạm", en = "Hit Impact" },
+		desc = { vi = "Chớp sáng + tia + sóng khi đánh trúng", en = "Flash, needles and ring on hit" },
+		kind = "burst",
+		placement = "air",
+		defaults = { color1 = rgb(255, 235, 120), color2 = rgb(255, 140, 40), trigger = "Loop", interval = 1.2 },
+		layers = {
+			{
+				type = "shape",
+				kind = "Orb",
+				attrs = { Size0 = 0.5, Size1 = 5, Duration = 0.18, Transparency = 0, FadeStart = 0.2 },
+				color0 = "w",
+				color1 = "p",
+			},
+			{
+				type = "shape",
+				kind = "Lines",
+				attrs = { Count = 14, Mode = "Sphere", Distance0 = 0.5, Distance1 = 8, Length = 4, Width = 0.35, Duration = 0.3 },
+				color0 = "w",
+				color1 = "p",
+			},
+			{
+				type = "shape",
+				kind = "Ring",
+				attrs = { Radius0 = 0.5, Radius1 = 6, Width0 = 0.8, Width1 = 0.05, Duration = 0.35, Tilt = Vector3.new(90, 0, 0) },
+				color0 = "p",
+				color1 = "s",
+			},
+			sparks(16, 30),
+			{ type = "light", brightness = 4, range = 14, color = "p", flash = 0.2 },
+		},
+	},
+	{
+		id = "ground_slam",
+		category = "combat",
+		name = { vi = "Đập đất", en = "Ground Slam" },
+		desc = { vi = "Hố nứt, đá văng, sóng xung kích", en = "Crater, flying rocks, shockwave" },
+		kind = "burst",
+		placement = "ground",
+		defaults = { color1 = rgb(255, 200, 60), color2 = rgb(255, 90, 20), trigger = "Loop", interval = 3.5 },
+		layers = {
+			{ type = "shape", kind = "Crater", attrs = { Count = 14, Radius = 7, SizeMin = 1.4, SizeMax = 2.6, Duration = 3, Ground = true } },
+			{ type = "shape", kind = "Debris", attrs = { Count = 14, Force = 40, SizeMin = 0.4, SizeMax = 1.1, Duration = 2.2, Ground = true } },
+			{
+				type = "shape",
+				kind = "Ring",
+				attrs = { Count = 3, Stagger = 0.08, Radius0 = 1, Radius1 = 14, Width0 = 1.4, Width1 = 0.05, Duration = 0.5, Ground = true },
+				color0 = "p",
+				color1 = "s",
+			},
+			{
+				type = "shape",
+				kind = "Lines",
+				attrs = { Count = 16, Mode = "Up", Cone = 35, Distance0 = 0, Distance1 = 10, Length = 6, Width = 0.3, Duration = 0.45, Ground = true },
+				color0 = "p",
+				color1 = "s",
+			},
+			dust(14),
+			{ type = "light", brightness = 5, range = 22, color = "p", flash = 0.35 },
+		},
+	},
+	{
+		id = "energy_blast",
+		category = "combat",
+		name = { vi = "Pháo năng lượng", en = "Energy Blast" },
+		desc = { vi = "Đường hầm vòng sáng bắn về phía trước", en = "Tunnel of rings firing forward" },
+		kind = "burst",
+		placement = "air",
+		defaults = { color1 = rgb(255, 235, 40), color2 = rgb(80, 200, 255), trigger = "Loop", interval = 2 },
+		layers = {
+			{
+				type = "shape",
+				kind = "Ring",
+				attrs = {
+					Count = 7,
+					Stagger = 0.04,
+					Step = Vector3.new(0, 0, -4),
+					Tilt = Vector3.new(90, 0, 0),
+					Radius0 = 0.5,
+					Radius1 = 4,
+					Width0 = 0.6,
+					Width1 = 0.05,
+					Duration = 0.5,
+					Brightness = 2,
+				},
+				color0 = "p",
+				color1 = "s",
+			},
+			{
+				type = "shape",
+				kind = "Lines",
+				attrs = { Count = 20, Mode = "Forward", Cone = 12, Distance0 = 1, Distance1 = 30, Length = 9, Width = 0.3, Duration = 0.45 },
+				color0 = "p",
+				color1 = "s",
+			},
+			{
+				type = "shape",
+				kind = "Orb",
+				attrs = { Shape = "Cylinder", Length = 22, Size0 = 2.5, Size1 = 0.3, Tilt = Vector3.new(0, 90, 0), Offset = Vector3.new(0, 0, -11), Duration = 0.45, Transparency = 0.15, FadeStart = 0.3 },
+				color0 = "w",
+				color1 = "s",
+			},
+			sparks(18, 45),
+			{ type = "light", brightness = 4, range = 20, color = "s", flash = 0.4 },
+		},
+	},
+	{
+		id = "explosion",
+		category = "combat",
+		name = { vi = "Vụ nổ", en = "Explosion" },
+		desc = { vi = "Cầu lửa, khói, tia lửa, đá vụn", en = "Fireball, smoke, sparks, rubble" },
+		kind = "burst",
+		placement = "ground",
+		defaults = { color1 = rgb(255, 160, 40), color2 = rgb(210, 40, 10), trigger = "Loop", interval = 3 },
+		layers = {
+			{
+				type = "shape",
+				kind = "Orb",
+				attrs = { Size0 = 1, Size1 = 12, Duration = 0.3, Transparency = 0, FadeStart = 0.1 },
+				color0 = "w",
+				color1 = "p",
+			},
+			{
+				type = "particles",
+				at = "center",
+				texture = T.Blast,
+				burst = 14,
+				color = { "w", "p", "s" },
+				size = { { 0, 3 }, { 1, 8 } },
+				transparency = { { 0, 0 }, { 0.6, 0.3 }, { 1, 1 } },
+				lifetime = { 0.5, 0.9 },
+				speed = { 8, 16 },
+				spread = { 180, 180 },
+				drag = 6,
+				rotation = { 0, 360 },
+				rotSpeed = { -90, 90 },
+				lightEmission = 0.8,
+			},
+			{
+				type = "particles",
+				at = "center",
+				texture = T.Smoke,
+				burst = 10,
+				delay = 0.1,
+				color = { "k" },
+				size = { { 0, 4 }, { 1, 10 } },
+				transparency = { { 0, 0.3 }, { 1, 1 } },
+				lifetime = { 1.5, 2.5 },
+				speed = { 4, 9 },
+				spread = { 180, 180 },
+				drag = 3,
+				accel = Vector3.new(0, 3, 0),
+				rotation = { 0, 360 },
+				rotSpeed = { -30, 30 },
+				lightEmission = 0,
+				lightInfluence = 1,
+			},
+			{
+				type = "shape",
+				kind = "Ring",
+				attrs = { Radius0 = 1, Radius1 = 18, Width0 = 1.6, Width1 = 0.05, Duration = 0.55, Ground = true },
+				color0 = "p",
+				color1 = "s",
+			},
+			{ type = "shape", kind = "Debris", attrs = { Count = 10, Force = 45, Duration = 2, Ground = true } },
+			sparks(30, 50),
+			{ type = "light", brightness = 8, range = 30, color = "p", flash = 0.5 },
+		},
+	},
+	{
+		id = "lightning",
+		category = "combat",
+		name = { vi = "Sét đánh", en = "Lightning Strike" },
+		desc = { vi = "Tia sét zig-zag từ trời xuống", en = "Zig-zag bolt from the sky" },
+		kind = "burst",
+		placement = "ground",
+		defaults = { color1 = rgb(130, 190, 255), color2 = rgb(200, 120, 255), trigger = "Loop", interval = 2.5 },
+		layers = {
+			{
+				type = "shape",
+				kind = "Bolt",
+				attrs = { Count = 2, Stagger = 0.06, From = Vector3.new(0, 40, 0), To = Vector3.new(0, -2, 0), Segments = 10, Jitter = 3, Width = 0.7, Duration = 0.4, Brightness = 3 },
+				color0 = "p",
+				color1 = "s",
+			},
+			{
+				type = "shape",
+				kind = "Ring",
+				attrs = { Radius0 = 0.5, Radius1 = 9, Width0 = 1, Width1 = 0.05, Duration = 0.4, Ground = true },
+				color0 = "w",
+				color1 = "p",
+			},
+			{
+				type = "shape",
+				kind = "Lines",
+				attrs = { Count = 10, Mode = "Up", Cone = 60, Distance0 = 0, Distance1 = 6, Length = 3, Width = 0.25, Duration = 0.3, Ground = true },
+				color0 = "w",
+				color1 = "p",
+			},
+			sparks(20, 30, Vector3.new(0, -1.8, 0)),
+			{ type = "light", brightness = 10, range = 40, color = "p", flash = 0.35 },
+		},
+	},
+	{
+		id = "shockwave",
+		category = "combat",
+		name = { vi = "Sóng xung kích", en = "Shockwave" },
+		desc = { vi = "Nhiều vòng sóng lan trên mặt đất", en = "Rings racing across the ground" },
+		kind = "burst",
+		placement = "ground",
+		defaults = { color1 = rgb(255, 255, 255), color2 = rgb(120, 200, 255), trigger = "Loop", interval = 2 },
+		layers = {
+			{
+				type = "shape",
+				kind = "Ring",
+				attrs = { Count = 3, Stagger = 0.1, Radius0 = 1, Radius1 = 16, Width0 = 1.2, Width1 = 0.05, Duration = 0.7, Ground = true },
+				color0 = "p",
+				color1 = "s",
+			},
+			dust(18),
+		},
+	},
+	{
+		id = "sword_trail",
+		category = "combat",
+		name = { vi = "Vệt vũ khí", en = "Weapon Trail" },
+		desc = { vi = "Gắn vào kiếm: để lại vệt khi vung", en = "Put on a sword: streak when swung" },
+		kind = "loop",
+		placement = "air",
+		area = Vector3.new(0.5, 4, 0.5),
+		defaults = { color1 = rgb(120, 210, 255), color2 = rgb(60, 80, 255), trigger = "Always" },
+		layers = {
+			{
+				type = "trail",
+				color = { "w", "p", "s" },
+				transparency = { { 0, 0.1 }, { 1, 1 } },
+				lifetime = 0.25,
+				widthScale = { { 0, 1 }, { 1, 0.2 } },
+				lightEmission = 1,
+				brightness = 2,
+			},
+		},
+	},
+
+	------------------------------------------------------------------ Magic
+	{
+		id = "magic_circle",
+		category = "magic",
+		name = { vi = "Vòng phép", en = "Magic Circle" },
+		desc = { vi = "Vòng sáng xoay + hạt bay lên", en = "Spinning rings with rising motes" },
+		kind = "loop",
+		placement = "ground",
+		defaults = { color1 = rgb(170, 90, 255), color2 = rgb(80, 220, 255), trigger = "Always", interval = 1.6 },
+		layers = {
+			{
+				type = "shape",
+				kind = "Ring",
+				attrs = { Radius0 = 5, Radius1 = 5.4, Width0 = 0.35, Width1 = 0.35, Spin = 90, Duration = 1.6, Transparency = 0.1, FadeStart = 0.6, Ease = "Linear", Ground = true },
+				color0 = "p",
+				color1 = "s",
+			},
+			{
+				type = "shape",
+				kind = "Ring",
+				attrs = { Radius0 = 3.4, Radius1 = 3.2, Width0 = 0.2, Width1 = 0.2, Spin = -120, Duration = 1.6, Transparency = 0.2, FadeStart = 0.6, Ease = "Linear", Ground = true },
+				color0 = "s",
+				color1 = "p",
+			},
+			{
+				type = "particles",
+				at = "part",
+				texture = T.Glow,
+				rate = 14,
+				color = { "w", "p", "s" },
+				size = { { 0, 0 }, { 0.2, 0.5 }, { 1, 0 } },
+				lifetime = { 1.2, 2 },
+				speed = { 0.2, 0.6 },
+				accel = Vector3.new(0, 5, 0),
+				lightEmission = 1,
+			},
+			{ type = "light", brightness = 1.5, range = 12, color = "p" },
+		},
+	},
+	{
+		id = "heal",
+		category = "magic",
+		name = { vi = "Hồi máu", en = "Heal" },
+		desc = { vi = "Vòng xanh + tia sáng bay lên", en = "Green ring and rising light" },
+		kind = "burst",
+		placement = "ground",
+		defaults = { color1 = rgb(80, 255, 140), color2 = rgb(210, 255, 120), trigger = "Loop", interval = 2 },
+		layers = {
+			{
+				type = "shape",
+				kind = "Ring",
+				attrs = { Count = 2, Stagger = 0.15, Radius0 = 1, Radius1 = 5, Width0 = 0.6, Width1 = 0.05, Duration = 0.7, Ground = true },
+				color0 = "w",
+				color1 = "p",
+			},
+			{
+				type = "shape",
+				kind = "Lines",
+				attrs = { Count = 12, Mode = "Up", Cone = 8, Distance0 = 0, Distance1 = 9, Length = 3, Width = 0.25, Duration = 0.8, Stagger = 0.3, Ground = true },
+				color0 = "w",
+				color1 = "p",
+			},
+			{
+				type = "particles",
+				at = "part",
+				texture = T.Star,
+				burst = 24,
+				color = { "w", "p" },
+				size = { { 0, 0.7 }, { 1, 0 } },
+				lifetime = { 0.8, 1.4 },
+				speed = { 0.2, 0.5 },
+				accel = Vector3.new(0, 10, 0),
+				drag = 1,
+				rotation = { 0, 360 },
+				lightEmission = 1,
+			},
+			{ type = "light", brightness = 3, range = 12, color = "p", flash = 0.6 },
+		},
+	},
+	{
+		id = "level_up",
+		category = "magic",
+		name = { vi = "Lên cấp", en = "Level Up" },
+		desc = { vi = "Cột sáng + vòng bay lên + sao", en = "Light pillar, rising rings, stars" },
+		kind = "burst",
+		placement = "ground",
+		defaults = { color1 = rgb(255, 220, 80), color2 = rgb(255, 255, 255), trigger = "Loop", interval = 3 },
+		layers = {
+			{
+				type = "shape",
+				kind = "Orb",
+				attrs = { Shape = "Cylinder", Length = 26, Size0 = 5, Size1 = 0.1, Tilt = Vector3.new(0, 0, 90), Offset = Vector3.new(0, 11, 0), Duration = 0.9, Transparency = 0.2, Ease = "In" },
+				color0 = "p",
+				color1 = "w",
+			},
+			{
+				type = "shape",
+				kind = "Ring",
+				attrs = { Count = 4, Stagger = 0.12, Step = Vector3.new(0, 2, 0), Radius0 = 3, Radius1 = 1.5, Width0 = 0.4, Width1 = 0.1, Duration = 0.8, Ground = true },
+				color0 = "p",
+				color1 = "s",
+			},
+			{
+				type = "particles",
+				at = "part",
+				texture = T.Star,
+				burst = 30,
+				color = { "w", "p" },
+				size = { { 0, 0.8 }, { 1, 0 } },
+				lifetime = { 1, 1.6 },
+				speed = { 0.5, 1 },
+				accel = Vector3.new(0, 12, 0),
+				rotation = { 0, 360 },
+				rotSpeed = { -90, 90 },
+				lightEmission = 1,
+			},
+			{ type = "light", brightness = 4, range = 18, color = "p", flash = 1 },
+		},
+	},
+	{
+		id = "power_aura",
+		category = "magic",
+		name = { vi = "Hào quang sức mạnh", en = "Power Aura" },
+		desc = { vi = "Tia năng lượng liên tục bốc lên", en = "Energy streaks rising nonstop" },
+		kind = "loop",
+		placement = "ground",
+		area = Vector3.new(4, 5, 4),
+		defaults = { color1 = rgb(80, 200, 255), color2 = rgb(255, 255, 255), trigger = "Always", interval = 0.35 },
+		layers = {
+			{
+				type = "shape",
+				kind = "Lines",
+				attrs = { Count = 5, Mode = "Up", Cone = 6, Distance0 = 0, Distance1 = 7, Length = 4, Width = 0.35, Duration = 0.5, Stagger = 0.2, Ground = true },
+				color0 = "p",
+				color1 = "s",
+			},
+			{
+				type = "particles",
+				at = "part",
+				texture = T.Glow,
+				rate = 25,
+				color = { "w", "p" },
+				size = { { 0, 0.6 }, { 1, 0 } },
+				lifetime = { 0.5, 0.9 },
+				speed = { 0.1, 0.3 },
+				accel = Vector3.new(0, 14, 0),
+				lightEmission = 1,
+			},
+			{ type = "light", brightness = 2, range = 12, color = "p" },
+		},
+	},
+	{
+		id = "portal",
+		category = "magic",
+		name = { vi = "Cổng dịch chuyển", en = "Portal" },
+		desc = { vi = "Hạt xoáy hút vào tâm", en = "Particles swirling inward" },
+		kind = "loop",
+		placement = "ground",
+		area = Vector3.new(7, 7, 7),
+		defaults = { color1 = rgb(140, 80, 255), color2 = rgb(60, 220, 255), trigger = "Always", interval = 1 },
+		layers = {
+			{
+				type = "particles",
+				at = "part",
+				texture = T.Glow,
+				rate = 60,
+				color = { "s", "p", "w" },
+				size = { { 0, 0.6 }, { 1, 0 } },
+				transparency = { { 0, 1 }, { 0.3, 0 }, { 1, 0 } },
+				lifetime = { 0.8, 1.2 },
+				speed = { 2.5, 3.5 },
+				shape = "Sphere",
+				shapeStyle = "Surface",
+				shapeInOut = "Inward",
+				lightEmission = 1,
+			},
+			{
+				type = "shape",
+				kind = "Ring",
+				attrs = { Tilt = Vector3.new(90, 0, 0), Radius0 = 3.4, Radius1 = 0.2, Width0 = 0.3, Width1 = 0.05, Duration = 1, Transparency = 0.1, Ease = "In" },
+				color0 = "p",
+				color1 = "w",
+			},
+			{
+				type = "particles",
+				at = "center",
+				texture = T.Glow,
+				rate = 4,
+				locked = true,
+				color = { "p" },
+				size = { { 0, 6 }, { 1, 6 } },
+				transparency = { { 0, 1 }, { 0.5, 0.5 }, { 1, 1 } },
+				lifetime = { 1, 1 },
+				speed = { 0, 0 },
+				lightEmission = 1,
+			},
+			{ type = "light", brightness = 2, range = 16, color = "p" },
+		},
+	},
+	{
+		id = "shield",
+		category = "magic",
+		name = { vi = "Khiên năng lượng", en = "Energy Shield" },
+		desc = { vi = "Bong bóng bảo vệ lung linh", en = "Shimmering protective bubble" },
+		kind = "loop",
+		placement = "ground",
+		area = Vector3.new(6, 6, 6),
+		defaults = { color1 = rgb(90, 180, 255), color2 = rgb(255, 255, 255), trigger = "Always" },
+		layers = {
+			{ type = "part", shape = "Ball", material = "ForceField", color = "p", transparency = 0, scale = 1.3 },
+			{
+				type = "particles",
+				at = "part",
+				texture = T.Star,
+				rate = 12,
+				color = { "w", "p" },
+				size = { { 0, 0 }, { 0.3, 0.5 }, { 1, 0 } },
+				lifetime = { 0.6, 1 },
+				speed = { 0, 0 },
+				shape = "Sphere",
+				shapeStyle = "Surface",
+				rotation = { 0, 360 },
+				lightEmission = 1,
+			},
+		},
+	},
+	{
+		id = "energy_orb",
+		category = "magic",
+		name = { vi = "Quả cầu năng lượng", en = "Energy Orb" },
+		desc = { vi = "Lõi neon phát sáng + tia điện", en = "Neon core with crackling sparks" },
+		kind = "loop",
+		placement = "air",
+		area = Vector3.new(2, 2, 2),
+		defaults = { color1 = rgb(80, 200, 255), color2 = rgb(255, 255, 255), trigger = "Always", interval = 0.4 },
+		layers = {
+			{ type = "part", shape = "Ball", material = "Neon", color = "p", transparency = 0.1, scale = 0.8 },
+			{
+				type = "shape",
+				kind = "Lines",
+				attrs = { Count = 4, Mode = "Sphere", Distance0 = 0.8, Distance1 = 3, Length = 1.5, Width = 0.15, Duration = 0.25, Stagger = 0.3 },
+				color0 = "w",
+				color1 = "p",
+			},
+			{
+				type = "particles",
+				at = "center",
+				texture = T.Glow,
+				rate = 8,
+				locked = true,
+				color = { "p" },
+				size = { { 0, 5 }, { 1, 5 } },
+				transparency = { { 0, 1 }, { 0.5, 0.6 }, { 1, 1 } },
+				lifetime = { 0.6, 0.8 },
+				speed = { 0, 0 },
+				lightEmission = 1,
+			},
+			{ type = "light", brightness = 2, range = 12, color = "p" },
+		},
+	},
+	{
+		id = "sparkles",
+		category = "magic",
+		name = { vi = "Lấp lánh", en = "Sparkles" },
+		desc = { vi = "Sao lấp lánh quanh vật thể", en = "Twinkling stars around an object" },
+		kind = "loop",
+		defaults = { color1 = rgb(255, 230, 120), color2 = rgb(255, 255, 255), trigger = "Always" },
+		layers = {
+			{
+				type = "particles",
+				at = "part",
+				texture = T.Star,
+				rate = 15,
+				color = { "s", "p" },
+				size = { { 0, 0 }, { 0.3, 0.6 }, { 1, 0 } },
+				lifetime = { 0.8, 1.5 },
+				speed = { 0.5, 1.5 },
+				spread = { 180, 180 },
+				rotation = { 0, 360 },
+				rotSpeed = { -90, 90 },
+				lightEmission = 1,
+			},
+		},
+	},
+
+	------------------------------------------------------------------ Elements
+	{
+		id = "fire",
+		category = "elements",
+		name = { vi = "Lửa", en = "Fire" },
+		desc = { vi = "Ngọn lửa, tàn lửa, khói", en = "Flames, embers and smoke" },
+		kind = "loop",
+		defaults = { color1 = rgb(255, 140, 40), color2 = rgb(200, 40, 20), trigger = "Always", duration = 3 },
+		layers = {
+			{
+				type = "particles",
+				at = "part",
+				texture = T.Glow,
+				rate = 40,
+				color = { "w", "p", "s" },
+				size = { { 0, 1.6 }, { 0.5, 1.2 }, { 1, 0 } },
+				transparency = { { 0, 0.4 }, { 0.2, 0.1 }, { 1, 1 } },
+				lifetime = { 0.6, 1 },
+				speed = { 3, 5 },
+				spread = { 10, 10 },
+				accel = Vector3.new(0, 4, 0),
+				drag = 1,
+				rotation = { 0, 360 },
+				rotSpeed = { -60, 60 },
+				lightEmission = 1,
+			},
+			{
+				type = "particles",
+				at = "part",
+				texture = T.Fire,
+				rate = 18,
+				color = { "p", "s" },
+				size = { { 0, 2 }, { 1, 0.5 } },
+				transparency = { { 0, 0.3 }, { 1, 1 } },
+				lifetime = { 0.5, 0.9 },
+				speed = { 4, 6 },
+				rotation = { 0, 360 },
+				rotSpeed = { -90, 90 },
+				lightEmission = 1,
+			},
+			{
+				type = "particles",
+				at = "part",
+				texture = T.Square,
+				rate = 8,
+				color = { "w", "p" },
+				size = { { 0, 0.15 }, { 1, 0 } },
+				squash = { { 0, -1.5 }, { 1, -1.5 } },
+				orientation = "VelocityParallel",
+				lifetime = { 1, 2 },
+				speed = { 6, 9 },
+				spread = { 25, 25 },
+				accel = Vector3.new(0, 2, 0),
+				drag = 2,
+				lightEmission = 1,
+			},
+			{
+				type = "particles",
+				at = "part",
+				texture = T.Smoke,
+				rate = 6,
+				color = { "k" },
+				size = { { 0, 1.5 }, { 1, 4 } },
+				transparency = { { 0, 1 }, { 0.2, 0.7 }, { 1, 1 } },
+				lifetime = { 2, 3 },
+				speed = { 4, 6 },
+				rotSpeed = { -30, 30 },
+				lightEmission = 0,
+				lightInfluence = 1,
+				zOffset = -0.5,
+			},
+			{ type = "light", brightness = 2, range = 12, color = "p" },
+		},
+	},
+	{
+		id = "smoke",
+		category = "elements",
+		name = { vi = "Khói", en = "Smoke" },
+		desc = { vi = "Cột khói bốc lên chậm", en = "Slowly rising smoke column" },
+		kind = "loop",
+		defaults = { color1 = rgb(170, 170, 175), color2 = rgb(90, 90, 95), trigger = "Always", duration = 4 },
+		layers = {
+			{
+				type = "particles",
+				at = "part",
+				texture = T.Smoke,
+				rate = 10,
+				color = { "p", "s" },
+				size = { { 0, 2 }, { 1, 6 } },
+				transparency = { { 0, 1 }, { 0.15, 0.5 }, { 1, 1 } },
+				lifetime = { 3, 5 },
+				speed = { 2, 4 },
+				spread = { 15, 15 },
+				accel = Vector3.new(0, 1, 0),
+				rotation = { 0, 360 },
+				rotSpeed = { -20, 20 },
+				lightEmission = 0,
+				lightInfluence = 1,
+			},
+		},
+	},
+	{
+		id = "frost",
+		category = "elements",
+		name = { vi = "Băng giá", en = "Frost" },
+		desc = { vi = "Tinh thể băng rơi + hơi lạnh", en = "Falling ice glints and cold mist" },
+		kind = "loop",
+		defaults = { color1 = rgb(170, 230, 255), color2 = rgb(255, 255, 255), trigger = "Always" },
+		layers = {
+			{
+				type = "particles",
+				at = "part",
+				texture = T.Star,
+				rate = 14,
+				color = { "s", "p" },
+				size = { { 0, 0 }, { 0.3, 0.45 }, { 1, 0 } },
+				lifetime = { 1.5, 2.5 },
+				speed = { 0.2, 0.5 },
+				accel = Vector3.new(0, -1.5, 0),
+				rotation = { 0, 360 },
+				rotSpeed = { -60, 60 },
+				lightEmission = 0.6,
+			},
+			{
+				type = "particles",
+				at = "part",
+				texture = T.Smoke,
+				rate = 5,
+				color = { "p" },
+				size = { { 0, 2 }, { 1, 4 } },
+				transparency = { { 0, 1 }, { 0.3, 0.8 }, { 1, 1 } },
+				lifetime = { 2, 3 },
+				speed = { 0.5, 1 },
+				accel = Vector3.new(0, -1, 0),
+				rotSpeed = { -10, 10 },
+				lightEmission = 0.2,
+				lightInfluence = 0.5,
+			},
+		},
+	},
+	{
+		id = "fountain",
+		category = "elements",
+		name = { vi = "Đài phun nước", en = "Fountain" },
+		desc = { vi = "Tia nước phun lên rồi rơi", en = "Water jet that arcs and falls" },
+		kind = "loop",
+		placement = "ground",
+		area = Vector3.new(2, 2, 2),
+		defaults = { color1 = rgb(110, 190, 255), color2 = rgb(255, 255, 255), trigger = "Always" },
+		layers = {
+			{
+				type = "particles",
+				at = "center",
+				texture = T.Glow,
+				rate = 120,
+				color = { "s", "p" },
+				size = { { 0, 0.35 }, { 1, 0.15 } },
+				transparency = { { 0, 0.2 }, { 1, 0.6 } },
+				lifetime = { 1.5, 2 },
+				speed = { 22, 26 },
+				spread = { 8, 8 },
+				accel = Vector3.new(0, -30, 0),
+				lightEmission = 0.3,
+				lightInfluence = 0.8,
+			},
+		},
+	},
+
+	------------------------------------------------------------------ World
+	{
+		id = "rain",
+		category = "world",
+		name = { vi = "Mưa", en = "Rain" },
+		desc = { vi = "Mưa rơi trên một vùng rộng", en = "Rain over a wide area" },
+		kind = "loop",
+		placement = "sky",
+		area = Vector3.new(60, 1, 60),
+		defaults = { color1 = rgb(170, 190, 220), color2 = rgb(255, 255, 255), trigger = "Always" },
+		layers = {
+			{
+				type = "particles",
+				at = "part",
+				texture = T.Square,
+				rate = 300,
+				color = { "p" },
+				size = { { 0, 0.12 }, { 1, 0.12 } },
+				squash = { { 0, 3 }, { 1, 3 } },
+				orientation = "FacingCameraWorldUp",
+				transparency = { { 0, 0.4 }, { 1, 0.4 } },
+				lifetime = { 0.9, 1.1 },
+				speed = { 50, 60 },
+				direction = "Bottom",
+				accel = Vector3.new(0, -20, 0),
+				lightEmission = 0.2,
+				lightInfluence = 1,
+				noSpread = true,
+			},
+		},
+	},
+	{
+		id = "snow",
+		category = "world",
+		name = { vi = "Tuyết", en = "Snow" },
+		desc = { vi = "Tuyết rơi nhẹ nhàng", en = "Gently falling snow" },
+		kind = "loop",
+		placement = "sky",
+		area = Vector3.new(60, 1, 60),
+		defaults = { color1 = rgb(255, 255, 255), color2 = rgb(200, 220, 255), trigger = "Always" },
+		layers = {
+			{
+				type = "particles",
+				at = "part",
+				texture = T.Glow,
+				rate = 120,
+				color = { "p", "s" },
+				size = { { 0, 0.35 }, { 1, 0.35 } },
+				transparency = { { 0, 1 }, { 0.1, 0.1 }, { 0.9, 0.1 }, { 1, 1 } },
+				lifetime = { 8, 10 },
+				speed = { 3, 5 },
+				direction = "Bottom",
+				spread = { 10, 10 },
+				windDrag = true,
+				drag = 0.5,
+				lightEmission = 0.3,
+				lightInfluence = 0.5,
+			},
+		},
+	},
+	{
+		id = "fireflies",
+		category = "world",
+		name = { vi = "Đom đóm", en = "Fireflies" },
+		desc = { vi = "Đốm sáng bay lơ lửng", en = "Floating glowing dots" },
+		kind = "loop",
+		placement = "ground",
+		area = Vector3.new(20, 6, 20),
+		defaults = { color1 = rgb(210, 255, 90), color2 = rgb(255, 220, 80), trigger = "Always" },
+		layers = {
+			{
+				type = "particles",
+				at = "part",
+				texture = T.Glow,
+				rate = 6,
+				color = { "p", "s" },
+				size = { { 0, 0 }, { 0.2, 0.35 }, { 0.8, 0.35 }, { 1, 0 } },
+				transparency = { { 0, 0 }, { 0.5, 0.6 }, { 1, 0 } },
+				lifetime = { 4, 7 },
+				speed = { 0.5, 1 },
+				spread = { 180, 180 },
+				lightEmission = 1,
+			},
+		},
+	},
+	{
+		id = "fog",
+		category = "world",
+		name = { vi = "Sương mù", en = "Ground Fog" },
+		desc = { vi = "Sương mỏng sát mặt đất", en = "Thin mist hugging the ground" },
+		kind = "loop",
+		placement = "ground",
+		area = Vector3.new(40, 2, 40),
+		defaults = { color1 = rgb(220, 225, 235), color2 = rgb(200, 205, 220), trigger = "Always" },
+		layers = {
+			{
+				type = "particles",
+				at = "part",
+				texture = T.Smoke,
+				rate = 4,
+				color = { "p", "s" },
+				size = { { 0, 8 }, { 1, 14 } },
+				transparency = { { 0, 1 }, { 0.3, 0.85 }, { 0.7, 0.85 }, { 1, 1 } },
+				lifetime = { 8, 12 },
+				speed = { 0.5, 1 },
+				spread = { 180, 180 },
+				rotSpeed = { -5, 5 },
+				lightEmission = 0,
+				lightInfluence = 1,
+			},
+		},
+	},
+	{
+		id = "confetti",
+		category = "world",
+		name = { vi = "Pháo giấy", en = "Confetti" },
+		desc = { vi = "Giấy màu tung lên ăn mừng", en = "Colorful celebration burst" },
+		kind = "burst",
+		placement = "ground",
+		defaults = { color1 = rgb(255, 80, 120), color2 = rgb(80, 180, 255), trigger = "Loop", interval = 3 },
+		layers = (function()
+			local layers = {}
+			for i, c in { "p", "s", rgb(255, 220, 60), rgb(90, 230, 120) } do
+				table.insert(layers, {
+					type = "particles",
+					at = "center",
+					texture = T.Square,
+					burst = 15,
+					color = { c },
+					size = { { 0, 0.35 }, { 1, 0.35 } },
+					squash = { { 0, -0.6 }, { 0.25, 0.6 }, { 0.5, -0.6 }, { 0.75, 0.6 }, { 1, -0.6 } },
+					lifetime = { 3, 4 },
+					speed = { 25, 40 },
+					spread = { 35, 35 },
+					direction = "Top",
+					accel = Vector3.new(0, -25, 0),
+					drag = 2,
+					rotation = { 0, 360 },
+					rotSpeed = { -360, 360 },
+					lightEmission = 0,
+					lightInfluence = 1,
+					delay = (i - 1) * 0.02,
+				})
+			end
+			return layers
+		end)(),
+	},
+	{
+		id = "bubbles",
+		category = "world",
+		name = { vi = "Bong bóng", en = "Bubbles" },
+		desc = { vi = "Bong bóng nổi lên", en = "Rising bubbles" },
+		kind = "loop",
+		defaults = { color1 = rgb(180, 230, 255), color2 = rgb(255, 255, 255), trigger = "Always" },
+		layers = {
+			{
+				type = "particles",
+				at = "part",
+				texture = T.Bubble,
+				rate = 6,
+				color = { "p", "s" },
+				size = { { 0, 0.4 }, { 1, 1 } },
+				transparency = { { 0, 1 }, { 0.1, 0.2 }, { 0.9, 0.3 }, { 1, 1 } },
+				lifetime = { 3, 5 },
+				speed = { 1, 2 },
+				direction = "Top",
+				spread = { 20, 20 },
+				accel = Vector3.new(0, 1, 0),
+				rotSpeed = { -30, 30 },
+				lightEmission = 0.3,
+			},
+		},
+	},
+
+	------------------------------------------------------------------ Light
+	{
+		id = "laser",
+		category = "light",
+		name = { vi = "Tia laser", en = "Laser Beam" },
+		desc = { vi = "Tia sáng bắn thẳng phía trước", en = "Straight beam shooting forward" },
+		kind = "loop",
+		placement = "air",
+		area = Vector3.new(1, 1, 1),
+		defaults = { color1 = rgb(255, 40, 70), color2 = rgb(255, 160, 160), trigger = "Always", duration = 1 },
+		layers = {
+			{ type = "beam", from = Vector3.zero, to = Vector3.new(0, 0, -30), width = 0.35, color = { "w" }, lightEmission = 1, brightness = 3 },
+			{ type = "beam", from = Vector3.zero, to = Vector3.new(0, 0, -30), width = 1.4, color = { "p", "s" }, transparency = { { 0, 0.3 }, { 1, 0.5 } }, lightEmission = 1, brightness = 2 },
+			{
+				type = "particles",
+				at = Vector3.new(0, 0, -30),
+				texture = T.Square,
+				rate = 30,
+				color = { "w", "p" },
+				size = { { 0, 0.2 }, { 1, 0 } },
+				squash = { { 0, -2 }, { 1, -2 } },
+				orientation = "VelocityParallel",
+				lifetime = { 0.2, 0.4 },
+				speed = { 15, 25 },
+				spread = { 180, 180 },
+				drag = 4,
+				lightEmission = 1,
+			},
+			{ type = "light", at = Vector3.new(0, 0, -30), brightness = 3, range = 10, color = "p" },
+		},
+	},
+	{
+		id = "glow",
+		category = "light",
+		name = { vi = "Quầng sáng", en = "Soft Glow" },
+		desc = { vi = "Vầng sáng dịu + đèn", en = "Soft halo with a light" },
+		kind = "loop",
+		defaults = { color1 = rgb(255, 220, 150), color2 = rgb(255, 255, 255), trigger = "Always" },
+		layers = {
+			{
+				type = "particles",
+				at = "center",
+				texture = T.Glow,
+				rate = 3,
+				locked = true,
+				color = { "p" },
+				size = { { 0, 8 }, { 1, 8 } },
+				transparency = { { 0, 1 }, { 0.5, 0.6 }, { 1, 1 } },
+				lifetime = { 2, 2 },
+				speed = { 0, 0 },
+				lightEmission = 1,
+			},
+			{ type = "light", brightness = 1.5, range = 14, color = "p" },
+		},
+	},
+	{
+		id = "outline",
+		category = "light",
+		name = { vi = "Viền phát sáng", en = "Glowing Outline" },
+		desc = { vi = "Tô viền vật thể (Highlight)", en = "Outline the object (Highlight)" },
+		kind = "loop",
+		defaults = { color1 = rgb(255, 200, 60), color2 = rgb(255, 255, 255), trigger = "Always" },
+		layers = {
+			{ type = "highlight", fill = "p", outline = "s", fillTransparency = 0.6, outlineTransparency = 0 },
+		},
+	},
+} :: any) :: { Preset }
+
+Presets.ById = {} :: { [string]: Preset }
+for _, preset in Presets.List do
+	Presets.ById[preset.id] = preset :: any
+end
+
+return Presets
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="8">
+        <Properties>
+          <string name="Name">Strings</string>
+          <string name="Source"><![CDATA[--!strict
+-- All text shown in the plugin, in Vietnamese and English.
+
+local Strings = {}
+
+Strings.vi = {
+	appTitle = "EasyVFX",
+	appSubtitle = "Hiệu ứng đẹp, không cần code",
+	toolbar = "EasyVFX",
+	toolbarTip = "Mở bảng hiệu ứng EasyVFX",
+	help = "Hướng dẫn",
+	language = "EN",
+	languageTip = "Switch to English",
+
+	tabLibrary = "Thư viện",
+	tabEdit = "Tùy chỉnh",
+	searchLabel = "Tìm hiệu ứng",
+	searchPlaceholder = "Ví dụ: chém, lửa, sét...",
+	badgeLoop = "Liên tục",
+	badgeBurst = "Một lần",
+	noResults = "Không tìm thấy hiệu ứng nào. Thử từ khóa khác hoặc chọn \"Tất cả\".",
+
+	targetNone = "Chưa chọn vật thể — hiệu ứng sẽ đặt trước camera",
+	targetSome = "Sẽ gắn vào: %s",
+	targetEffect = "Đang chọn hiệu ứng: %s",
+
+	added = "Đã thêm \"%s\". Nhấn Ctrl+Z nếu muốn hoàn tác.",
+	runtimeInstalled = "Đã cài script chạy hiệu ứng vào game (1 lần duy nhất).",
+	runtimeUpdated = "Đã cập nhật script chạy hiệu ứng.",
+
+	emptyTitle = "Chưa chọn hiệu ứng nào",
+	emptyBody = "Chọn một hiệu ứng trong Explorer, hoặc thêm mới từ Thư viện.",
+	emptyAction = "Mở Thư viện",
+
+	play = "Xem thử",
+	playTip = "Phát hiệu ứng ngay trong Studio",
+	duplicate = "Nhân bản",
+	delete = "Xóa",
+	deleteConfirm = "Bấm lần nữa để xóa",
+	deleted = "Đã xóa hiệu ứng. Nhấn Ctrl+Z để lấy lại.",
+	reset = "Đặt lại mặc định",
+	resetDone = "Đã đặt lại thông số mặc định.",
+	autoPreview = "Tự động xem thử khi chọn",
+	saveFavorite = "Lưu vào Yêu thích",
+	saved = "Đã lưu \"%s\" vào Yêu thích.",
+	nameLabel = "Tên hiệu ứng",
+
+	sectionColor = "Màu sắc",
+	color1 = "Màu chính",
+	color2 = "Màu phụ",
+	hexLabel = "Mã màu",
+	hexInvalid = "Mã màu chưa đúng. Ví dụ đúng: #FFAA00",
+
+	sectionLook = "Hình dạng",
+	size = "Kích thước",
+	sizeHint = "To hay nhỏ",
+	amount = "Số lượng",
+	amountHint = "Nhiều hay ít hạt / tia",
+	speed = "Tốc độ",
+	speedHint = "Nhanh hay chậm",
+	lifetime = "Thời gian tồn tại",
+	lifetimeHint = "Mỗi hạt sống bao lâu",
+	glow = "Độ phát sáng",
+	glowHint = "0 = không sáng, 2 = rất sáng",
+
+	sectionTrigger = "Khi nào hiệu ứng chạy?",
+	trigAlways = "Luôn bật",
+	trigAlwaysHint = "Chạy liên tục khi vào game",
+	trigLoop = "Lặp lại",
+	trigLoopHint = "Tự phát lại sau mỗi khoảng thời gian",
+	trigTouch = "Khi chạm vào",
+	trigTouchHint = "Người chơi chạm vào vật thể",
+	trigClick = "Khi click chuột",
+	trigClickHint = "Người chơi click vào vật thể",
+	trigPrompt = "Khi bấm phím E",
+	trigPromptHint = "Hiện nút tương tác khi đến gần",
+	trigScript = "Bằng script",
+	trigScriptHint = "Tự gọi từ code của bạn",
+	interval = "Lặp lại mỗi (giây)",
+	cooldown = "Chờ giữa 2 lần (giây)",
+	duration = "Thời lượng bật (giây)",
+	promptText = "Chữ trên nút",
+	scriptSnippetLabel = "Dán dòng này vào Script của bạn",
+
+	sectionAdvanced = "Nâng cao",
+	textureLabel = "Texture riêng (ID ảnh)",
+	texturePlaceholder = "Dán ID ảnh, ví dụ 1234567890",
+	textureHint = "Để trống = dùng texture có sẵn. Dùng ảnh bạn vẽ trong Blender/Photoshop.",
+	bloom = "Bật Bloom cho Lighting",
+	bloomTip = "Làm Neon và hiệu ứng phát sáng rực như anime",
+	bloomDone = "Đã thêm Bloom vào Lighting.",
+	bloomExists = "Lighting đã có Bloom rồi.",
+
+	favorites = "Yêu thích",
+
+	onboardSkip = "Bỏ qua",
+	onboardNext = "Tiếp",
+	onboardBack = "Quay lại",
+	onboardDone = "Bắt đầu!",
+	onboard1Title = "1. Chọn nơi đặt hiệu ứng",
+	onboard1Body = "Click một Part trong game (ví dụ thanh kiếm, nhân vật, mặt đất). Không chọn gì thì hiệu ứng xuất hiện trước camera.",
+	onboard2Title = "2. Bấm vào một hiệu ứng",
+	onboard2Body = "Mở tab Thư viện và bấm vào thẻ hiệu ứng bạn thích. Hiệu ứng được thêm ngay, có thể Ctrl+Z.",
+	onboard3Title = "3. Tùy chỉnh và chọn cách kích hoạt",
+	onboard3Body = "Đổi màu, kéo thanh trượt, chọn \"Khi chạm vào\" hoặc \"Khi bấm E\"... rồi nhấn Play (F5) để thử. Không cần viết code!",
+
+	helpTitle = "Mẹo nhanh",
+	helpBody = "• Hiệu ứng thật sự chạy khi bấm Play (F5). Nút \"Xem thử\" chỉ để xem trong Studio.\n• Mỗi hiệu ứng là 1 Part vô hình tên VFX_... — kéo, xoay, nhân bản như Part bình thường.\n• Hiệu ứng chạy trên máy người chơi (client) nên mượt và nhẹ mạng.\n• Muốn sắc nét kiểu anime: bật Bloom bên dưới, giữ \"Độ phát sáng\" ≥ 1.\n• Script: require(game.ReplicatedStorage.EasyVFX).Play(effect)",
+	close = "Đóng",
+	replayGuide = "Xem lại hướng dẫn",
+}
+
+Strings.en = {
+	appTitle = "EasyVFX",
+	appSubtitle = "Beautiful effects, zero code",
+	toolbar = "EasyVFX",
+	toolbarTip = "Open the EasyVFX panel",
+	help = "Help",
+	language = "VI",
+	languageTip = "Chuyển sang Tiếng Việt",
+
+	tabLibrary = "Library",
+	tabEdit = "Customize",
+	searchLabel = "Find an effect",
+	searchPlaceholder = "e.g. slash, fire, lightning...",
+	badgeLoop = "Looping",
+	badgeBurst = "One-shot",
+	noResults = "No effects found. Try another word or pick \"All\".",
+
+	targetNone = "Nothing selected — the effect will appear in front of the camera",
+	targetSome = "Will attach to: %s",
+	targetEffect = "Editing effect: %s",
+
+	added = "Added \"%s\". Press Ctrl+Z to undo.",
+	runtimeInstalled = "Installed the effect player scripts into your game (one time).",
+	runtimeUpdated = "Updated the effect player scripts.",
+
+	emptyTitle = "No effect selected",
+	emptyBody = "Select an effect in the Explorer, or add one from the Library.",
+	emptyAction = "Open Library",
+
+	play = "Preview",
+	playTip = "Play the effect right here in Studio",
+	duplicate = "Duplicate",
+	delete = "Delete",
+	deleteConfirm = "Click again to delete",
+	deleted = "Effect deleted. Press Ctrl+Z to bring it back.",
+	reset = "Reset to default",
+	resetDone = "Settings reset to default.",
+	autoPreview = "Auto-preview when selected",
+	saveFavorite = "Save to Favorites",
+	saved = "Saved \"%s\" to Favorites.",
+	nameLabel = "Effect name",
+
+	sectionColor = "Colors",
+	color1 = "Main color",
+	color2 = "Second color",
+	hexLabel = "Hex code",
+	hexInvalid = "That color code isn't valid. Example: #FFAA00",
+
+	sectionLook = "Look",
+	size = "Size",
+	sizeHint = "Bigger or smaller",
+	amount = "Amount",
+	amountHint = "More or fewer particles / streaks",
+	speed = "Speed",
+	speedHint = "Faster or slower",
+	lifetime = "Lifetime",
+	lifetimeHint = "How long each piece lives",
+	glow = "Glow",
+	glowHint = "0 = no glow, 2 = very bright",
+
+	sectionTrigger = "When does it play?",
+	trigAlways = "Always on",
+	trigAlwaysHint = "Runs all the time in game",
+	trigLoop = "Repeat",
+	trigLoopHint = "Plays again every few seconds",
+	trigTouch = "On touch",
+	trigTouchHint = "A player touches the object",
+	trigClick = "On click",
+	trigClickHint = "A player clicks the object",
+	trigPrompt = "On key E",
+	trigPromptHint = "Shows an interact button nearby",
+	trigScript = "From a script",
+	trigScriptHint = "Call it from your own code",
+	interval = "Repeat every (seconds)",
+	cooldown = "Wait between plays (seconds)",
+	duration = "Stay on for (seconds)",
+	promptText = "Button text",
+	scriptSnippetLabel = "Paste this line into your Script",
+
+	sectionAdvanced = "Advanced",
+	textureLabel = "Custom texture (image ID)",
+	texturePlaceholder = "Paste an image ID, e.g. 1234567890",
+	textureHint = "Empty = built-in textures. Use art you made in Blender/Photoshop.",
+	bloom = "Add Bloom to Lighting",
+	bloomTip = "Makes Neon and glowing effects pop like anime",
+	bloomDone = "Added Bloom to Lighting.",
+	bloomExists = "Lighting already has Bloom.",
+
+	favorites = "Favorites",
+
+	onboardSkip = "Skip",
+	onboardNext = "Next",
+	onboardBack = "Back",
+	onboardDone = "Let's go!",
+	onboard1Title = "1. Pick where the effect goes",
+	onboard1Body = "Click a Part in your game (a sword, a character, the floor). With nothing selected the effect appears in front of the camera.",
+	onboard2Title = "2. Click an effect",
+	onboard2Body = "Open the Library tab and click the card you like. It is added instantly and Ctrl+Z works.",
+	onboard3Title = "3. Customize and choose a trigger",
+	onboard3Body = "Change colors, drag sliders, choose \"On touch\" or \"On key E\"... then press Play (F5) to try it. No code needed!",
+
+	helpTitle = "Quick tips",
+	helpBody = "• Effects really run when you press Play (F5). \"Preview\" is just for looking in Studio.\n• Each effect is one invisible Part named VFX_... — move, rotate, duplicate it like any Part.\n• Effects run on each player's device (client), so they're smooth and light on the network.\n• For a crisp anime look: add Bloom below and keep Glow at 1 or more.\n• Script: require(game.ReplicatedStorage.EasyVFX).Play(effect)",
+	close = "Close",
+	replayGuide = "Replay the guide",
+}
+
+return Strings
+]]></string>
+        </Properties>
+      </Item>
+    </Item>
+    <Item class="Folder" referent="9">
+      <Properties>
+        <string name="Name">UI</string>
+      </Properties>
+      <Item class="ModuleScript" referent="10">
+        <Properties>
+          <string name="Name">App</string>
+          <string name="Source"><![CDATA[--!nonstrict
+--[[
+	The EasyVFX panel.
+	  Header      title, language switch, help
+	  Tabs        Library (pick an effect) | Customize (tune the selected effect)
+	  Status bar  what the next effect will attach to
+	  Overlays    toast messages, 3-step first-run guide, help card
+]]
+
+local Presets = require(script.Parent.Parent.Shared.Presets)
+local Builder = require(script.Parent.Parent.Shared.Builder)
+local Strings = require(script.Parent.Parent.Shared.Strings)
+local Theme = require(script.Parent.Theme)
+local C = require(script.Parent.Components)
+
+type Params = Builder.Params
+
+export type SelectionInfo = {
+	kind: string, -- "none" | "part" | "effect"
+	name: string,
+	root: Instance?,
+}
+
+export type Favorite = { name: string, params: Params }
+
+export type Api = {
+	widget: any,
+	getSetting: (key: string) -> any,
+	setSetting: (key: string, value: any) -> (),
+	insert: (presetId: string, params: Params?) -> Instance?,
+	apply: (root: Instance, params: Params, final: boolean) -> (),
+	beginEdit: (name: string) -> (),
+	preview: (root: Instance) -> number,
+	hasBursts: (root: Instance) -> boolean,
+	duplicate: (root: Instance) -> (),
+	delete: (root: Instance) -> (),
+	rename: (root: Instance, name: string) -> (),
+	addBloom: () -> boolean,
+	selectionInfo: () -> SelectionInfo,
+	loadFavorites: () -> { Favorite },
+	saveFavorites: (favorites: { Favorite }) -> (),
+}
+
+local App = {}
+App.__index = App
+
+export type State = {
+	tab: string,
+	category: string,
+	search: string,
+	lang: string,
+	autoPreview: boolean,
+	advancedOpen: boolean,
+	onboardStep: number?,
+	helpOpen: boolean,
+	root: Instance?,
+	selection: SelectionInfo,
+}
+
+local HEADER_H, TABS_H, STATUS_H = 52, 38, 30
+
+function App.new(api: Api)
+	local self = setmetatable({}, App)
+	self.api = api
+	local lang = api.getSetting("EasyVFX_Lang")
+	self.state = {
+		tab = "library",
+		category = "all",
+		search = "",
+		lang = if lang == "en" then "en" else "vi",
+		autoPreview = api.getSetting("EasyVFX_AutoPreview") ~= false,
+		advancedOpen = false,
+		onboardStep = if api.getSetting("EasyVFX_Onboarded") then nil else 1,
+		helpOpen = false,
+		root = nil,
+		selection = { kind = "none", name = "" },
+	} :: State
+	self.previewToken = 0
+	self.toastToken = 0
+	self.rootConnections = {} :: { RBXScriptConnection }
+	self:render()
+	return self
+end
+
+function App:L(key: string): string
+	local lang = (Strings :: any)[self.state.lang] or Strings.vi
+	return lang[key] or Strings.en[key] or key
+end
+
+------------------------------------------------------------------------------------
+-- Full render (theme or language change)
+------------------------------------------------------------------------------------
+
+function App:render()
+	local t = Theme.current()
+	self.t = t
+	if self.frame then
+		self.frame:Destroy()
+	end
+	local api: Api = self.api
+	local frame = C.new("Frame", {
+		Name = "EasyVFX",
+		BackgroundColor3 = t.bg,
+		BorderSizePixel = 0,
+		Size = UDim2.fromScale(1, 1),
+		Active = true,
+		Parent = api.widget,
+	})
+	self.frame = frame
+
+	-- Header
+	local header = C.new("Frame", {
+		BackgroundColor3 = t.bg,
+		BorderSizePixel = 0,
+		Size = UDim2.new(1, 0, 0, HEADER_H),
+		Parent = frame,
+	}, { C.padding(10, 12, 6, 12) })
+	C.new("TextLabel", {
+		BackgroundTransparency = 1,
+		Text = self:L("appTitle"),
+		TextColor3 = t.fg,
+		TextSize = Theme.Text.hero,
+		FontFace = Theme.Font.bold,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Size = UDim2.new(1, -120, 0, 20),
+		Parent = header,
+	})
+	C.new("TextLabel", {
+		BackgroundTransparency = 1,
+		Text = self:L("appSubtitle"),
+		TextColor3 = t.mutedFg,
+		TextSize = Theme.Text.caption,
+		FontFace = Theme.Font.regular,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Position = UDim2.new(0, 0, 0, 20),
+		Size = UDim2.new(1, -120, 0, 16),
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		Parent = header,
+	})
+	local actions = C.new("Frame", {
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, 0, 0, 2),
+		Size = UDim2.new(0, 116, 0, 30),
+		Parent = header,
+	}, { C.new("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		HorizontalAlignment = Enum.HorizontalAlignment.Right,
+		Padding = UDim.new(0, 6),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	}) })
+	C.button(t, {
+		text = self:L("language"),
+		width = UDim.new(0, 40),
+		height = 30,
+		order = 1,
+		onClick = function()
+			self.state.lang = if self.state.lang == "vi" then "en" else "vi"
+			api.setSetting("EasyVFX_Lang", self.state.lang)
+			self:render()
+		end,
+	}).Parent = actions
+	C.button(t, {
+		text = self:L("help"),
+		width = UDim.new(0, 70),
+		height = 30,
+		order = 2,
+		onClick = function()
+			self.state.helpOpen = true
+			self:renderOverlay()
+		end,
+	}).Parent = actions
+
+	-- Tabs
+	local tabs = C.new("Frame", {
+		BackgroundColor3 = t.bg,
+		BorderSizePixel = 0,
+		Position = UDim2.new(0, 0, 0, HEADER_H),
+		Size = UDim2.new(1, 0, 0, TABS_H),
+		Parent = frame,
+	})
+	C.new("Frame", {
+		BackgroundColor3 = t.border,
+		BorderSizePixel = 0,
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.new(0, 0, 1, 0),
+		Size = UDim2.new(1, 0, 0, 1),
+		Parent = tabs,
+	})
+	self.tabButtons = {}
+	for i, tab in { { id = "library", key = "tabLibrary" }, { id = "edit", key = "tabEdit" } } do
+		local b = C.new("TextButton", {
+			AutoButtonColor = false,
+			BackgroundTransparency = 1,
+			Text = self:L(tab.key),
+			TextSize = Theme.Text.body,
+			FontFace = Theme.Font.semibold,
+			Position = UDim2.new((i - 1) * 0.5, 0, 0, 0),
+			Size = UDim2.new(0.5, 0, 1, 0),
+			Parent = tabs,
+		})
+		local underline = C.new("Frame", {
+			BorderSizePixel = 0,
+			AnchorPoint = Vector2.new(0.5, 1),
+			Position = UDim2.new(0.5, 0, 1, 0),
+			Size = UDim2.new(0.6, 0, 0, 2),
+			Parent = b,
+		})
+		b.Activated:Connect(function()
+			self:setTab(tab.id)
+		end)
+		self.tabButtons[tab.id] = { button = b, underline = underline }
+	end
+
+	-- Body: one scrolling page per tab
+	local body = C.new("Frame", {
+		BackgroundTransparency = 1,
+		Position = UDim2.new(0, 0, 0, HEADER_H + TABS_H),
+		Size = UDim2.new(1, 0, 1, -(HEADER_H + TABS_H + STATUS_H)),
+		ClipsDescendants = true,
+		Parent = frame,
+	})
+	local function page(): ScrollingFrame
+		return C.new("ScrollingFrame", {
+			BackgroundTransparency = 1,
+			BorderSizePixel = 0,
+			Size = UDim2.fromScale(1, 1),
+			CanvasSize = UDim2.new(),
+			AutomaticCanvasSize = Enum.AutomaticSize.Y,
+			ScrollingDirection = Enum.ScrollingDirection.Y,
+			ScrollBarThickness = 6,
+			ScrollBarImageColor3 = t.borderStrong,
+			VerticalScrollBarInset = Enum.ScrollBarInset.ScrollBar,
+			Parent = body,
+		})
+	end
+	self.libraryPage = page()
+	self.editPage = page()
+
+	-- Status bar
+	local status = C.new("Frame", {
+		BackgroundColor3 = t.card,
+		BorderSizePixel = 0,
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.new(0, 0, 1, 0),
+		Size = UDim2.new(1, 0, 0, STATUS_H),
+		Parent = frame,
+	}, { C.padding(0, 12) })
+	C.new("Frame", {
+		BackgroundColor3 = t.border,
+		BorderSizePixel = 0,
+		Position = UDim2.new(0, -12, 0, 0),
+		Size = UDim2.new(1, 24, 0, 1),
+		Parent = status,
+	})
+	self.statusDot = C.new("Frame", {
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 0, 0.5, 0),
+		Size = UDim2.new(0, 8, 0, 8),
+		Parent = status,
+	}, { C.round() })
+	self.statusText = C.new("TextLabel", {
+		BackgroundTransparency = 1,
+		TextColor3 = t.mutedFg,
+		TextSize = Theme.Text.caption,
+		FontFace = Theme.Font.medium,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		Position = UDim2.new(0, 16, 0, 0),
+		Size = UDim2.new(1, -16, 1, 0),
+		Parent = status,
+	})
+
+	-- Toast
+	self.toast = C.new("Frame", {
+		BackgroundColor3 = t.fg,
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 1, -(STATUS_H + 10)),
+		Size = UDim2.new(1, -24, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		Visible = false,
+		ZIndex = 20,
+		Parent = frame,
+	}, { C.corner(Theme.Radius.md), C.padding(10, 12) })
+	self.toastText = C.text(t, { text = "", size = Theme.Text.label, font = Theme.Font.medium, color = t.bg })
+	self.toastText.ZIndex = 21
+	self.toastText.Parent = self.toast
+
+	self.overlay = C.new("Frame", {
+		BackgroundColor3 = t.overlay,
+		BackgroundTransparency = 0.35,
+		BorderSizePixel = 0,
+		Size = UDim2.fromScale(1, 1),
+		Visible = false,
+		Active = true,
+		ZIndex = 30,
+		Parent = frame,
+	})
+
+	self:renderLibrary()
+	self:renderEdit()
+	self:setTab(self.state.tab)
+	self:renderStatus()
+	self:renderOverlay()
+end
+
+function App:setTab(id: string)
+	self.state.tab = id
+	local t = self.t
+	for tabId, parts in self.tabButtons do
+		local active = tabId == id
+		parts.button.TextColor3 = if active then t.fg else t.mutedFg
+		parts.underline.BackgroundColor3 = t.accent
+		parts.underline.Visible = active
+	end
+	self.libraryPage.Visible = id == "library"
+	self.editPage.Visible = id == "edit"
+end
+
+------------------------------------------------------------------------------------
+-- Library tab
+------------------------------------------------------------------------------------
+
+local function matches(preset: Presets.Preset, query: string): boolean
+	if query == "" then
+		return true
+	end
+	query = query:lower()
+	local hay = (preset.name.vi .. " " .. preset.name.en .. " " .. preset.desc.vi .. " " .. preset.desc.en .. " " .. preset.id):lower()
+	for word in query:gmatch("%S+") do
+		if not hay:find(word, 1, true) then
+			return false
+		end
+	end
+	return true
+end
+
+function App:renderLibrary()
+	local t = self.t
+	local api: Api = self.api
+	local pageFrame: ScrollingFrame = self.libraryPage
+	for _, child in pageFrame:GetChildren() do
+		child:Destroy()
+	end
+	local content = C.stack({ Parent = pageFrame }, 12)
+	C.padding(12, 12, 16, 12).Parent = content
+
+	-- Search
+	local _, searchBox = C.input(t, {
+		label = self:L("searchLabel"),
+		text = self.state.search,
+		placeholder = self:L("searchPlaceholder"),
+		order = 1,
+	})
+	searchBox.Parent.Parent = content
+	searchBox:GetPropertyChangedSignal("Text"):Connect(function()
+		self.state.search = searchBox.Text
+		self:renderCards()
+	end)
+
+	-- Categories
+	local chips = C.new("Frame", {
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		LayoutOrder = 2,
+		Parent = content,
+	})
+	C.list(Enum.FillDirection.Horizontal, 6, true).Parent = chips
+	for i, cat in Presets.Categories do
+		C.chip(t, (cat :: any)[self.state.lang], self.state.category == cat.id, function()
+			self.state.category = cat.id
+			self:renderLibrary()
+		end, i).Parent = chips
+	end
+
+	-- Favorites
+	local favorites = api.loadFavorites()
+	if #favorites > 0 then
+		local favWrap = C.stack({ LayoutOrder = 3 }, 6)
+		C.text(t, { text = self:L("favorites"):upper(), size = Theme.Text.caption, font = Theme.Font.bold, color = t.mutedFg, order = 1 }).Parent =
+			favWrap
+		local row = C.new("Frame", {
+			BackgroundTransparency = 1,
+			Size = UDim2.new(1, 0, 0, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
+			LayoutOrder = 2,
+			Parent = favWrap,
+		})
+		C.list(Enum.FillDirection.Horizontal, 6, true).Parent = row
+		for i, fav in favorites do
+			local pill = C.new("Frame", {
+				BackgroundColor3 = t.muted,
+				Size = UDim2.new(0, 0, 0, 28),
+				AutomaticSize = Enum.AutomaticSize.X,
+				LayoutOrder = i,
+				Parent = row,
+			}, { C.round(), C.list(Enum.FillDirection.Horizontal, 0) })
+			local swatch = C.new("Frame", { Size = UDim2.new(0, 28, 0, 28), BackgroundTransparency = 1, LayoutOrder = 0, Parent = pill })
+			C.new("Frame", {
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.fromScale(0.5, 0.5),
+				Size = UDim2.new(0, 14, 0, 14),
+				BackgroundColor3 = fav.params.color1,
+				Parent = swatch,
+			}, { C.round() })
+			local nameButton = C.new("TextButton", {
+				AutoButtonColor = false,
+				BackgroundTransparency = 1,
+				Text = fav.name,
+				TextColor3 = t.fg,
+				TextSize = Theme.Text.caption,
+				FontFace = Theme.Font.semibold,
+				Size = UDim2.new(0, 0, 1, 0),
+				AutomaticSize = Enum.AutomaticSize.X,
+				LayoutOrder = 1,
+				Parent = pill,
+			})
+			nameButton.Activated:Connect(function()
+				api.insert(fav.params.preset, fav.params)
+			end)
+			local remove = C.new("TextButton", {
+				AutoButtonColor = false,
+				BackgroundTransparency = 1,
+				Text = "×",
+				TextColor3 = t.mutedFg,
+				TextSize = Theme.Text.body,
+				FontFace = Theme.Font.bold,
+				Size = UDim2.new(0, 26, 1, 0),
+				LayoutOrder = 2,
+				Parent = pill,
+			})
+			remove.Activated:Connect(function()
+				table.remove(favorites, i)
+				api.saveFavorites(favorites)
+				self:renderLibrary()
+			end)
+		end
+		favWrap.Parent = content
+	end
+
+	-- Cards
+	local grid = C.new("Frame", {
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		LayoutOrder = 4,
+		Parent = content,
+	})
+	local layout = C.new("UIGridLayout", {
+		CellPadding = UDim2.new(0, 8, 0, 8),
+		CellSize = UDim2.new(0.5, -4, 0, 118),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Parent = grid,
+	})
+	local function fit()
+		local _, size = C.abs(grid)
+		local oneColumn = size.X > 0 and size.X < 280
+		layout.CellSize = if oneColumn then UDim2.new(1, 0, 0, 110) else UDim2.new(0.5, -4, 0, 118)
+	end
+	grid:GetPropertyChangedSignal("AbsoluteSize"):Connect(fit)
+	fit()
+	self.grid = grid
+	self.emptyNote = C.text(t, { text = self:L("noResults"), size = Theme.Text.label, color = t.mutedFg, order = 5 })
+	self.emptyNote.Visible = false
+	self.emptyNote.Parent = content
+	self:renderCards()
+end
+
+function App:card(preset: Presets.Preset, order: number): TextButton
+	local t = self.t
+	local api: Api = self.api
+	local d = preset.defaults
+	local b = C.new("TextButton", {
+		AutoButtonColor = false,
+		BackgroundColor3 = t.card,
+		Text = "",
+		LayoutOrder = order,
+	}, { C.corner(Theme.Radius.lg) })
+	local stroke = C.stroke(t.border, 1)
+	stroke.Parent = b
+
+	local strip = C.new("Frame", {
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		Position = UDim2.new(0, 6, 0, 6),
+		Size = UDim2.new(1, -12, 0, 46),
+		ClipsDescendants = true,
+		Parent = b,
+	}, { C.corner(Theme.Radius.md) })
+	C.new("UIGradient", {
+		Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, (d.color1 :: Color3):Lerp(Color3.new(0, 0, 0), 0.55)),
+			ColorSequenceKeypoint.new(0.55, d.color1),
+			ColorSequenceKeypoint.new(1, d.color2),
+		}),
+		Rotation = 20,
+		Parent = strip,
+	})
+	-- tiny glyph: a ring for one-shot effects, rising dots for looping ones
+	if preset.kind == "burst" then
+		local ring = C.new("Frame", {
+			BackgroundTransparency = 1,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(0, 26, 0.5, 0),
+			Size = UDim2.new(0, 26, 0, 26),
+			Parent = strip,
+		}, { C.round() })
+		C.stroke(Color3.new(1, 1, 1), 2, 0.1).Parent = ring
+		C.new("Frame", {
+			BackgroundColor3 = Color3.new(1, 1, 1),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.new(0, 8, 0, 8),
+			Parent = ring,
+		}, { C.round() })
+	else
+		for i = 1, 3 do
+			C.new("Frame", {
+				BackgroundColor3 = Color3.new(1, 1, 1),
+				BackgroundTransparency = 0.1 * i,
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.new(0, 10 + i * 8, 0.5, 10 - i * 7),
+				Size = UDim2.new(0, 10 - i * 2, 0, 10 - i * 2),
+				Parent = strip,
+			}, { C.round() })
+		end
+	end
+	local badge = C.new("TextLabel", {
+		BackgroundColor3 = Color3.new(0, 0, 0),
+		BackgroundTransparency = 0.45,
+		Text = self:L(if preset.kind == "burst" then "badgeBurst" else "badgeLoop"),
+		TextColor3 = Color3.new(1, 1, 1),
+		TextSize = Theme.Text.caption,
+		FontFace = Theme.Font.semibold,
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -6, 0, 6),
+		Size = UDim2.new(0, 0, 0, 20),
+		AutomaticSize = Enum.AutomaticSize.X,
+		Parent = strip,
+	}, { C.round(), C.padding(0, 8) })
+	badge.ZIndex = 2
+
+	local name = C.new("TextLabel", {
+		BackgroundTransparency = 1,
+		Text = (preset.name :: any)[self.state.lang],
+		TextColor3 = t.fg,
+		TextSize = Theme.Text.body,
+		FontFace = Theme.Font.semibold,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		Position = UDim2.new(0, 10, 0, 58),
+		Size = UDim2.new(1, -20, 0, 18),
+		Parent = b,
+	})
+	C.new("TextLabel", {
+		BackgroundTransparency = 1,
+		Text = (preset.desc :: any)[self.state.lang],
+		TextColor3 = t.mutedFg,
+		TextSize = Theme.Text.caption,
+		FontFace = Theme.Font.regular,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Top,
+		TextWrapped = true,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		Position = UDim2.new(0, 10, 0, 78),
+		Size = UDim2.new(1, -20, 1, -84),
+		Parent = b,
+	})
+	b.MouseEnter:Connect(function()
+		C.tween(stroke, { Color = t.accent })
+		C.tween(b, { BackgroundColor3 = t.muted })
+	end)
+	b.MouseLeave:Connect(function()
+		C.tween(stroke, { Color = t.border })
+		C.tween(b, { BackgroundColor3 = t.card })
+	end)
+	b.Activated:Connect(function()
+		api.insert(preset.id, nil)
+	end)
+	local _ = name
+	return b
+end
+
+function App:renderCards()
+	local grid: Frame = self.grid
+	for _, child in grid:GetChildren() do
+		if child:IsA("GuiObject") then
+			child:Destroy()
+		end
+	end
+	local shown = 0
+	for i, preset in Presets.List do
+		local p = preset :: any
+		if (self.state.category == "all" or p.category == self.state.category) and matches(p, self.state.search) then
+			self:card(p, i).Parent = grid
+			shown += 1
+		end
+	end
+	self.emptyNote.Visible = shown == 0
+end
+
+------------------------------------------------------------------------------------
+-- Customize tab
+------------------------------------------------------------------------------------
+
+local function luaPath(inst: Instance): string
+	local parts = {}
+	local current: Instance? = inst
+	while current and current.Parent and current ~= game do
+		table.insert(parts, 1, current.Name)
+		current = current.Parent
+	end
+	local out = "workspace"
+	if parts[1] ~= "Workspace" then
+		out = "game"
+	else
+		table.remove(parts, 1)
+	end
+	for _, name in parts do
+		if name:match("^[%a_][%w_]*$") then
+			out ..= "." .. name
+		else
+			out ..= '["' .. name:gsub('"', '\\"') .. '"]'
+		end
+	end
+	return out
+end
+
+function App:renderEdit()
+	local t = self.t
+	local api: Api = self.api
+	local pageFrame: ScrollingFrame = self.editPage
+	local scroll = pageFrame.CanvasPosition
+	for _, child in pageFrame:GetChildren() do
+		child:Destroy()
+	end
+	local content = C.stack({ Parent = pageFrame }, 16)
+	C.padding(12, 12, 16, 12).Parent = content
+
+	local root = self.state.root
+	local params = if root and root.Parent then Builder.readParams(root) else nil
+	if not root or not params then
+		local empty = C.stack({ LayoutOrder = 1 }, 8)
+		C.padding(24, 8).Parent = empty
+		C.text(t, { text = self:L("emptyTitle"), size = Theme.Text.title, font = Theme.Font.bold, align = Enum.TextXAlignment.Center, order = 1 }).Parent =
+			empty
+		C.text(t, { text = self:L("emptyBody"), size = Theme.Text.label, color = t.mutedFg, align = Enum.TextXAlignment.Center, order = 2 }).Parent =
+			empty
+		local holder = C.new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 44), LayoutOrder = 3, Parent = empty })
+		local b = C.button(t, {
+			text = self:L("emptyAction"),
+			variant = "primary",
+			width = UDim.new(0, 160),
+			onClick = function()
+				self:setTab("library")
+			end,
+		})
+		b.AnchorPoint = Vector2.new(0.5, 1)
+		b.Position = UDim2.new(0.5, 0, 1, 0)
+		b.Parent = holder
+		empty.Parent = content
+		return
+	end
+	assert(root)
+	local p: Params = params
+	local preset = Presets.ById[p.preset]
+	local slider: C.SliderCtx = { widget = api.widget, root = self.frame }
+
+	local function apply(final: boolean)
+		api.apply(root, p, final)
+	end
+	local function edit(name: string)
+		return function()
+			api.beginEdit(name)
+		end
+	end
+
+	-- Effect header
+	local headCard = C.stack({ LayoutOrder = 1, BackgroundColor3 = t.card, BackgroundTransparency = 0 }, 10)
+	C.corner(Theme.Radius.lg).Parent = headCard
+	C.stroke(t.border, 1).Parent = headCard
+	C.padding(12).Parent = headCard
+	C.text(t, { text = (preset.name :: any)[self.state.lang], size = Theme.Text.title, font = Theme.Font.bold, order = 1 }).Parent =
+		headCard
+	local nameWrap = C.input(t, {
+		label = self:L("nameLabel"),
+		text = root.Name,
+		order = 2,
+		onCommit = function(text)
+			if text ~= "" and text ~= root.Name then
+				api.rename(root, text)
+			end
+		end,
+	})
+	nameWrap.Parent = headCard
+	local row = C.new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 32), LayoutOrder = 3, Parent = headCard })
+	C.new("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		Padding = UDim.new(0, 6),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Parent = row,
+	})
+	C.button(t, {
+		text = self:L("play"),
+		variant = "primary",
+		width = UDim.new(0.44, -4),
+		order = 1,
+		onClick = function()
+			api.preview(root)
+		end,
+	}).Parent = row
+	C.button(t, {
+		text = self:L("duplicate"),
+		width = UDim.new(0.28, -4),
+		order = 2,
+		onClick = function()
+			api.duplicate(root)
+		end,
+	}).Parent = row
+	local armed = false
+	local deleteButton: TextButton
+	deleteButton = C.button(t, {
+		text = self:L("delete"),
+		variant = "danger",
+		width = UDim.new(0.28, -4),
+		order = 3,
+		onClick = function()
+			if armed then
+				api.delete(root)
+				return
+			end
+			armed = true
+			deleteButton.Text = self:L("deleteConfirm")
+			deleteButton.BackgroundColor3 = t.danger
+			deleteButton.TextColor3 = t.onDanger
+			task.delay(3, function()
+				if armed and C.alive(deleteButton) then
+					armed = false
+					deleteButton.Text = self:L("delete")
+					deleteButton.BackgroundColor3 = t.card
+					deleteButton.TextColor3 = t.danger
+				end
+			end)
+		end,
+	})
+	deleteButton.Parent = row
+	C.toggle(t, self:L("autoPreview"), self.state.autoPreview, function(on)
+		self.state.autoPreview = on
+		api.setSetting("EasyVFX_AutoPreview", on)
+		self:restartPreview()
+	end, 4).Parent = headCard
+	headCard.Parent = content
+
+	-- Colors
+	local colorOuter, colors = C.section(t, self:L("sectionColor"), 2)
+	local function invalid()
+		self:toastMessage(self:L("hexInvalid"), "error")
+	end
+	C.colorPicker(t, self:L("color1"), self:L("hexLabel"), p.color1, function(color)
+		api.beginEdit("Color")
+		p.color1 = color
+		apply(true)
+	end, invalid, 1).Parent = colors
+	C.colorPicker(t, self:L("color2"), self:L("hexLabel"), p.color2, function(color)
+		api.beginEdit("Color")
+		p.color2 = color
+		apply(true)
+	end, invalid, 2).Parent = colors
+	colorOuter.Parent = content
+
+	-- Look
+	local lookOuter, look = C.section(t, self:L("sectionLook"), 3)
+	local sliders = {
+		{ key = "size", label = "size", hint = "sizeHint", min = 0.2, max = 4, step = 0.05 },
+		{ key = "amount", label = "amount", hint = "amountHint", min = 0.1, max = 4, step = 0.05 },
+		{ key = "speed", label = "speed", hint = "speedHint", min = 0.2, max = 3, step = 0.05 },
+		{ key = "lifetime", label = "lifetime", hint = "lifetimeHint", min = 0.2, max = 3, step = 0.05 },
+		{ key = "glow", label = "glow", hint = "glowHint", min = 0, max = 2, step = 0.05 },
+	}
+	for i, s in sliders do
+		C.slider(t, slider, {
+			label = self:L(s.label),
+			hint = self:L(s.hint),
+			min = s.min,
+			max = s.max,
+			step = s.step,
+			value = (p :: any)[s.key],
+			suffix = "x",
+			order = i,
+			onBegin = edit(self:L(s.label)),
+			onChange = function(v, final)
+				(p :: any)[s.key] = v
+				apply(final)
+			end,
+		}).Parent = look
+	end
+	lookOuter.Parent = content
+
+	-- Trigger
+	local trigOuter, trig = C.section(t, self:L("sectionTrigger"), 4)
+	local trigText = {
+		Always = { "trigAlways", "trigAlwaysHint" },
+		Loop = { "trigLoop", "trigLoopHint" },
+		Touch = { "trigTouch", "trigTouchHint" },
+		Click = { "trigClick", "trigClickHint" },
+		Prompt = { "trigPrompt", "trigPromptHint" },
+		Script = { "trigScript", "trigScriptHint" },
+	}
+	local radios = C.stack({ LayoutOrder = 1 }, 6)
+	for i, id in Builder.Triggers do
+		local texts = trigText[id]
+		C.radio(t, self:L(texts[1]), self:L(texts[2]), p.trigger == id, function()
+			if p.trigger == id then
+				return
+			end
+			api.beginEdit("Trigger")
+			p.trigger = id
+			apply(true)
+			self:renderEdit()
+		end, i).Parent = radios
+	end
+	radios.Parent = trig
+	local extras = C.stack({ LayoutOrder = 2 }, 12)
+	local function numberSlider(key: string, labelKey: string, min: number, max: number, step: number, order: number)
+		C.slider(t, slider, {
+			label = self:L(labelKey),
+			min = min,
+			max = max,
+			step = step,
+			value = (p :: any)[key],
+			suffix = "s",
+			order = order,
+			onBegin = edit(self:L(labelKey)),
+			onChange = function(v, final)
+				(p :: any)[key] = v
+				apply(final)
+			end,
+		}).Parent = extras
+	end
+	local hasBursts = api.hasBursts(root)
+	if p.trigger == "Loop" or (p.trigger == "Always" and hasBursts) then
+		numberSlider("interval", "interval", 0.2, 10, 0.1, 1)
+	end
+	if p.trigger == "Touch" or p.trigger == "Click" or p.trigger == "Prompt" then
+		numberSlider("cooldown", "cooldown", 0, 10, 0.1, 2)
+	end
+	if p.trigger ~= "Always" and preset.kind == "loop" then
+		numberSlider("duration", "duration", 0.1, 20, 0.1, 3)
+	end
+	if p.trigger == "Prompt" then
+		local wrap = C.input(t, {
+			label = self:L("promptText"),
+			text = p.promptText,
+			order = 4,
+			onCommit = function(text)
+				if text ~= p.promptText then
+					api.beginEdit("Prompt text")
+					p.promptText = text
+					apply(true)
+				end
+			end,
+		})
+		wrap.Parent = extras
+	end
+	if p.trigger == "Script" then
+		local wrap = C.input(t, {
+			label = self:L("scriptSnippetLabel"),
+			text = ("require(game.ReplicatedStorage.EasyVFX).Play(%s)"):format(luaPath(root)),
+			mono = true,
+			readOnly = true,
+			order = 5,
+		})
+		wrap.Parent = extras
+	end
+	extras.Parent = trig
+	trigOuter.Parent = content
+
+	-- Advanced (collapsed by default: progressive disclosure)
+	local adv = C.stack({ LayoutOrder = 5 }, 8)
+	C.button(t, {
+		text = (if self.state.advancedOpen then "−  " else "+  ") .. self:L("sectionAdvanced"),
+		variant = "ghost",
+		order = 1,
+		onClick = function()
+			self.state.advancedOpen = not self.state.advancedOpen
+			self:renderEdit()
+		end,
+	}).Parent = adv
+	if self.state.advancedOpen then
+		local box = C.stack({ LayoutOrder = 2, BackgroundColor3 = t.card, BackgroundTransparency = 0 }, 12)
+		C.corner(Theme.Radius.lg).Parent = box
+		C.stroke(t.border, 1).Parent = box
+		C.padding(12).Parent = box
+		local texWrap = C.input(t, {
+			label = self:L("textureLabel"),
+			text = (p.texture:gsub("^rbxassetid://", "")),
+			placeholder = self:L("texturePlaceholder"),
+			hint = self:L("textureHint"),
+			order = 1,
+			onCommit = function(text)
+				local cleaned = text:gsub("%s", "")
+				local id = cleaned:match("(%d+)")
+				local value = if cleaned == "" then "" elseif cleaned:match("^rbxasset") then cleaned elseif id then "rbxassetid://" .. id else nil
+				if value == nil then
+					self:toastMessage(self:L("texturePlaceholder"), "error")
+					return
+				end
+				if value ~= p.texture then
+					api.beginEdit("Texture")
+					p.texture = value
+					apply(true)
+				end
+			end,
+		})
+		texWrap.Parent = box
+		C.button(t, {
+			text = self:L("bloom"),
+			order = 2,
+			onClick = function()
+				local added = api.addBloom()
+				self:toastMessage(self:L(if added then "bloomDone" else "bloomExists"), "success")
+			end,
+		}).Parent = box
+		C.text(t, { text = self:L("bloomTip"), size = Theme.Text.caption, color = t.mutedFg, order = 3 }).Parent = box
+		C.button(t, {
+			text = self:L("saveFavorite"),
+			order = 4,
+			onClick = function()
+				local favorites = api.loadFavorites()
+				table.insert(favorites, 1, { name = root.Name, params = table.clone(p) })
+				while #favorites > 12 do
+					table.remove(favorites)
+				end
+				api.saveFavorites(favorites)
+				self:renderLibrary()
+				self:toastMessage(self:L("saved"):format(root.Name), "success")
+			end,
+		}).Parent = box
+		C.button(t, {
+			text = self:L("reset"),
+			variant = "danger",
+			order = 5,
+			onClick = function()
+				api.beginEdit("Reset")
+				local fresh = Builder.defaultParams(p.preset)
+				api.apply(root, fresh, true)
+				self:renderEdit()
+				self:toastMessage(self:L("resetDone"), "success")
+			end,
+		}).Parent = box
+		box.Parent = adv
+	end
+	adv.Parent = content
+
+	task.defer(function()
+		if C.alive(pageFrame) then -- the page may have been rebuilt meanwhile
+			pageFrame.CanvasPosition = scroll
+		end
+	end)
+end
+
+------------------------------------------------------------------------------------
+-- Selection, preview, status
+------------------------------------------------------------------------------------
+
+function App:watchRoot(root: Instance?)
+	for _, c in self.rootConnections do
+		c:Disconnect()
+	end
+	table.clear(self.rootConnections)
+	if root then
+		table.insert(
+			self.rootConnections,
+			root.AncestryChanged:Connect(function()
+				if not root.Parent then
+					self:setSelection(self.api.selectionInfo())
+				end
+			end)
+		)
+	end
+end
+
+function App:setSelection(info: SelectionInfo)
+	self.state.selection = info
+	local newRoot = if info.kind == "effect" then info.root else nil
+	if newRoot ~= self.state.root then
+		self.state.root = newRoot
+		self:watchRoot(newRoot)
+		self:renderEdit()
+		if newRoot then
+			self:setTab("edit")
+		end
+		self:restartPreview()
+	end
+	self:renderStatus()
+end
+
+function App:refresh()
+	self:renderEdit()
+	self:renderStatus()
+end
+
+function App:renderStatus()
+	local t = self.t
+	local info: SelectionInfo = self.state.selection
+	if info.kind == "effect" then
+		self.statusText.Text = self:L("targetEffect"):format(info.name)
+		self.statusDot.BackgroundColor3 = t.accent
+	elseif info.kind == "part" then
+		self.statusText.Text = self:L("targetSome"):format(info.name)
+		self.statusDot.BackgroundColor3 = t.accent
+	else
+		self.statusText.Text = self:L("targetNone")
+		self.statusDot.BackgroundColor3 = t.mutedFg
+	end
+end
+
+-- Replays the selected one-shot effect in a loop while it is selected.
+function App:restartPreview()
+	self.previewToken += 1
+	local token = self.previewToken
+	local root = self.state.root
+	local api: Api = self.api
+	if not (root and self.state.autoPreview and api.hasBursts(root)) then
+		return
+	end
+	task.spawn(function()
+		task.wait(0.15)
+		while token == self.previewToken and C.alive(root) and api.widget.Enabled do
+			local length = api.preview(root)
+			local interval = root:GetAttribute("VFX_Interval")
+			task.wait(math.max(1, length + 0.4, if type(interval) == "number" then interval else 0))
+		end
+	end)
+end
+
+function App:toastMessage(text: string, kind: string?)
+	local t = self.t
+	self.toastToken += 1
+	local token = self.toastToken
+	self.toast.BackgroundColor3 = if kind == "error" then t.danger else t.fg
+	self.toastText.TextColor3 = if kind == "error" then t.onDanger else t.bg
+	self.toastText.Text = text
+	self.toast.Visible = true
+	task.delay(3.2, function()
+		if token == self.toastToken and C.alive(self.toast) then
+			self.toast.Visible = false
+		end
+	end)
+end
+
+------------------------------------------------------------------------------------
+-- Overlays: first-run guide and help
+------------------------------------------------------------------------------------
+
+function App:renderOverlay()
+	local t = self.t
+	local api: Api = self.api
+	local overlay: Frame = self.overlay
+	for _, child in overlay:GetChildren() do
+		child:Destroy()
+	end
+	local step = self.state.onboardStep
+	if not step and not self.state.helpOpen then
+		overlay.Visible = false
+		return
+	end
+	overlay.Visible = true
+	local card = C.stack({
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.new(1, -32, 0, 0),
+		BackgroundColor3 = t.card,
+		BackgroundTransparency = 0,
+		ZIndex = 31,
+		Parent = overlay,
+	}, 12)
+	C.corner(Theme.Radius.lg).Parent = card
+	C.stroke(t.borderStrong, 1).Parent = card
+	C.padding(16).Parent = card
+	local constraint = C.new("UISizeConstraint", { MaxSize = Vector2.new(420, math.huge), Parent = card })
+	local _ = constraint
+
+	local function finishOnboarding()
+		self.state.onboardStep = nil
+		api.setSetting("EasyVFX_Onboarded", true)
+		self:renderOverlay()
+	end
+
+	local buttons = C.new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 32), LayoutOrder = 10 })
+	C.new("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		HorizontalAlignment = Enum.HorizontalAlignment.Right,
+		Padding = UDim.new(0, 6),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Parent = buttons,
+	})
+
+	if step then
+		local dots = C.new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 8), LayoutOrder = 1, Parent = card })
+		C.list(Enum.FillDirection.Horizontal, 6).Parent = dots
+		for i = 1, 3 do
+			C.new("Frame", {
+				BackgroundColor3 = if i == step then t.accent else t.borderStrong,
+				Size = UDim2.new(0, if i == step then 20 else 8, 0, 8),
+				LayoutOrder = i,
+				Parent = dots,
+			}, { C.round() })
+		end
+		C.text(t, { text = self:L("onboard" .. step .. "Title"), size = Theme.Text.title, font = Theme.Font.bold, order = 2 }).Parent =
+			card
+		C.text(t, { text = self:L("onboard" .. step .. "Body"), size = Theme.Text.body, color = t.mutedFg, order = 3 }).Parent =
+			card
+		C.button(t, { text = self:L("onboardSkip"), variant = "ghost", width = UDim.new(0, 80), order = 1, onClick = finishOnboarding }).Parent =
+			buttons
+		if step > 1 then
+			C.button(t, {
+				text = self:L("onboardBack"),
+				width = UDim.new(0, 80),
+				order = 2,
+				onClick = function()
+					self.state.onboardStep = step - 1
+					self:renderOverlay()
+				end,
+			}).Parent = buttons
+		end
+		C.button(t, {
+			text = self:L(if step == 3 then "onboardDone" else "onboardNext"),
+			variant = "primary",
+			width = UDim.new(0, 96),
+			order = 3,
+			onClick = function()
+				if step >= 3 then
+					finishOnboarding()
+					self:setTab("library")
+				else
+					self.state.onboardStep = step + 1
+					self:renderOverlay()
+				end
+			end,
+		}).Parent = buttons
+	else
+		C.text(t, { text = self:L("helpTitle"), size = Theme.Text.title, font = Theme.Font.bold, order = 1 }).Parent = card
+		C.text(t, { text = self:L("helpBody"), size = Theme.Text.label, color = t.mutedFg, order = 2 }).Parent = card
+		C.button(t, {
+			text = self:L("bloom"),
+			width = UDim.new(1, 0),
+			order = 3,
+			onClick = function()
+				local added = api.addBloom()
+				self:toastMessage(self:L(if added then "bloomDone" else "bloomExists"), "success")
+			end,
+		}).Parent = card
+		C.button(t, {
+			text = self:L("replayGuide"),
+			variant = "ghost",
+			width = UDim.new(0, 150),
+			order = 1,
+			onClick = function()
+				self.state.helpOpen = false
+				self.state.onboardStep = 1
+				self:renderOverlay()
+			end,
+		}).Parent = buttons
+		C.button(t, {
+			text = self:L("close"),
+			variant = "primary",
+			width = UDim.new(0, 90),
+			order = 2,
+			onClick = function()
+				self.state.helpOpen = false
+				self:renderOverlay()
+			end,
+		}).Parent = buttons
+	end
+	buttons.Parent = card
+end
+
+function App:destroy()
+	self.previewToken += 1
+	self:watchRoot(nil)
+	if self.frame then
+		self.frame:Destroy()
+	end
+end
+
+return App
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="11">
+        <Properties>
+          <string name="Name">Components</string>
+          <string name="Source"><![CDATA[--!strict
+--[[
+	Small UI kit for the plugin. Every builder takes the theme tokens `t` first.
+	Kept deliberately plain: clear labels, visible hover/focus states, 150 ms
+	transitions, no icon-only buttons.
+]]
+
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+
+local Theme = require(script.Parent.Theme)
+
+type Tokens = Theme.Tokens
+
+local C = {}
+
+local FAST = TweenInfo.new(Theme.Motion.fast, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+
+function C.new(className: string, props: { [string]: any }?, children: { any }?): any
+	local inst = Instance.new(className) :: any
+	local parent = nil
+	if props then
+		for key, value in props do
+			if key == "Parent" then
+				parent = value
+			else
+				inst[key] = value
+			end
+		end
+	end
+	if children then
+		for _, child in children do
+			child.Parent = inst
+		end
+	end
+	if parent then
+		inst.Parent = parent
+	end
+	return inst
+end
+
+-- True while the object is still in a tree (safe to call on destroyed objects).
+function C.alive(inst: Instance?): boolean
+	if not inst then
+		return false
+	end
+	local ok, parent = pcall(function()
+		return inst.Parent
+	end)
+	return ok and parent ~= nil
+end
+
+-- AbsolutePosition / AbsoluteSize, or zeros before the object is laid out.
+function C.abs(gui: GuiObject): (Vector2, Vector2)
+	local ok, pos, size = pcall(function()
+		return gui.AbsolutePosition, gui.AbsoluteSize
+	end)
+	if ok then
+		return pos, size
+	end
+	return Vector2.zero, Vector2.zero
+end
+
+function C.tween(inst: Instance, goal: { [string]: any })
+	TweenService:Create(inst, FAST, goal):Play()
+end
+
+function C.corner(radius: number): any
+	return C.new("UICorner", { CornerRadius = UDim.new(0, radius) })
+end
+
+function C.round(): any
+	return C.new("UICorner", { CornerRadius = UDim.new(1, 0) })
+end
+
+function C.stroke(color: Color3, thickness: number?, transparency: number?): any
+	return C.new("UIStroke", {
+		Color = color,
+		Thickness = thickness or 1,
+		Transparency = transparency or 0,
+		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+	})
+end
+
+function C.padding(top: number, right: number?, bottom: number?, left: number?): any
+	return C.new("UIPadding", {
+		PaddingTop = UDim.new(0, top),
+		PaddingRight = UDim.new(0, right or top),
+		PaddingBottom = UDim.new(0, bottom or top),
+		PaddingLeft = UDim.new(0, left or right or top),
+	})
+end
+
+function C.list(direction: Enum.FillDirection?, padding: number?, wraps: boolean?): any
+	return C.new("UIListLayout", {
+		FillDirection = direction or Enum.FillDirection.Vertical,
+		Padding = UDim.new(0, padding or 0),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Wraps = wraps == true,
+	})
+end
+
+-- Plain frame that grows with its content.
+function C.stack(props: { [string]: any }?, gap: number?): Frame
+	local f = C.new("Frame", {
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+	})
+	if props then
+		for k, v in props do
+			f[k] = v
+		end
+	end
+	C.list(Enum.FillDirection.Vertical, gap or 0).Parent = f
+	return f
+end
+
+type TextProps = {
+	text: string,
+	size: number?,
+	font: Font?,
+	color: Color3?,
+	wrap: boolean?,
+	align: Enum.TextXAlignment?,
+	order: number?,
+	height: number?,
+	rich: boolean?,
+}
+
+function C.text(t: Tokens, p: TextProps): TextLabel
+	local size = p.size or Theme.Text.body
+	local label = C.new("TextLabel", {
+		BackgroundTransparency = 1,
+		Text = p.text,
+		TextSize = size,
+		FontFace = p.font or Theme.Font.regular,
+		TextColor3 = p.color or t.fg,
+		TextXAlignment = p.align or Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Top,
+		TextWrapped = p.wrap ~= false,
+		RichText = p.rich == true,
+		LayoutOrder = p.order or 0,
+		Size = UDim2.new(1, 0, 0, p.height or 0),
+		AutomaticSize = if p.height then Enum.AutomaticSize.None else Enum.AutomaticSize.Y,
+		LineHeight = 1.15,
+	})
+	return label
+end
+
+export type ButtonProps = {
+	text: string,
+	variant: string?, -- primary | secondary | ghost | danger
+	height: number?,
+	width: UDim?,
+	order: number?,
+	onClick: (() -> ())?,
+}
+
+local function variantColors(t: Tokens, variant: string): (Color3, Color3, Color3, Color3?)
+	if variant == "primary" then
+		return t.accent, t.accentHover, t.onAccent, nil
+	elseif variant == "danger" then
+		return t.card, t.muted, t.danger, t.danger
+	elseif variant == "ghost" then
+		return t.bg, t.muted, t.fg, nil
+	end
+	return t.muted, t.hover, t.fg, t.border
+end
+
+function C.button(t: Tokens, p: ButtonProps): TextButton
+	local variant = p.variant or "secondary"
+	local bg, bgHover, fg, border = variantColors(t, variant)
+	local b = C.new("TextButton", {
+		AutoButtonColor = false,
+		BackgroundColor3 = bg,
+		BackgroundTransparency = if variant == "ghost" then 1 else 0,
+		Text = p.text,
+		TextColor3 = fg,
+		TextSize = Theme.Text.label,
+		FontFace = if variant == "primary" then Theme.Font.bold else Theme.Font.semibold,
+		Size = UDim2.new(p.width or UDim.new(1, 0), UDim.new(0, p.height or 32)),
+		LayoutOrder = p.order or 0,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+	}, { C.corner(Theme.Radius.md), C.padding(0, 10) })
+	if border then
+		C.stroke(border, 1).Parent = b
+	end
+	b.MouseEnter:Connect(function()
+		C.tween(b, { BackgroundColor3 = bgHover, BackgroundTransparency = 0 })
+	end)
+	b.MouseLeave:Connect(function()
+		C.tween(b, { BackgroundColor3 = bg, BackgroundTransparency = if variant == "ghost" then 1 else 0 })
+	end)
+	if p.onClick then
+		local onClick = p.onClick
+		b.Activated:Connect(function()
+			onClick()
+		end)
+	end
+	return b
+end
+
+-- Pill-shaped toggle chip (categories).
+function C.chip(t: Tokens, text: string, selected: boolean, onClick: () -> (), order: number?): TextButton
+	local b = C.new("TextButton", {
+		AutoButtonColor = false,
+		BackgroundColor3 = if selected then t.fg else t.muted,
+		Text = text,
+		TextColor3 = if selected then t.bg else t.fg,
+		TextSize = Theme.Text.caption,
+		FontFace = Theme.Font.semibold,
+		Size = UDim2.new(0, 0, 0, 28),
+		AutomaticSize = Enum.AutomaticSize.X,
+		LayoutOrder = order or 0,
+	}, { C.round(), C.padding(0, 12) })
+	if not selected then
+		b.MouseEnter:Connect(function()
+			C.tween(b, { BackgroundColor3 = t.hover })
+		end)
+		b.MouseLeave:Connect(function()
+			C.tween(b, { BackgroundColor3 = t.muted })
+		end)
+	end
+	b.Activated:Connect(onClick)
+	return b
+end
+
+export type InputProps = {
+	label: string?,
+	text: string,
+	placeholder: string?,
+	hint: string?,
+	mono: boolean?,
+	order: number?,
+	readOnly: boolean?,
+	onCommit: ((text: string) -> ())?,
+}
+
+function C.input(t: Tokens, p: InputProps): (Frame, TextBox)
+	local wrap = C.stack({ LayoutOrder = p.order or 0 }, 4)
+	if p.label then
+		C.text(t, { text = p.label, size = Theme.Text.caption, font = Theme.Font.semibold, color = t.mutedFg, order = 1 }).Parent =
+			wrap
+	end
+	local box = C.new("TextBox", {
+		BackgroundColor3 = t.card,
+		Text = p.text,
+		PlaceholderText = p.placeholder or "",
+		PlaceholderColor3 = t.mutedFg,
+		TextColor3 = t.fg,
+		TextSize = Theme.Text.label,
+		FontFace = if p.mono then Theme.Font.mono else Theme.Font.regular,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ClearTextOnFocus = false,
+		TextEditable = not p.readOnly,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		Size = UDim2.new(1, 0, 0, 32),
+		LayoutOrder = 2,
+	}, { C.corner(Theme.Radius.md), C.padding(0, 10) })
+	local stroke = C.stroke(t.borderStrong, 1)
+	stroke.Parent = box
+	box.Focused:Connect(function()
+		stroke.Color = t.accent
+		stroke.Thickness = 2
+	end)
+	box.FocusLost:Connect(function()
+		stroke.Color = t.borderStrong
+		stroke.Thickness = 1
+		if p.onCommit and not p.readOnly then
+			p.onCommit(box.Text)
+		end
+	end)
+	box.Parent = wrap
+	if p.hint then
+		C.text(t, { text = p.hint, size = Theme.Text.caption, color = t.mutedFg, order = 3 }).Parent = wrap
+	end
+	return wrap, box
+end
+
+export type SliderProps = {
+	label: string,
+	hint: string?,
+	min: number,
+	max: number,
+	step: number,
+	value: number,
+	order: number?,
+	suffix: string?,
+	onChange: (value: number, final: boolean) -> (),
+	onBegin: (() -> ())?,
+}
+
+export type SliderCtx = {
+	widget: any, -- DockWidgetPluginGui (for mouse position)
+	root: GuiObject, -- full-size frame that receives mouse moves
+}
+
+local function roundTo(v: number, step: number): number
+	return math.floor(v / step + 0.5) * step
+end
+
+local function format(v: number, step: number): string
+	if step >= 1 then
+		return tostring(math.floor(v + 0.5))
+	elseif step >= 0.1 then
+		return string.format("%.1f", v)
+	end
+	return string.format("%.2f", v)
+end
+
+function C.slider(t: Tokens, ctx: SliderCtx, p: SliderProps): Frame
+	local value = math.clamp(p.value, p.min, p.max)
+	local frame = C.stack({ LayoutOrder = p.order or 0 }, 2)
+
+	local top = C.new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 24), LayoutOrder = 1, Parent = frame })
+	C.new("TextLabel", {
+		BackgroundTransparency = 1,
+		Text = p.label,
+		TextSize = Theme.Text.label,
+		FontFace = Theme.Font.semibold,
+		TextColor3 = t.fg,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Size = UDim2.new(1, -64, 1, 0),
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		Parent = top,
+	})
+	local box = C.new("TextBox", {
+		BackgroundColor3 = t.card,
+		Text = format(value, p.step) .. (p.suffix or ""),
+		TextColor3 = t.fg,
+		TextSize = Theme.Text.caption,
+		FontFace = Theme.Font.mono,
+		ClearTextOnFocus = false,
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, 0, 0.5, 0),
+		Size = UDim2.new(0, 56, 0, 22),
+		Parent = top,
+	}, { C.corner(Theme.Radius.sm) })
+	local boxStroke = C.stroke(t.border, 1)
+	boxStroke.Parent = box
+
+	if p.hint then
+		C.text(t, { text = p.hint, size = Theme.Text.caption, color = t.mutedFg, order = 2 }).Parent = frame
+	end
+
+	local hit = C.new("TextButton", {
+		AutoButtonColor = false,
+		BackgroundTransparency = 1,
+		Text = "",
+		Size = UDim2.new(1, 0, 0, 22),
+		LayoutOrder = 3,
+		Parent = frame,
+	})
+	local track = C.new("Frame", {
+		BackgroundColor3 = t.muted,
+		BorderSizePixel = 0,
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 7, 0.5, 0),
+		Size = UDim2.new(1, -14, 0, 4),
+		Parent = hit,
+	}, { C.round() })
+	local fill = C.new("Frame", {
+		BackgroundColor3 = t.accent,
+		BorderSizePixel = 0,
+		Size = UDim2.new(0, 0, 1, 0),
+		Parent = track,
+	}, { C.round() })
+	local knob = C.new("Frame", {
+		BackgroundColor3 = t.fg,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0, 0, 0.5, 0),
+		Size = UDim2.new(0, 14, 0, 14),
+		ZIndex = 2,
+		Parent = track,
+	}, { C.round() })
+	local knobStroke = C.stroke(t.accent, 2)
+	knobStroke.Parent = knob
+
+	local function render()
+		local f = (value - p.min) / (p.max - p.min)
+		fill.Size = UDim2.new(f, 0, 1, 0)
+		knob.Position = UDim2.new(f, 0, 0.5, 0)
+		box.Text = format(value, p.step) .. (p.suffix or "")
+	end
+	render()
+
+	local function setValue(v: number, final: boolean)
+		local newValue = math.clamp(roundTo(v, p.step), p.min, p.max)
+		local changed = newValue ~= value
+		value = newValue
+		render()
+		if changed or final then
+			p.onChange(value, final)
+		end
+	end
+
+	local dragging = false
+	local connections: { RBXScriptConnection } = {}
+	local function fromX(x: number)
+		local pos, size = C.abs(track)
+		local f = math.clamp((x - pos.X) / math.max(1, size.X), 0, 1)
+		setValue(p.min + f * (p.max - p.min), false)
+	end
+	local function stop()
+		if not dragging then
+			return
+		end
+		dragging = false
+		knob.Size = UDim2.new(0, 14, 0, 14)
+		for _, c in connections do
+			c:Disconnect()
+		end
+		table.clear(connections)
+		setValue(value, true)
+	end
+	hit.InputBegan:Connect(function(input)
+		if input.UserInputType ~= Enum.UserInputType.MouseButton1 then
+			return
+		end
+		dragging = true
+		knob.Size = UDim2.new(0, 16, 0, 16)
+		if p.onBegin then
+			p.onBegin()
+		end
+		fromX(input.Position.X)
+		table.insert(
+			connections,
+			RunService.Heartbeat:Connect(function()
+				if dragging then
+					fromX(ctx.widget:GetRelativeMousePosition().X)
+				end
+			end)
+		)
+		table.insert(
+			connections,
+			ctx.root.InputEnded:Connect(function(ended)
+				if ended.UserInputType == Enum.UserInputType.MouseButton1 then
+					stop()
+				end
+			end)
+		)
+	end)
+	hit.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			stop()
+		end
+	end)
+	hit.MouseEnter:Connect(function()
+		C.tween(knob, { Size = UDim2.new(0, 16, 0, 16) })
+	end)
+	hit.MouseLeave:Connect(function()
+		if not dragging then
+			C.tween(knob, { Size = UDim2.new(0, 14, 0, 14) })
+		end
+	end)
+
+	box.Focused:Connect(function()
+		boxStroke.Color = t.accent
+	end)
+	box.FocusLost:Connect(function()
+		boxStroke.Color = t.border
+		local n = tonumber((box.Text:gsub("[^%d%.%-]", "")))
+		if n then
+			if p.onBegin then
+				p.onBegin()
+			end
+			setValue(n, true)
+		else
+			render()
+		end
+	end)
+	return frame
+end
+
+function C.toggle(t: Tokens, label: string, value: boolean, onChange: (boolean) -> (), order: number?): TextButton
+	local row = C.new("TextButton", {
+		AutoButtonColor = false,
+		BackgroundTransparency = 1,
+		Text = "",
+		Size = UDim2.new(1, 0, 0, 28),
+		LayoutOrder = order or 0,
+	})
+	C.new("TextLabel", {
+		BackgroundTransparency = 1,
+		Text = label,
+		TextColor3 = t.fg,
+		TextSize = Theme.Text.label,
+		FontFace = Theme.Font.medium,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Size = UDim2.new(1, -48, 1, 0),
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		Parent = row,
+	})
+	local track = C.new("Frame", {
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, 0, 0.5, 0),
+		Size = UDim2.new(0, 36, 0, 20),
+		Parent = row,
+	}, { C.round() })
+	local dot = C.new("Frame", {
+		AnchorPoint = Vector2.new(0, 0.5),
+		Size = UDim2.new(0, 16, 0, 16),
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		Parent = track,
+	}, { C.round() })
+	local on = value
+	local function render(animate: boolean)
+		local goalTrack = { BackgroundColor3 = if on then t.accent else t.borderStrong }
+		local goalDot = { Position = if on then UDim2.new(1, -18, 0.5, 0) else UDim2.new(0, 2, 0.5, 0) }
+		if animate then
+			C.tween(track, goalTrack)
+			C.tween(dot, goalDot)
+		else
+			track.BackgroundColor3 = goalTrack.BackgroundColor3
+			dot.Position = goalDot.Position
+		end
+	end
+	render(false)
+	row.Activated:Connect(function()
+		on = not on
+		render(true)
+		onChange(on)
+	end)
+	return row
+end
+
+-- Row of color swatches + hex box.
+function C.colorPicker(t: Tokens, label: string, hexLabel: string, value: Color3, onPick: (Color3) -> (), onInvalid: () -> (), order: number?): Frame
+	local frame = C.stack({ LayoutOrder = order or 0 }, 6)
+	local head = C.new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 22), LayoutOrder = 1, Parent = frame })
+	C.new("TextLabel", {
+		BackgroundTransparency = 1,
+		Text = label,
+		TextColor3 = t.fg,
+		TextSize = Theme.Text.label,
+		FontFace = Theme.Font.semibold,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Size = UDim2.new(1, -110, 1, 0),
+		Parent = head,
+	})
+	local preview = C.new("Frame", {
+		BackgroundColor3 = value,
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -84, 0.5, 0),
+		Size = UDim2.new(0, 18, 0, 18),
+		Parent = head,
+	}, { C.corner(Theme.Radius.sm), C.stroke(t.borderStrong, 1) })
+	local hexBox = C.new("TextBox", {
+		BackgroundColor3 = t.card,
+		Text = "#" .. value:ToHex():upper(),
+		PlaceholderText = hexLabel,
+		TextColor3 = t.fg,
+		TextSize = Theme.Text.caption,
+		FontFace = Theme.Font.mono,
+		ClearTextOnFocus = false,
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, 0, 0.5, 0),
+		Size = UDim2.new(0, 76, 0, 22),
+		Parent = head,
+	}, { C.corner(Theme.Radius.sm) })
+	local hexStroke = C.stroke(t.border, 1)
+	hexStroke.Parent = hexBox
+
+	local grid = C.new("Frame", {
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		LayoutOrder = 2,
+		Parent = frame,
+	})
+	C.list(Enum.FillDirection.Horizontal, 6, true).Parent = grid
+	local strokes: { [Color3]: UIStroke } = {}
+	local current = value
+
+	local function mark()
+		for color, s in strokes do
+			local selected = color:ToHex() == current:ToHex()
+			s.Color = if selected then t.ring else t.border
+			s.Thickness = if selected then 2 else 1
+		end
+		preview.BackgroundColor3 = current
+		hexBox.Text = "#" .. current:ToHex():upper()
+	end
+
+	local function pick(color: Color3)
+		current = color
+		mark()
+		onPick(color)
+	end
+
+	for i, color in Theme.Swatches do
+		local sw = C.new("TextButton", {
+			AutoButtonColor = false,
+			BackgroundColor3 = color,
+			Text = "",
+			Size = UDim2.new(0, 22, 0, 22),
+			LayoutOrder = i,
+			Parent = grid,
+		}, { C.round() })
+		local s = C.stroke(t.border, 1)
+		s.Parent = sw
+		strokes[color] = s
+		sw.MouseEnter:Connect(function()
+			C.tween(sw, { Size = UDim2.new(0, 24, 0, 24) })
+		end)
+		sw.MouseLeave:Connect(function()
+			C.tween(sw, { Size = UDim2.new(0, 22, 0, 22) })
+		end)
+		sw.Activated:Connect(function()
+			pick(color)
+		end)
+	end
+	mark()
+
+	hexBox.Focused:Connect(function()
+		hexStroke.Color = t.accent
+	end)
+	hexBox.FocusLost:Connect(function()
+		hexStroke.Color = t.border
+		local text = hexBox.Text:gsub("%s", "")
+		local r, g, b = text:match("^(%d+),(%d+),(%d+)$")
+		if r and g and b then
+			pick(Color3.fromRGB(math.clamp(tonumber(r) or 0, 0, 255), math.clamp(tonumber(g) or 0, 0, 255), math.clamp(tonumber(b) or 0, 0, 255)))
+			return
+		end
+		local hex = text:gsub("^#", "")
+		if #hex == 6 and hex:match("^%x+$") then
+			pick(Color3.fromHex(hex))
+		else
+			mark()
+			onInvalid()
+		end
+	end)
+	return frame
+end
+
+-- Selectable option with a title and a one-line explanation.
+function C.radio(t: Tokens, title: string, hint: string, selected: boolean, onClick: () -> (), order: number?): TextButton
+	local b = C.new("TextButton", {
+		AutoButtonColor = false,
+		BackgroundColor3 = if selected then t.muted else t.card,
+		Text = "",
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		LayoutOrder = order or 0,
+	}, { C.corner(Theme.Radius.md), C.padding(8, 10) })
+	C.stroke(if selected then t.accent else t.border, if selected then 2 else 1).Parent = b
+	local dot = C.new("Frame", {
+		BackgroundTransparency = 1,
+		Position = UDim2.new(0, 0, 0, 2),
+		Size = UDim2.new(0, 16, 0, 16),
+		Parent = b,
+	}, { C.round(), C.stroke(if selected then t.accent else t.borderStrong, 2) })
+	if selected then
+		C.new("Frame", {
+			BackgroundColor3 = t.accent,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(0.5, 0, 0.5, 0),
+			Size = UDim2.new(0, 8, 0, 8),
+			Parent = dot,
+		}, { C.round() })
+	end
+	local textCol = C.stack({ Position = UDim2.new(0, 26, 0, 0), Size = UDim2.new(1, -26, 0, 0), Parent = b }, 2)
+	C.text(t, { text = title, size = Theme.Text.label, font = Theme.Font.semibold, order = 1 }).Parent = textCol
+	C.text(t, { text = hint, size = Theme.Text.caption, color = t.mutedFg, order = 2 }).Parent = textCol
+	if not selected then
+		b.MouseEnter:Connect(function()
+			C.tween(b, { BackgroundColor3 = t.muted })
+		end)
+		b.MouseLeave:Connect(function()
+			C.tween(b, { BackgroundColor3 = t.card })
+		end)
+	end
+	b.Activated:Connect(onClick)
+	return b
+end
+
+-- Titled group. Returns the outer frame and the content frame to fill.
+function C.section(t: Tokens, title: string, order: number?): (Frame, Frame)
+	local outer = C.stack({ LayoutOrder = order or 0 }, 8)
+	C.text(t, { text = title:upper(), size = Theme.Text.caption, font = Theme.Font.bold, color = t.mutedFg, order = 1 }).Parent =
+		outer
+	local content = C.stack({ LayoutOrder = 2, BackgroundColor3 = t.card, BackgroundTransparency = 0 }, 12)
+	C.corner(Theme.Radius.lg).Parent = content
+	C.stroke(t.border, 1).Parent = content
+	C.padding(12).Parent = content
+	content.Parent = outer
+	return outer, content
+end
+
+return C
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="12">
+        <Properties>
+          <string name="Name">Theme</string>
+          <string name="Source"><![CDATA[--!strict
+--[[
+	Design tokens. Palette from the UI UX Pro Max design system
+	("Developer Tool / IDE": slate surfaces + green action color), dense spacing,
+	minimal Swiss style. A light variant follows Studio's light theme.
+]]
+
+export type Tokens = {
+	isDark: boolean,
+	bg: Color3,
+	card: Color3,
+	muted: Color3,
+	hover: Color3,
+	fg: Color3,
+	mutedFg: Color3,
+	border: Color3,
+	borderStrong: Color3,
+	accent: Color3,
+	accentHover: Color3,
+	onAccent: Color3,
+	danger: Color3,
+	onDanger: Color3,
+	ring: Color3,
+	overlay: Color3,
+}
+
+local function hex(s: string): Color3
+	return Color3.fromHex(s)
+end
+
+local Theme = {}
+
+Theme.Dark = {
+	isDark = true,
+	bg = hex("#0F172A"),
+	card = hex("#1B2336"),
+	muted = hex("#272F42"),
+	hover = hex("#303A50"),
+	fg = hex("#F8FAFC"),
+	mutedFg = hex("#94A3B8"),
+	border = hex("#334155"),
+	borderStrong = hex("#475569"),
+	accent = hex("#22C55E"),
+	accentHover = hex("#4ADE80"),
+	onAccent = hex("#0F172A"),
+	danger = hex("#EF4444"),
+	onDanger = hex("#FFFFFF"),
+	ring = hex("#FFFFFF"),
+	overlay = hex("#020617"),
+} :: Tokens
+
+Theme.Light = {
+	isDark = false,
+	bg = hex("#F8FAFC"),
+	card = hex("#FFFFFF"),
+	muted = hex("#F1F5F9"),
+	hover = hex("#E2E8F0"),
+	fg = hex("#0F172A"),
+	mutedFg = hex("#475569"),
+	border = hex("#E2E8F0"),
+	borderStrong = hex("#CBD5E1"),
+	accent = hex("#15803D"),
+	accentHover = hex("#166534"),
+	onAccent = hex("#FFFFFF"),
+	danger = hex("#DC2626"),
+	onDanger = hex("#FFFFFF"),
+	ring = hex("#0F172A"),
+	overlay = hex("#0F172A"),
+} :: Tokens
+
+Theme.Space = { xs = 4, sm = 8, md = 12, lg = 16, xl = 24 }
+Theme.Radius = { sm = 4, md = 6, lg = 8, pill = 999 }
+Theme.Text = { caption = 12, body = 14, label = 13, title = 16, hero = 18 }
+Theme.Motion = { fast = 0.12, base = 0.18 }
+
+local FAMILY = "rbxasset://fonts/families/BuilderSans.json"
+Theme.Font = {
+	regular = Font.new(FAMILY, Enum.FontWeight.Regular),
+	medium = Font.new(FAMILY, Enum.FontWeight.Medium),
+	semibold = Font.new(FAMILY, Enum.FontWeight.SemiBold),
+	bold = Font.new(FAMILY, Enum.FontWeight.Bold),
+	mono = Font.new("rbxasset://fonts/families/RobotoMono.json", Enum.FontWeight.Regular),
+}
+
+-- Colors offered as one-click swatches.
+Theme.Swatches = {
+	hex("#FFFFFF"),
+	hex("#FFD640"),
+	hex("#FF8C28"),
+	hex("#FF3B3B"),
+	hex("#FF5FA2"),
+	hex("#A45CFF"),
+	hex("#3D8BFF"),
+	hex("#3CE0FF"),
+	hex("#50FF8C"),
+	hex("#C8FF50"),
+	hex("#9AA3B2"),
+	hex("#1A1A1A"),
+}
+
+function Theme.current(): Tokens
+	local ok, name = pcall(function()
+		return (settings().Studio :: any).Theme.Name
+	end)
+	if ok and name == "Light" then
+		return Theme.Light
+	end
+	return Theme.Dark
+end
+
+return Theme
+]]></string>
+        </Properties>
+      </Item>
+    </Item>
+  </Item>
+</roblox>
