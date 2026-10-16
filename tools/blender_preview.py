@@ -106,7 +106,7 @@ def reset():
     sc = bpy.context.scene
     sc.render.engine = "CYCLES"
     sc.cycles.device = "CPU"
-    sc.cycles.samples = 48
+    sc.cycles.samples = int(os.environ.get("PREVIEW_SAMPLES", "48"))
     sc.cycles.use_denoising = False
     sc.render.resolution_x, sc.render.resolution_y = W, H
     sc.view_settings.view_transform = "Standard"

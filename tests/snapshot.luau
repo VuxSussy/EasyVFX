@@ -104,6 +104,7 @@ for _, shot in shots do
 	H.emitLog = {}
 	H.recordEmits = true
 	local startFrame = H.frame
+	math.randomseed(42) -- same random choices for every frame of a timeline
 	EasyVFX.PlayLocal(root)
 	while H.frame - startFrame < shot.frames do
 		H.task.wait()

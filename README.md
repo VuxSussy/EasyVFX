@@ -3,6 +3,9 @@
 EasyVFX là plugin Roblox Studio giúp người **không biết lập trình** tạo hiệu ứng hình ảnh (VFX) chỉ bằng cách bấm chuột:
 chọn vật thể → bấm vào hiệu ứng → đổi màu, kéo thanh trượt → chọn *khi nào* hiệu ứng chạy. Xong.
 
+![Demo HD](docs/demo-hd.gif)
+*Chạy thử 6 hiệu ứng HD: runtime EasyVFX phát hiệu ứng trong môi trường mô phỏng (Lune), từng khung được dựng lại bằng Blender Cycles. Phát chậm 2 lần. Đây là ảnh gần đúng, không phải quay màn hình Roblox. Đá có màu xanh vì mặt đất giả lập là cỏ.*
+
 ![Xem trước hình học hiệu ứng](docs/preview-shapes.png)
 *Ảnh dựng lại từ dữ liệu của runtime (vòng, lưỡi chém, tia, sét, hố đá) bằng `tools/render_snapshot.py`. Ảnh này là bản xem trước gần đúng, không phải ảnh chụp trong Roblox.*
 
