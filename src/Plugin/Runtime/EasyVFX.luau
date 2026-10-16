@@ -28,7 +28,7 @@ local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 
 local EasyVFX = {}
-EasyVFX.Version = 5
+EasyVFX.Version = 6
 EasyVFX.Tag = "EasyVFX"
 -- 0.25 .. 1. Multiplies particle, line and rock counts. Lowered automatically on the
 -- client when the player picks a low graphics level.
@@ -238,6 +238,7 @@ type Style = {
 	color0: Color3,
 	color1: Color3,
 	glow: number,
+	coreGlow: number,
 	brightness: number,
 	fade0: number,
 	fadeStart: number,
@@ -253,6 +254,9 @@ local function readStyle(cfg: Instance): Style
 		color0 = col(cfg, "Color0", Color3.new(1, 1, 1)),
 		color1 = col(cfg, "Color1", col(cfg, "Color0", Color3.new(1, 1, 1))),
 		glow = math.clamp(num(cfg, "Glow", 1), 0, 1),
+		-- Dark effects: Glow = 0 gives an opaque, unlit body (black really covers the
+		-- scene), while CoreGlow keeps the thin core additive and bright.
+		coreGlow = math.clamp(num(cfg, "CoreGlow", num(cfg, "Glow", 1)), 0, 1),
 		brightness = num(cfg, "Brightness", 1),
 		fade0 = math.clamp(num(cfg, "Transparency", 0), 0, 1),
 		fadeStart = math.clamp(num(cfg, "FadeStart", 0.35), 0, 0.99),
@@ -283,7 +287,7 @@ local function newBeam(parent: Instance, a0: Attachment, a1: Attachment, style: 
 	-- camera-facing ribbon. Its width follows the attachments' Y axes.
 	b.FaceCamera = false
 	b.Segments = 12
-	b.LightEmission = style.glow
+	b.LightEmission = if isCore then style.coreGlow else style.glow
 	b.LightInfluence = 0
 	b.Brightness = if isCore then style.brightness * 1.5 else style.brightness
 	b.Color = ColorSequence.new(if isCore then style.coreColor else style.color0)

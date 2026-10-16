@@ -4,6 +4,16 @@ All notable changes to EasyVFX are listed here. Versions follow [Semantic Versio
 
 ## [Unreleased]
 
+### Dark fantasy
+- New **Dark Fantasy** category with 8 presets: Shadow Slash, Soul Flame, Blood Burst, Void Rift, Cursed Sigil, Necrotic Aura, Soul Release, Ash & Embers.
+- Dark bodies with bright edges: shapes accept `Glow = 0` (unlit, opaque) together with `CoreGlow` and a `core` color for the thin additive core. A new `"x"` (void) color token gives a near-black tinted by the second color.
+- `docs/dark-fantasy-vfx.md`: what Souls, Elden Ring, Diablo IV, Hollow Knight and Blasphemous do, the rules the presets follow, and where to find VFX material legally.
+
+### Make your own effects
+- New **Create** tab: build effects from 16 blocks, each with a color, a dark style, delay, size and amount. Save them to **My Effects**, edit, delete, and share or import them with `EVFX1:` codes, which are validated and clamped.
+- Custom effects are ordinary presets once registered, so the library, Customize tab, triggers and favorites all work with them. Each placed effect stores its definition (`VFX_CustomDef`) and is re-learned in other places.
+
+
 ### New ways to make effects
 - `Spiral` shape: twisting helix strands made of beams (tornadoes, charge-ups, vortexes).
 - `Projectile` shape: a glowing head flying along an arc with a tapered trail; pair it with hit layers.
