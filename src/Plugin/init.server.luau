@@ -312,6 +312,117 @@ local function saveFavorites(favorites: { App.Favorite })
 end
 
 ------------------------------------------------------------------------------------
+-- HD asset pack (textures rendered in Blender). Image IDs are account-wide, so they
+-- are remembered in plugin settings and reused in every place.
+------------------------------------------------------------------------------------
+
+local PACK_PREFIX = "EVFX_Tex_"
+local SCAN_ROOTS = { Workspace, ReplicatedStorage, game:GetService("ServerStorage") }
+
+local function loadAssets(): Builder.Assets?
+	local raw = setting("EasyVFX_Assets")
+	if type(raw) ~= "table" then
+		return nil
+	end
+	local out: Builder.Assets = {}
+	for key, value in raw do
+		if type(key) == "string" and type(value) == "string" and value ~= "" then
+			out[key] = value
+		end
+	end
+	return if Builder.isHD(out) then out else nil
+end
+
+local function countAssets(assets: Builder.Assets?): number
+	local n = 0
+	if assets then
+		for _ in assets do
+			n += 1
+		end
+	end
+	return n
+end
+
+local function normalizeId(text: string): string?
+	local cleaned = text:gsub("%s", "")
+	if cleaned:match("^rbxasset") then
+		return cleaned
+	end
+	local id = cleaned:match("(%d+)")
+	return if id then "rbxassetid://" .. id else nil
+end
+
+-- Finds the texture an imported EVFX_Tex_* object carries (3D Importer output).
+local function textureOf(inst: Instance): string?
+	local candidates = {}
+	if inst:IsA("MeshPart") then
+		table.insert(candidates, inst.TextureID)
+	end
+	for _, d in inst:GetDescendants() do
+		if d:IsA("SurfaceAppearance") then
+			local ok, value = pcall(function()
+				return (d :: any).ColorMap
+			end)
+			if ok then
+				table.insert(candidates, value)
+			end
+		elseif d:IsA("Decal") or d:IsA("Texture") then
+			table.insert(candidates, d.Texture)
+		elseif d:IsA("MeshPart") then
+			table.insert(candidates, d.TextureID)
+		end
+	end
+	for _, value in candidates do
+		if type(value) == "string" and value ~= "" then
+			return value
+		end
+	end
+	return nil
+end
+
+local function saveAssets(assets: Builder.Assets)
+	setSetting("EasyVFX_Assets", assets)
+end
+
+local function scanAssets(): number
+	local found: Builder.Assets = loadAssets() or {}
+	local n = 0
+	for _, scanRoot in SCAN_ROOTS do
+		for _, inst in scanRoot:GetDescendants() do
+			if inst.Name:sub(1, #PACK_PREFIX) == PACK_PREFIX then
+				local key = inst.Name:sub(#PACK_PREFIX + 1)
+				local texture = textureOf(inst)
+				if texture and key ~= "" then
+					found[key] = texture
+					n += 1
+				end
+			end
+		end
+	end
+	if n > 0 then
+		saveAssets(found)
+	end
+	return n
+end
+
+local function assetsFromText(text: string): number
+	local found: Builder.Assets = loadAssets() or {}
+	local n = 0
+	for line in text:gmatch("[^\r\n]+") do
+		local key, rest = line:match("^%s*([%w_]+)%s*[=:%s]%s*(.-)%s*$")
+		local id = if rest then normalizeId(rest) else nil
+		if key and id then
+			found[key] = id
+			n += 1
+		end
+	end
+	if n > 0 then
+		saveAssets(found)
+	end
+	return n
+end
+
+------------------------------------------------------------------------------------
 -- Actions used by the panel
 ------------------------------------------------------------------------------------
 
@@ -322,7 +433,7 @@ local applyScheduled = false
 
 local function applyNow(root: Instance, params: Params)
 	if root.Parent and root:IsA("BasePart") then
-		local ok, err = pcall(Builder.apply :: any, root, params)
+		local ok, err = pcall(Builder.apply :: any, root, params, loadAssets())
 		if not ok then
 			warn("[EasyVFX] " .. tostring(err))
 		end
@@ -368,7 +479,7 @@ local function insert(presetId: string, params: Params?): Instance?
 	local runtimeMessage: string? = nil
 	local root = record("Add " .. preset.name.en, function()
 		local placement = placementFor(preset)
-		local created = Builder.create(p, placement)
+		local created = Builder.create(p, placement, loadAssets())
 		runtimeMessage = ensureRuntime()
 		return created
 	end)
@@ -445,6 +556,30 @@ local api: App.Api = {
 	selectionInfo = selectionInfo,
 	loadFavorites = loadFavorites,
 	saveFavorites = saveFavorites,
+	getAssets = loadAssets,
+	countAssets = function()
+		return countAssets(loadAssets())
+	end,
+	scanAssets = scanAssets,
+	assetsFromText = assetsFromText,
+	disableHD = function()
+		setSetting("EasyVFX_Assets", nil)
+	end,
+	applyAll = function()
+		local assets = loadAssets()
+		local n = 0
+		record("Apply HD setting", function()
+			for _, inst in game:GetService("CollectionService"):GetTagged(Builder.TAG) do
+				local params = if inst:IsA("BasePart") then Builder.readParams(inst) else nil
+				if params then
+					Builder.apply(inst :: BasePart, params, assets)
+					n += 1
+				end
+			end
+			return nil
+		end)
+		return n
+	end,
 }
 
 app = App.new(api)

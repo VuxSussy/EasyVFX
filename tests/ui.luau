@@ -124,6 +124,7 @@ local selection = { kind = "none", name = "" }
 local inserted = {}
 local applied = 0
 local previews = 0
+local packAssets = nil
 
 local api
 api = {
@@ -170,6 +171,42 @@ api = {
 	end,
 	loadFavorites = function()
 		return table.clone(favorites)
+	end,
+	getAssets = function()
+		return if packAssets and Builder.isHD(packAssets) then packAssets else nil
+	end,
+	countAssets = function()
+		local n = 0
+		for _ in packAssets or {} do
+			n += 1
+		end
+		return n
+	end,
+	scanAssets = function()
+		packAssets = { slash_arc = "rbxassetid://11", flip_slash = "rbxassetid://12", spark_star = "rbxassetid://13" }
+		return 3
+	end,
+	assetsFromText = function(text)
+		packAssets = packAssets or {}
+		local n = 0
+		for key, id in text:gmatch("([%w_]+)%s*=%s*(%d+)") do
+			packAssets[key] = "rbxassetid://" .. id
+			n += 1
+		end
+		return n
+	end,
+	disableHD = function()
+		packAssets = nil
+	end,
+	applyAll = function()
+		local n = 0
+		for _, root in inserted do
+			if root.Parent then
+				Builder.apply(root, Builder.readParams(root), api.getAssets())
+				n += 1
+			end
+		end
+		return n
 	end,
 	saveFavorites = function(list)
 		favorites = list
@@ -362,6 +399,46 @@ for _, preset in Presets.List do
 end
 check(applied > 0, "builder applied changes")
 check(#favorites > 0 and #favorites <= 12, "favorites saved and capped (" .. #favorites .. ")")
+
+print("== HD pack card")
+run("hd paste", function()
+	app:renderLibrary()
+	fire(buttonWithText(app.libraryPage, app:L("hdPaste")), "Activated")
+	local box = findAll(app.libraryPage, function(d)
+		return d:IsA("TextBox") and d.MultiLine
+	end)[1]
+	check(box ~= nil, "paste box shown")
+	box.Text = "spark_star = 555"
+	fire(buttonWithText(app.libraryPage, app:L("hdSave")), "Activated")
+	check(api.getAssets() == nil, "HD stays off without slash_arc")
+	check(app.toastText.Text == app:L("hdMissing"), "missing-main-texture message")
+end)
+run("hd scan", function()
+	fire(buttonWithText(app.libraryPage, app:L("hdScan")), "Activated")
+	check(api.getAssets() ~= nil, "HD on after scan")
+	check(buttonWithText(app.libraryPage, app:L("hdApplyAll")) ~= nil, "apply-all shown when HD on")
+	local before = #inserted
+	fire(app.grid:GetChildren()[2], "Activated")
+	local root = inserted[#inserted]
+	if root and #inserted > before then
+		selection = { kind = "effect", name = root.Name, root = root }
+		app:setSelection(selection)
+		local hasRotation = false
+		for _, d in app.editPage:GetDescendants() do
+			if d:IsA("TextLabel") and d.Text == app:L("rotation") then
+				hasRotation = true
+			end
+		end
+		local p = Builder.readParams(root)
+		check(not Builder.hasHD(p.preset) or hasRotation, "rotation slider for HD preset")
+		selection = { kind = "none", name = "" }
+		app:setSelection(selection)
+		app:setTab("library")
+	end
+	fire(buttonWithText(app.libraryPage, app:L("hdApplyAll")), "Activated")
+	fire(buttonWithText(app.libraryPage, app:L("hdDisable")), "Activated")
+	check(api.getAssets() == nil, "HD off after disable")
+end)
 
 print("== Favorites row, help, language, theme re-render")
 run("favorites", function()

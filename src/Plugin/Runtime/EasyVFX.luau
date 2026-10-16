@@ -28,7 +28,7 @@ local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 
 local EasyVFX = {}
-EasyVFX.Version = 3
+EasyVFX.Version = 4
 EasyVFX.Tag = "EasyVFX"
 -- 0.25 .. 1. Multiplies particle, line and rock counts. Lowered automatically on the
 -- client when the player picks a low graphics level.
@@ -827,13 +827,15 @@ local function pulse(inst: Instance, delay: number, duration: number)
 		local baseBrightness = num(light, "BaseBrightness", light.Brightness)
 		light:SetAttribute("BaseBrightness", baseBrightness)
 		addAnim(delay, duration, function()
-			light.Enabled = true
+			if light.Parent then
+				light.Enabled = true
+			end
 		end, function(alpha)
-			if pulseTokens[light] == token then
+			if pulseTokens[light] == token and light.Parent then
 				light.Brightness = baseBrightness * (1 - alpha) ^ 2
 			end
 		end, function()
-			if pulseTokens[light] == token then
+			if pulseTokens[light] == token and light.Parent then
 				light.Enabled = false
 				light.Brightness = baseBrightness
 			end
@@ -951,6 +953,23 @@ function EasyVFX.PlayLocal(target: Instance | string, at: CFrame?): number
 		rng = Random.new(),
 		ignore = ignore,
 	}
+
+	-- Re-roll random tilts so HD slashes swing at a new angle every time.
+	for _, d in root:GetDescendants() do
+		if d:IsA("Attachment") then
+			local tilt = d:GetAttribute("RandomTilt")
+			local base = d:GetAttribute("BaseCFrame")
+			if type(tilt) == "number" and typeof(base) == "CFrame" then
+				local rng = ctx.rng
+				d.CFrame = base
+					* CFrame.Angles(
+						math.rad(rng:NextNumber(-tilt, tilt)),
+						math.rad(rng:NextNumber(-tilt, tilt) * 0.5),
+						math.rad(rng:NextNumber(-tilt, tilt))
+					)
+			end
+		end
+	end
 
 	local length = 0
 	for _, d in root:GetDescendants() do

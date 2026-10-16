@@ -106,7 +106,13 @@ for _, preset in Presets.List do
 	check(Builder.isRoot(root), preset.id .. " isRoot")
 	check(Builder.findRoot(root:GetDescendants()[1] or root) == root, preset.id .. " findRoot from child")
 	local count1 = layerCount(root)
-	check(count1 >= #preset.layers, preset.id .. " layer instances " .. count1)
+	local basicLayers = 0
+	for _, layer in preset.layers do
+		if not layer.hd and not layer.pack then
+			basicLayers += 1
+		end
+	end
+	check(count1 >= basicLayers, preset.id .. " layer instances " .. count1)
 
 	-- read back
 	local back = Builder.readParams(root)
@@ -174,6 +180,81 @@ for _, preset in Presets.List do
 	local ok4, err4 = pcall(Builder.apply, root, other)
 	check(ok4, preset.id .. " switch preset: " .. tostring(err4))
 	target:Destroy()
+end
+
+print("== HD asset pack")
+do
+	local assets = {}
+	for _, key in {
+		"slash_arc", "slash_fiber", "slash_clean", "slash_glow", "slash_core", "spark_star", "spark_streak",
+		"glow_soft", "ring_wave", "flip_slash", "flip_impact", "flip_smoke", "flip_electric",
+	} do
+		assets[key] = "rbxassetid://" .. (1000 + #key)
+	end
+	check(Builder.isHD(assets), "isHD with pack")
+	check(not Builder.isHD({}), "not HD without pack")
+	local hdCount = 0
+	for _, preset in Presets.List do
+		H.warnings = {}
+		local holder = roblox.Instance.new("Part")
+		holder.Anchored = true
+		holder.Parent = H.workspace
+		local ok, root = pcall(Builder.create, Builder.defaultParams(preset.id), {
+			cframe = roblox.CFrame.new(0, 3, 0),
+			size = roblox.Vector3.new(4, 4, 4),
+			parent = holder,
+			weldTo = holder,
+		}, assets)
+		check(ok, preset.id .. " HD create: " .. tostring(root))
+		if not ok then
+			continue
+		end
+		check(root:GetAttribute("VFX_HD") == true, preset.id .. " marked HD")
+		local usesPack, basicLeft = false, false
+		for _, d in root:GetDescendants() do
+			if d:IsA("ParticleEmitter") and tostring(d.Texture):find("rbxassetid://") then
+				usesPack = true
+			end
+		end
+		for i, layer in preset.layers do
+			if layer.basic then
+				for _, d in root:GetDescendants() do
+					if d:GetAttribute("VFX_Layer") == tostring(i) then
+						basicLeft = true
+					end
+				end
+			end
+		end
+		check(not basicLeft, preset.id .. " basic-only layers removed in HD")
+		if Builder.hasHD(preset.id) then
+			check(usesPack, preset.id .. " uses pack textures")
+			hdCount += 1
+		end
+		-- flipbook layers really are flipbooks
+		for _, d in root:GetDescendants() do
+			if d:IsA("ParticleEmitter") and d.Name == "FlipHD" then
+				check(d.FlipbookLayout == roblox.Enum.ParticleFlipbookLayout.Grid4x4, preset.id .. " flipbook layout")
+			end
+		end
+		-- switching back to basic removes HD layers and restores basic ones
+		Builder.apply(root, Builder.readParams(root), nil)
+		for _, d in root:GetDescendants() do
+			if d:IsA("ParticleEmitter") then
+				check(not tostring(d.Texture):find("rbxassetid://"), preset.id .. " no pack textures after removing pack")
+			end
+		end
+		Builder.apply(root, Builder.readParams(root), assets)
+		local okPlay, len = pcall(EasyVFX.PlayLocal, root)
+		check(okPlay, preset.id .. " HD play: " .. tostring(len))
+		waitForQuiet(400)
+		for _ = 1, 60 do -- let light flashes finish before removing the effect
+			task.wait()
+		end
+		check(#H.warnings == 0, preset.id .. " HD no warnings: " .. table.concat(H.warnings, " | "))
+		holder:Destroy()
+	end
+	print(("  %d presets have dedicated HD layers"):format(hdCount))
+	check(hdCount >= 7, "enough HD presets")
 end
 
 print("== Server mode forwards to clients")

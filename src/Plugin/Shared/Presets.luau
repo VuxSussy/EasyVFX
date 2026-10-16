@@ -82,6 +82,160 @@ local function sparks(count: number, speed: number, at: any?): Layer
 	}
 end
 
+-- HD (asset pack) layers ------------------------------------------------------
+-- These only appear after the Blender pack is imported. They are flat particles
+-- (VelocityPerpendicular + tiny speed), so the texture lies in the attachment's
+-- plane; `rotatable` adds the plugin's Rotation slider to their angle.
+
+local function hdSlash(o: { [string]: any }): { Layer }
+	local radius = o.radius or 5
+	local quad = radius / 0.48 -- the crescent's outer edge is at 48% of the texture
+	local life = o.life or 0.34
+	local rot = o.rotation or 0
+	local spin = (o.sweep or 50) / life
+	local common = {
+		hd = true,
+		group = o.group,
+		tilt = o.tilt,
+		randomTilt = o.randomTilt,
+		delay = o.delay,
+		orientation = "VelocityPerpendicular",
+		direction = "Top",
+		speed = { 0.01, 0.01 },
+		rotation = { rot, rot },
+		rotSpeed = { spin, spin },
+		rotatable = true,
+		lightEmission = 1,
+		at = o.at or "center",
+	}
+	local function with(extra: { [string]: any }): Layer
+		local layer = table.clone(common)
+		for k, v in extra do
+			layer[k] = v
+		end
+		return layer
+	end
+	return {
+		with({
+			type = "particles",
+			name = "SlashHD",
+			pack = "slash_arc",
+			burst = 1,
+			size = { { 0, quad * 0.82 }, { 0.12, quad }, { 1, quad * 1.12 } },
+			transparency = { { 0, 0 }, { 0.45, 0.05 }, { 1, 1 } },
+			lifetime = { life, life },
+			color = { "w", "w", "p", "s" },
+			brightness = 4,
+			zOffset = 1,
+		}),
+		with({
+			type = "particles",
+			name = "SlashDissolve",
+			pack = "flip_slash",
+			flipbook = "Grid4x4",
+			flipMode = "OneShot",
+			burst = 1,
+			size = { { 0, quad * 1.0 }, { 1, quad * 1.16 } },
+			transparency = { { 0, 0.15 }, { 1, 0.35 } },
+			lifetime = { life * 1.3, life * 1.3 },
+			color = { "p", "s" },
+			brightness = 2,
+			zOffset = 0.5,
+		}),
+		{
+			type = "particles",
+			name = "Twinkles",
+			hd = true,
+			group = o.group,
+			tilt = o.tilt,
+			randomTilt = o.randomTilt,
+			pack = "spark_star",
+			at = o.at or "center",
+			delay = (o.delay or 0) + 0.04,
+			burst = o.twinkles or 16,
+			direction = "Front",
+			speed = { radius * 3, radius * 6 },
+			drag = 5,
+			spread = { 80, 80 },
+			size = { { 0, 0 }, { 0.15, 0.8 }, { 1, 0 } },
+			lifetime = { 0.35, 0.8 },
+			rotation = { 0, 360 },
+			color = { "w", "p" },
+			lightEmission = 1,
+			brightness = 2,
+		},
+	}
+end
+
+local hdSlashLayers = hdSlash
+
+-- Marks a layer as "only without the HD pack".
+local function basic(layer: Layer): Layer
+	layer.basic = true
+	return layer
+end
+
+local function hdRing(at: any, size1: number, life: number, tilt: Vector3?, delay: number?): Layer
+	return {
+		type = "particles",
+		name = "RingHD",
+		hd = true,
+		pack = "ring_wave",
+		at = at,
+		tilt = tilt,
+		delay = delay,
+		burst = 1,
+		orientation = "VelocityPerpendicular",
+		direction = "Top",
+		speed = { 0.01, 0.01 },
+		size = { { 0, size1 * 0.08 }, { 1, size1 } },
+		transparency = { { 0, 0 }, { 0.6, 0.25 }, { 1, 1 } },
+		lifetime = { life, life },
+		rotation = { 0, 360 },
+		color = { "w", "p", "s" },
+		lightEmission = 1,
+		brightness = 2,
+	}
+end
+
+local function hdFlip(pack: string, at: any, count: number, size: { any }, life: { number }, extra: { [string]: any }?): Layer
+	local layer: Layer = {
+		type = "particles",
+		name = "FlipHD",
+		hd = true,
+		pack = pack,
+		at = at,
+		flipbook = "Grid4x4",
+		flipMode = "OneShot",
+		burst = count,
+		size = size,
+		lifetime = life,
+		rotation = { 0, 360 },
+		color = { "w", "p" },
+		lightEmission = 1,
+		brightness = 2,
+	}
+	if extra then
+		for k, v in extra do
+			layer[k] = v
+		end
+	end
+	return layer
+end
+
+local function hdDust(count: number): Layer
+	return hdFlip("flip_smoke", Vector3.new(0, -1.6, 0), count, { { 0, 2.5 }, { 1, 6 } }, { 0.9, 1.4 }, {
+		color = { "g" },
+		lightEmission = 0,
+		lightInfluence = 1,
+		brightness = 1,
+		speed = { 8, 14 },
+		spread = { 90, 90 },
+		drag = 4,
+		transparency = { { 0, 0.15 }, { 1, 0.6 } },
+	})
+end
+
 local function dust(count: number, at: any?): Layer
 	return {
 		type = "particles",
@@ -117,10 +271,12 @@ Presets.List = ({
 			{
 				type = "shape",
 				kind = "Slash",
+				basic = true,
 				attrs = { Radius = 5, Arc = 170, Width = 1.6, Sweep = 60, Duration = 0.4, Brightness = 2, TailFade = 0.8 },
 				color0 = "p",
 				color1 = "s",
 			},
+			hdSlashLayers({ group = "a", radius = 5, sweep = 60 }),
 			{
 				type = "shape",
 				kind = "Lines",
@@ -144,14 +300,22 @@ Presets.List = ({
 			{
 				type = "shape",
 				kind = "Slash",
+				basic = true,
 				attrs = { Count = 5, Stagger = 0.07, RandomTilt = 70, Radius = 4.5, Arc = 150, Width = 1.2, Sweep = 40, Duration = 0.35, Brightness = 2 },
 				color0 = "p",
 				color1 = "s",
 			},
+			-- upright planes facing forward, crossing at different angles (an "X" flurry)
+			-- upright planes facing forward, off-centre and crossing (an anime "X" flurry)
+			hdSlashLayers({ group = "a", at = Vector3.new(-1.4, 0.9, 0), radius = 3.8, tilt = Vector3.new(90, 0, 0), randomTilt = 15, rotation = 20, twinkles = 8 }),
+			hdSlashLayers({ group = "b", at = Vector3.new(1.5, -0.7, 0), radius = 3.6, tilt = Vector3.new(90, 0, 0), randomTilt = 15, rotation = 200, delay = 0.07, twinkles = 8 }),
+			hdSlashLayers({ group = "c", at = Vector3.new(0.5, 1.6, 0), radius = 4.0, tilt = Vector3.new(90, 0, 0), randomTilt = 15, rotation = 120, delay = 0.14, twinkles = 8 }),
+			hdSlashLayers({ group = "d", at = Vector3.new(-0.7, -1.3, 0), radius = 3.7, tilt = Vector3.new(90, 0, 0), randomTilt = 15, rotation = 300, delay = 0.21, twinkles = 8 }),
 			{
 				type = "shape",
 				kind = "Orb",
-				attrs = { Size0 = 1, Size1 = 7, Duration = 0.2, Transparency = 0.3, FadeStart = 0 },
+				basic = true,
+				attrs = { Size0 = 0.6, Size1 = 3, Duration = 0.15, Transparency = 0.45, FadeStart = 0 },
 				color0 = "w",
 				color1 = "p",
 			},
@@ -171,7 +335,7 @@ Presets.List = ({
 			{
 				type = "shape",
 				kind = "Orb",
-				attrs = { Size0 = 0.5, Size1 = 5, Duration = 0.18, Transparency = 0, FadeStart = 0.2 },
+				attrs = { Size0 = 0.5, Size1 = 3.5, Duration = 0.15, Transparency = 0.2, FadeStart = 0 },
 				color0 = "w",
 				color1 = "p",
 			},
@@ -185,10 +349,13 @@ Presets.List = ({
 			{
 				type = "shape",
 				kind = "Ring",
+				basic = true,
 				attrs = { Radius0 = 0.5, Radius1 = 6, Width0 = 0.8, Width1 = 0.05, Duration = 0.35, Tilt = Vector3.new(90, 0, 0) },
 				color0 = "p",
 				color1 = "s",
 			},
+			hdFlip("flip_impact", "center", 1, { { 0, 6 }, { 1, 9 } }, { 0.4, 0.4 }, { zOffset = 1, color = { "p", "s" }, brightness = 1.2 }),
+			hdRing("center", 13, 0.35, Vector3.new(90, 0, 0)),
 			sparks(16, 30),
 			{ type = "light", brightness = 4, range = 14, color = "p", flash = 0.2 },
 		},
@@ -218,7 +385,10 @@ Presets.List = ({
 				color0 = "p",
 				color1 = "s",
 			},
-			dust(14),
+			basic(dust(14)),
+			hdDust(12),
+			hdRing(Vector3.new(0, -1.8, 0), 30, 0.55),
+			hdFlip("flip_impact", Vector3.new(0, -1, 0), 1, { { 0, 7 }, { 1, 11 } }, { 0.35, 0.35 }, { color = { "p", "s" }, brightness = 1.2 }),
 			{ type = "light", brightness = 5, range = 22, color = "p", flash = 0.35 },
 		},
 	},
@@ -264,6 +434,7 @@ Presets.List = ({
 				color1 = "s",
 			},
 			sparks(18, 45),
+			hdFlip("flip_electric", "center", 2, { { 0, 4 }, { 1, 7 } }, { 0.3, 0.4 }, { color = { "w", "s" }, brightness = 3 }),
 			{ type = "light", brightness = 4, range = 20, color = "s", flash = 0.4 },
 		},
 	},
@@ -279,7 +450,7 @@ Presets.List = ({
 			{
 				type = "shape",
 				kind = "Orb",
-				attrs = { Size0 = 1, Size1 = 12, Duration = 0.3, Transparency = 0, FadeStart = 0.1 },
+				attrs = { Size0 = 1, Size1 = 9, Duration = 0.25, Transparency = 0.15, FadeStart = 0 },
 				color0 = "w",
 				color1 = "p",
 			},
@@ -305,6 +476,7 @@ Presets.List = ({
 				texture = T.Smoke,
 				burst = 10,
 				delay = 0.1,
+				basic = true,
 				color = { "k" },
 				size = { { 0, 4 }, { 1, 10 } },
 				transparency = { { 0, 0.3 }, { 1, 1 } },
@@ -326,6 +498,20 @@ Presets.List = ({
 				color1 = "s",
 			},
 			{ type = "shape", kind = "Debris", attrs = { Count = 10, Force = 45, Duration = 2, Ground = true } },
+			hdFlip("flip_impact", "center", 1, { { 0, 9 }, { 1, 15 } }, { 0.45, 0.45 }, { zOffset = 2, color = { "p", "s" }, brightness = 1.2 }),
+			hdFlip("flip_smoke", "center", 9, { { 0, 5 }, { 1, 12 } }, { 1.6, 2.4 }, {
+				delay = 0.1,
+				color = { "k" },
+				lightEmission = 0,
+				lightInfluence = 1,
+				brightness = 1,
+				speed = { 5, 10 },
+				spread = { 180, 180 },
+				drag = 3,
+				accel = Vector3.new(0, 3, 0),
+				transparency = { { 0, 0.1 }, { 1, 0.5 } },
+			}),
+			hdRing(Vector3.new(0, -1.8, 0), 36, 0.55),
 			sparks(30, 50),
 			{ type = "light", brightness = 8, range = 30, color = "p", flash = 0.5 },
 		},
@@ -361,6 +547,8 @@ Presets.List = ({
 				color1 = "p",
 			},
 			sparks(20, 30, Vector3.new(0, -1.8, 0)),
+			hdFlip("flip_electric", Vector3.new(0, -1.2, 0), 2, { { 0, 6 }, { 1, 9 } }, { 0.35, 0.45 }, { color = { "w", "p", "s" }, brightness = 3 }),
+			hdFlip("flip_impact", Vector3.new(0, -1.2, 0), 1, { { 0, 5 }, { 1, 8 } }, { 0.3, 0.3 }),
 			{ type = "light", brightness = 10, range = 40, color = "p", flash = 0.35 },
 		},
 	},
@@ -380,7 +568,10 @@ Presets.List = ({
 				color0 = "p",
 				color1 = "s",
 			},
-			dust(18),
+			basic(dust(18)),
+			hdDust(16),
+			hdRing(Vector3.new(0, -1.8, 0), 34, 0.7),
+			hdRing(Vector3.new(0, -1.8, 0), 24, 0.6, nil, 0.12),
 		},
 	},
 	{
@@ -496,9 +687,9 @@ Presets.List = ({
 			{
 				type = "shape",
 				kind = "Orb",
-				attrs = { Shape = "Cylinder", Length = 26, Size0 = 5, Size1 = 0.1, Tilt = Vector3.new(0, 0, 90), Offset = Vector3.new(0, 11, 0), Duration = 0.9, Transparency = 0.2, Ease = "In" },
+				attrs = { Shape = "Cylinder", Length = 26, Size0 = 3, Size1 = 0.1, Tilt = Vector3.new(0, 0, 90), Offset = Vector3.new(0, 11, 0), Duration = 0.9, Transparency = 0.35, FadeStart = 0.2, Ease = "Out" },
 				color0 = "p",
-				color1 = "w",
+				color1 = "s",
 			},
 			{
 				type = "shape",
@@ -1099,6 +1290,21 @@ Presets.List = ({
 		},
 	},
 } :: any) :: { Preset }
+
+-- Helpers like hdSlash() return several layers; flatten them into the list.
+for _, preset in Presets.List do
+	local flat = {}
+	for _, layer in preset.layers do
+		if layer.type == nil and #layer > 0 then
+			for _, inner in layer do
+				table.insert(flat, inner)
+			end
+		else
+			table.insert(flat, layer)
+		end
+	end
+	preset.layers = flat
+end
 
 Presets.ById = {} :: { [string]: Preset }
 for _, preset in Presets.List do

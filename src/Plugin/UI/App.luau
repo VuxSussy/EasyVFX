@@ -39,6 +39,12 @@ export type Api = {
 	selectionInfo: () -> SelectionInfo,
 	loadFavorites: () -> { Favorite },
 	saveFavorites: (favorites: { Favorite }) -> (),
+	getAssets: () -> Builder.Assets?,
+	countAssets: () -> number,
+	scanAssets: () -> number,
+	assetsFromText: (text: string) -> number,
+	disableHD: () -> (),
+	applyAll: () -> number,
 }
 
 local App = {}
@@ -70,6 +76,7 @@ function App.new(api: Api)
 		lang = if lang == "en" then "en" else "vi",
 		autoPreview = api.getSetting("EasyVFX_AutoPreview") ~= false,
 		advancedOpen = false,
+		pasteOpen = false,
 		onboardStep = if api.getSetting("EasyVFX_Onboarded") then nil else 1,
 		helpOpen = false,
 		root = nil,
@@ -374,6 +381,8 @@ function App:renderLibrary()
 		end, i).Parent = chips
 	end
 
+	self:hdCard(content, 0)
+
 	-- Favorites
 	local favorites = api.loadFavorites()
 	if #favorites > 0 then
@@ -465,6 +474,139 @@ function App:renderLibrary()
 	self.emptyNote.Visible = false
 	self.emptyNote.Parent = content
 	self:renderCards()
+end
+
+-- "HD quality" card: how to import the Blender pack, scan it, or paste IDs.
+function App:hdCard(parent: Instance, order: number)
+	local t = self.t
+	local api: Api = self.api
+	local count = api.countAssets()
+	local on = api.getAssets() ~= nil
+	local card = C.stack({ LayoutOrder = order, BackgroundColor3 = t.card, BackgroundTransparency = 0 }, 10)
+	C.corner(Theme.Radius.lg).Parent = card
+	C.stroke(if on then t.accent else t.border, 1).Parent = card
+	C.padding(12).Parent = card
+	local head = C.new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 22), LayoutOrder = 1, Parent = card })
+	C.new("TextLabel", {
+		BackgroundTransparency = 1,
+		Text = self:L("hdTitle"),
+		TextColor3 = t.fg,
+		TextSize = Theme.Text.label,
+		FontFace = Theme.Font.bold,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Size = UDim2.new(1, -56, 1, 0),
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		Parent = head,
+	})
+	C.new("TextLabel", {
+		BackgroundColor3 = if on then t.accent else t.muted,
+		Text = if on then "HD" else "BASIC",
+		TextColor3 = if on then t.onAccent else t.mutedFg,
+		TextSize = Theme.Text.caption,
+		FontFace = Theme.Font.bold,
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, 0, 0.5, 0),
+		Size = UDim2.new(0, 0, 0, 20),
+		AutomaticSize = Enum.AutomaticSize.X,
+		Parent = head,
+	}, { C.round(), C.padding(0, 8) })
+	C.text(t, {
+		text = if on then self:L("hdBodyOn"):format(count) else self:L("hdBodyOff"),
+		size = Theme.Text.caption,
+		color = t.mutedFg,
+		order = 2,
+	}).Parent = card
+
+	local row = C.new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 30), LayoutOrder = 3, Parent = card })
+	C.new("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		Padding = UDim.new(0, 6),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Parent = row,
+	})
+	local function toastApplied()
+		local n = api.applyAll()
+		self:toastMessage(self:L("hdApplied"):format(n), "success")
+		self:renderEdit()
+	end
+	if on then
+		C.button(t, { text = self:L("hdApplyAll"), variant = "primary", width = UDim.new(0.6, -3), height = 30, order = 1, onClick = toastApplied }).Parent =
+			row
+		C.button(t, {
+			text = self:L("hdDisable"),
+			width = UDim.new(0.4, -3),
+			height = 30,
+			order = 2,
+			onClick = function()
+				api.disableHD()
+				self:toastMessage(self:L("hdDisabled"), "success")
+				self:renderLibrary()
+			end,
+		}).Parent = row
+	else
+		C.button(t, {
+			text = self:L("hdScan"),
+			variant = "primary",
+			width = UDim.new(0.5, -3),
+			height = 30,
+			order = 1,
+			onClick = function()
+				local n = api.scanAssets()
+				if n == 0 then
+					self:toastMessage(self:L("hdScanNone"), "error")
+				elseif api.getAssets() == nil then
+					self:toastMessage(self:L("hdMissing"), "error")
+				else
+					self:toastMessage(self:L("hdScanFound"):format(n), "success")
+					api.applyAll()
+				end
+				self:renderLibrary()
+			end,
+		}).Parent = row
+		C.button(t, {
+			text = self:L("hdPaste"),
+			width = UDim.new(0.5, -3),
+			height = 30,
+			order = 2,
+			onClick = function()
+				self.state.pasteOpen = not self.state.pasteOpen
+				self:renderLibrary()
+			end,
+		}).Parent = row
+	end
+	if self.state.pasteOpen and not on then
+		local wrap, box = C.input(t, {
+			label = self:L("hdPasteLabel"),
+			text = "",
+			placeholder = self:L("hdPastePlaceholder"),
+			order = 4,
+			mono = true,
+		})
+		box.MultiLine = true
+		box.TextWrapped = true
+		box.TextYAlignment = Enum.TextYAlignment.Top
+		box.Size = UDim2.new(1, 0, 0, 110)
+		C.padding(8, 10).Parent = box
+		wrap.Parent = card
+		C.button(t, {
+			text = self:L("hdSave"),
+			variant = "primary",
+			order = 5,
+			height = 30,
+			onClick = function()
+				local n = api.assetsFromText(box.Text)
+				if api.getAssets() == nil then
+					self:toastMessage(self:L("hdMissing"), "error")
+				else
+					self.state.pasteOpen = false
+					self:toastMessage(self:L("hdScanFound"):format(n), "success")
+					api.applyAll()
+				end
+				self:renderLibrary()
+			end,
+		}).Parent = card
+	end
+	card.Parent = parent
 end
 
 function App:card(preset: Presets.Preset, order: number): TextButton
@@ -790,6 +932,23 @@ function App:renderEdit()
 			onBegin = edit(self:L(s.label)),
 			onChange = function(v, final)
 				(p :: any)[s.key] = v
+				apply(final)
+			end,
+		}).Parent = look
+	end
+	if api.getAssets() ~= nil and Builder.hasHD(p.preset) then
+		C.slider(t, slider, {
+			label = self:L("rotation"),
+			hint = self:L("rotationHint"),
+			min = 0,
+			max = 360,
+			step = 5,
+			value = p.rotation,
+			suffix = "°",
+			order = #sliders + 1,
+			onBegin = edit(self:L("rotation")),
+			onChange = function(v, final)
+				p.rotation = v
 				apply(final)
 			end,
 		}).Parent = look

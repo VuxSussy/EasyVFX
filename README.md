@@ -63,16 +63,66 @@ Texture có sẵn của Roblox khá mờ, nên phần "sắc" của EasyVFX đư
 Thêm vào đó: tia lửa dùng texture vuông kéo dài theo hướng bay (`VelocityParallel` + `Squash`), `LightEmission = 1` để cộng sáng.
 **Mẹo:** bấm **Bật Bloom cho Lighting** (trong Nâng cao hoặc Hướng dẫn) để Neon và các vệt sáng rực như anime.
 
-### Muốn đẹp hơn nữa: bộ texture sắc nét (tùy chọn)
+## 3b. Chất lượng HD với Blender (v2)
 
-![Bộ texture](docs/texture-pack.png)
+Bản v1 sắc nét nhưng **thô**. So với ảnh tham khảo (bộ 3 vệt chém vàng/đỏ/tím, pháo năng lượng, đập đất), v1 thua ở 5 điểm:
 
-Thư mục `textures/` có 6 ảnh trắng nền trong (flare, impact_burst, ring, slash, star4, streak). Ảnh trắng sẽ nhận màu của hiệu ứng.
-1. Studio → **Asset Manager** → **Bulk Import** → chọn các file trong `textures/`.
-2. Chuột phải ảnh → **Copy ID**.
-3. Trong plugin: **Tùy chỉnh → Nâng cao → Texture riêng** → dán ID.
+| Ảnh tham khảo có | v1 (chỉ hình học) | v2 HD (texture Blender) |
+|---|---|---|
+| Thân vệt chém gồm **nhiều sợi mảnh** sáng tối khác nhau | Dải phẳng một màu | Vân sợi tạo bằng Noise kéo dài trong shader Blender |
+| **Đuôi tưa và tan dần**, mép trong lởm chởm | Viền trơn, biến mất đột ngột | Mỗi sợi dài ngắn khác nhau, flipbook 16 khung tan theo noise |
+| **Mép ngoài sáng gắt + quầng glow** ôm sát | Không có glow, lõi đều | Viền sáng gắt + glow mềm trong texture, LightEmission cộng sáng |
+| **Lóe trắng → màu → tắt** rất nhanh | Màu cố định, giữ lâu | Màu theo thời gian: trắng → màu chính → màu phụ trong 0.35 giây |
+| **Sao lấp lánh rải dọc vệt** | Tia lửa bắn từ tâm | Sao 4 cánh sắc rải dọc cung + tia lửa |
 
-Ảnh bạn tự vẽ (Blender, Photoshop, Krita…) cũng dùng được y hệt. Có thể tạo lại bộ ảnh bằng `python3 tools/make_textures.py textures`.
+![So sánh theo thời gian](docs/compare-slash-timeline.png)
+![So sánh 9 hiệu ứng](docs/compare-grid.png)
+![Liên hoàn trảm HD](docs/hd-flurry.png)
+
+*Các ảnh trên được dựng bằng Blender Cycles từ **dữ liệu thật mà runtime EasyVFX sinh ra** (`tests/snapshot.luau` → `tools/blender_preview.py`). Script mô phỏng lại hạt theo thuộc tính Roblox (tốc độ, drag, size/transparency theo thời gian, flipbook, hướng quad). Đây là ảnh gần đúng, **không phải ảnh chụp trong Roblox**.*
+
+### Bật HD (một lần, dùng được cho mọi place)
+
+1. Studio → **File → Import 3D** → chọn `pack/EasyVFX_Pack.fbx` → **Import**. Studio sẽ upload các texture nhúng trong file.
+2. Plugin → tab **Thư viện** → thẻ **Chất lượng HD** → bấm **Quét gói**. Plugin tìm các part `EVFX_Tex_*` và đọc ID ảnh, rồi tự cập nhật mọi hiệu ứng.
+3. Có thể xóa model vừa import. ID ảnh được lưu trong cài đặt plugin nên place khác dùng lại được ngay.
+
+Nếu Quét gói không tìm thấy ID (Import 3D đôi khi không gán texture), hãy dùng **Asset Manager → Bulk Import** cho thư mục `pack/textures/`. Sau đó bấm **Dán ID** và nhập mỗi dòng một cặp, ví dụ `slash_arc = 1234567890` (tên = tên file không có `.png`). Bắt buộc có `slash_arc` thì HD mới bật.
+
+Khi HD bật:
+- 8 preset có lớp HD riêng: Chém lưỡi liềm, Liên hoàn trảm, Va chạm, Đập đất, Vụ nổ, Sét đánh, Pháo năng lượng, Sóng xung kích.
+- Mọi preset khác tự đổi texture mờ mặc định của Roblox (sao, quầng sáng, tia vuông) sang bản sắc nét.
+- Tắt HD thì hiệu ứng trở về bản cơ bản, không mất gì.
+
+Lưỡi chém HD là hạt phẳng (`VelocityPerpendicular`). Nếu trong Studio cung bị lệch hướng so với ý bạn, dùng thanh trượt **Góc xoay** trong tab Tùy chỉnh.
+
+### Gói HD gồm gì
+
+![Gói texture HD](docs/hd-pack.png)
+
+| Texture | Dùng cho |
+|---|---|
+| `slash_arc` (1024², vân sợi uốn cung) | Thân lưỡi chém HD |
+| `flip_slash` (flipbook 4×4) | Lưỡi chém hiện ra rồi tan dần |
+| `flip_impact`, `flip_smoke`, `flip_electric` (4×4) | Va chạm nổ tia, bụi khói, tia điện |
+| `ring_wave` | Vòng sóng có noise trên mặt đất |
+| `spark_star`, `spark_streak`, `glow_soft` | Sao lấp lánh, tia lửa, quầng sáng |
+| `slash_fiber`, `slash_clean`, `slash_glow`, `slash_core` | Texture dải thẳng cho Beam/Trail/mesh |
+| Mesh `EVFX_Mesh_SlashWide`, `SlashThin`, `SpinRing` | Lưỡi chém 3D có UV, dùng với tính năng mesh bên dưới |
+
+![Ảnh dựng Blender của các lớp lưỡi chém](docs/hd-slash-colors.png)
+*Ảnh dựng thử trong Blender: lớp glow, vân sợi, lõi và sao, với 3 màu giống ảnh tham khảo.*
+
+### Tự tạo lại / chỉnh gói bằng Blender của bạn
+
+Script là Python thuần cho Blender (4.2+ hoặc 5.x), không cần addon:
+
+```bash
+blender -b -P blender/make_vfx_pack.py -- --out ./pack            # render toàn bộ gói + FBX
+blender -b -P blender/make_vfx_pack.py -- --out ./pack --only slash_arc,flip_slash --samples 64
+```
+
+Hoặc mở Blender → tab **Scripting** → mở file → **Run Script**. Hình dạng nằm trong hàm `slash_shape()`: độ dày, độ dài sợi (`fib_n`), độ tưa đuôi (`tail`), và mép trong (`reach`). Đổi các số ở đó rồi chạy lại để có phong cách riêng.
 
 ### Dùng mesh làm trong Blender
 
@@ -136,17 +186,23 @@ src/Plugin/
   Runtime/EasyVFX.luau    runtime: emit, Ring/Slash/Lines/Bolt/Orb/Debris/Crater, kích hoạt
   Runtime/EasyVFXServer.server.luau, EasyVFXClient.client.luau   (tắt trong plugin, bật khi cài vào game)
   UI/Theme.luau, Components.luau, App.luau
-tests/      run.luau (builder+runtime), ui.luau (bấm thử toàn bộ GUI), snapshot.luau (xuất hình học)
-tools/      render_snapshot.py, make_textures.py, check.sh
+blender/    make_vfx_pack.py (tạo gói HD: texture, flipbook, mesh, FBX)
+pack/       gói HD đã render sẵn: EasyVFX_Pack.fbx + textures/*.png
+tests/      run.luau (builder+runtime), ui.luau (bấm thử toàn bộ GUI), snapshot.luau (xuất dữ liệu runtime)
+tools/      blender_preview.py, render_snapshot.py, view_textures.py, check.sh
 ```
 
 Công cụ cần có: [Rojo](https://github.com/rojo-rbx/rojo) 7.4, [Lune](https://github.com/lune-org/lune) 0.8, [luau-lsp](https://github.com/JohnnyMorganz/luau-lsp) (kèm `globalTypes.d.luau`).
 
 ```bash
 rojo build default.project.json -o build/EasyVFX.rbxmx   # build plugin
-lune run tests/run.luau        # 987 kiểm tra: tạo/cập nhật/phát/dọn dẹp mọi preset
-lune run tests/ui.luau         # 847 kiểm tra: bấm thử mọi nút, tab, thanh trượt, kích hoạt
+lune run tests/run.luau        # 1229 kiểm tra: tạo/cập nhật/phát/dọn dẹp mọi preset, cả Basic lẫn HD
+lune run tests/ui.luau         # 856 kiểm tra: bấm thử mọi nút, tab, thanh trượt, kích hoạt, thẻ HD
 tools/check.sh                 # chạy tất cả + type-check
+
+# Dựng ảnh preview bằng Blender từ dữ liệu runtime (pip install bpy, hoặc chạy bằng blender -b -P)
+lune run tests/snapshot.luau snap.json hd                       # hoặc: basic / thêm "slash 2,4,6" để chụp theo thời gian
+python tools/blender_preview.py snap.json out/ pack/textures <thư mục texture có sẵn của Roblox đã đổi sang png>
 ```
 
 Các test chạy bằng Lune, với Instance Roblox thật từ reflection database (sai tên hoặc sai kiểu thuộc tính sẽ báo lỗi). Các hàm của engine (`Emit`, `Raycast`, sự kiện GUI) được giả lập. Ánh sáng và render thật vẫn cần thử trong Studio.
@@ -161,4 +217,7 @@ Các test chạy bằng Lune, với Instance Roblox thật từ reflection datab
 - DevForum, quy ước EmitCount/EmitDelay: [Jad's Emit Plugin](https://devforum.roblox.com/t/dear-vfx-makers-i-present-to-you-jads-emit-plugin/1986838), [VFX Editor](https://devforum.roblox.com/t/vfx-editor-all-your-vfx-needs-in-one/3103467), [How can I emit particles properly](https://devforum.roblox.com/t/how-can-i-emit-particles-properly/3548786)
 - DevForum, đá / hố kiểu anime: [Rock Module](https://devforum.roblox.com/t/rock-module-v10-craters-explosions-and-more-effects/3041562), [Crater system](https://devforum.roblox.com/t/crater-system-by-frodev/2628508), [Anime VFX beginner guide](https://devforum.roblox.com/t/full-beginners-guide-on-scripting-animefighting-vfxvisual-effects-part-1/1610853)
 - DevForum, chém bằng mesh/Blender: [Animated slash effects with Blender](https://devforum.roblox.com/t/how-to-make-animated-slash-effects-with-only-blender/1794034), [Animated Slashes 2.0](https://devforum.roblox.com/t/how-to-make-animated-slashes-20/1880010)
+- Kỹ thuật slash gradient + noise + dissolve: [Godot Slash Shader](https://godotshaders.com/shader/slash-shader/), [Unity VFX Stylized Ground Slash (Udemy)](https://www.udemy.com/course/unity-vfx-stylized-ground-slash/), [Realtime VFX – Sword Slash help](https://realtimevfx.com/t/sword-slash-help/9407)
+- Flipbook / texture trong Roblox: [Create basic visual effects](https://create.roblox.com/docs/tutorials/curriculums/core/building/create-basic-visual-effects), [How to create VFX? (DevForum)](https://devforum.roblox.com/t/how-to-create-vfx/4029502), [LightEmission với màu đen](https://devforum.roblox.com/t/when-coloring-particles-with-lightemission-1-to-black-they-become-transparent/2614320)
+- Blender: [bpy trên PyPI](https://pypi.org/project/bpy/)
 - Design system: [UI UX Pro Max skill](https://github.com/nextlevelbuilder/ui-ux-pro-max-skill)

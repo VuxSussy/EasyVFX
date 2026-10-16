@@ -13,21 +13,46 @@ local Harness = {}
 local ROOT = "src/Plugin"
 
 Harness.warnings = {} :: { string }
+Harness.emitLog = {} :: { any }
+Harness.recordEmits = false
+Harness.frame = 0
 Harness.emitted = {} :: { [any]: number }
 
 -- Virtual time: task.wait() returns a fixed frame time so tests run fast.
 local FRAME = 1 / 30
+Harness.FRAME = FRAME
 local realTask = require("@lune/task")
+local pending = {}
 local fakeTask = {
 	spawn = realTask.spawn,
 	defer = realTask.defer,
 	cancel = realTask.cancel,
 	wait = function(_t: number?)
 		realTask.wait()
+		Harness.frame += 1
+		local now = Harness.frame * FRAME
+		local due = {}
+		for i = #pending, 1, -1 do
+			if pending[i].at <= now then
+				table.insert(due, table.remove(pending, i))
+			end
+		end
+		for i = #due, 1, -1 do
+			realTask.spawn(due[i].f, table.unpack(due[i].args))
+		end
 		return FRAME
 	end,
+	-- virtual-time delay: fires when enough fake frames have passed
 	delay = function(t: number, f, ...)
-		return realTask.delay(t * 0.02, f, ...)
+		table.insert(pending, { at = Harness.frame * FRAME + t, f = f, args = { ... } })
+		if #pending == 1 then
+			-- keep virtual time moving even when no animation is running
+			realTask.spawn(function()
+				while #pending > 0 do
+					Harness.task.wait()
+				end
+			end)
+		end
 	end,
 }
 Harness.task = fakeTask
@@ -200,6 +225,17 @@ function Harness.install()
 	end)
 	roblox.implementMethod("ParticleEmitter", "Emit", function(inst, n)
 		Harness.emitted[inst] = (Harness.emitted[inst] or 0) + (n or 16)
+		if Harness.recordEmits then
+			-- remember where/how it emitted, for tests/snapshot.luau
+			local parent = inst.Parent
+			local cf, size = roblox.CFrame.new(), roblox.Vector3.new(0, 0, 0)
+			if parent and parent:IsA("Attachment") then
+				cf = parent.Parent.CFrame * parent.CFrame
+			elseif parent and parent:IsA("BasePart") then
+				cf, size = parent.CFrame, parent.Size
+			end
+			table.insert(Harness.emitLog, { emitter = inst, count = n or 16, frame = Harness.frame, cframe = cf, size = size })
+		end
 	end)
 	roblox.implementMethod("Workspace", "Raycast", function(_ws, origin, _dir, _params)
 		return {

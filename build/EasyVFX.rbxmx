@@ -317,6 +317,117 @@ local function saveFavorites(favorites: { App.Favorite })
 end
 
 ------------------------------------------------------------------------------------
+-- HD asset pack (textures rendered in Blender). Image IDs are account-wide, so they
+-- are remembered in plugin settings and reused in every place.
+------------------------------------------------------------------------------------
+
+local PACK_PREFIX = "EVFX_Tex_"
+local SCAN_ROOTS = { Workspace, ReplicatedStorage, game:GetService("ServerStorage") }
+
+local function loadAssets(): Builder.Assets?
+	local raw = setting("EasyVFX_Assets")
+	if type(raw) ~= "table" then
+		return nil
+	end
+	local out: Builder.Assets = {}
+	for key, value in raw do
+		if type(key) == "string" and type(value) == "string" and value ~= "" then
+			out[key] = value
+		end
+	end
+	return if Builder.isHD(out) then out else nil
+end
+
+local function countAssets(assets: Builder.Assets?): number
+	local n = 0
+	if assets then
+		for _ in assets do
+			n += 1
+		end
+	end
+	return n
+end
+
+local function normalizeId(text: string): string?
+	local cleaned = text:gsub("%s", "")
+	if cleaned:match("^rbxasset") then
+		return cleaned
+	end
+	local id = cleaned:match("(%d+)")
+	return if id then "rbxassetid://" .. id else nil
+end
+
+-- Finds the texture an imported EVFX_Tex_* object carries (3D Importer output).
+local function textureOf(inst: Instance): string?
+	local candidates = {}
+	if inst:IsA("MeshPart") then
+		table.insert(candidates, inst.TextureID)
+	end
+	for _, d in inst:GetDescendants() do
+		if d:IsA("SurfaceAppearance") then
+			local ok, value = pcall(function()
+				return (d :: any).ColorMap
+			end)
+			if ok then
+				table.insert(candidates, value)
+			end
+		elseif d:IsA("Decal") or d:IsA("Texture") then
+			table.insert(candidates, d.Texture)
+		elseif d:IsA("MeshPart") then
+			table.insert(candidates, d.TextureID)
+		end
+	end
+	for _, value in candidates do
+		if type(value) == "string" and value ~= "" then
+			return value
+		end
+	end
+	return nil
+end
+
+local function saveAssets(assets: Builder.Assets)
+	setSetting("EasyVFX_Assets", assets)
+end
+
+local function scanAssets(): number
+	local found: Builder.Assets = loadAssets() or {}
+	local n = 0
+	for _, scanRoot in SCAN_ROOTS do
+		for _, inst in scanRoot:GetDescendants() do
+			if inst.Name:sub(1, #PACK_PREFIX) == PACK_PREFIX then
+				local key = inst.Name:sub(#PACK_PREFIX + 1)
+				local texture = textureOf(inst)
+				if texture and key ~= "" then
+					found[key] = texture
+					n += 1
+				end
+			end
+		end
+	end
+	if n > 0 then
+		saveAssets(found)
+	end
+	return n
+end
+
+local function assetsFromText(text: string): number
+	local found: Builder.Assets = loadAssets() or {}
+	local n = 0
+	for line in text:gmatch("[^\r\n]+") do
+		local key, rest = line:match("^%s*([%w_]+)%s*[=:%s]%s*(.-)%s*$")
+		local id = if rest then normalizeId(rest) else nil
+		if key and id then
+			found[key] = id
+			n += 1
+		end
+	end
+	if n > 0 then
+		saveAssets(found)
+	end
+	return n
+end
+
+------------------------------------------------------------------------------------
 -- Actions used by the panel
 ------------------------------------------------------------------------------------
 
@@ -327,7 +438,7 @@ local applyScheduled = false
 
 local function applyNow(root: Instance, params: Params)
 	if root.Parent and root:IsA("BasePart") then
-		local ok, err = pcall(Builder.apply :: any, root, params)
+		local ok, err = pcall(Builder.apply :: any, root, params, loadAssets())
 		if not ok then
 			warn("[EasyVFX] " .. tostring(err))
 		end
@@ -373,7 +484,7 @@ local function insert(presetId: string, params: Params?): Instance?
 	local runtimeMessage: string? = nil
 	local root = record("Add " .. preset.name.en, function()
 		local placement = placementFor(preset)
-		local created = Builder.create(p, placement)
+		local created = Builder.create(p, placement, loadAssets())
 		runtimeMessage = ensureRuntime()
 		return created
 	end)
@@ -450,6 +561,30 @@ local api: App.Api = {
 	selectionInfo = selectionInfo,
 	loadFavorites = loadFavorites,
 	saveFavorites = saveFavorites,
+	getAssets = loadAssets,
+	countAssets = function()
+		return countAssets(loadAssets())
+	end,
+	scanAssets = scanAssets,
+	assetsFromText = assetsFromText,
+	disableHD = function()
+		setSetting("EasyVFX_Assets", nil)
+	end,
+	applyAll = function()
+		local assets = loadAssets()
+		local n = 0
+		record("Apply HD setting", function()
+			for _, inst in game:GetService("CollectionService"):GetTagged(Builder.TAG) do
+				local params = if inst:IsA("BasePart") then Builder.readParams(inst) else nil
+				if params then
+					Builder.apply(inst :: BasePart, params, assets)
+					n += 1
+				end
+			end
+			return nil
+		end)
+		return n
+	end,
 }
 
 app = App.new(api)
@@ -537,7 +672,7 @@ local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 
 local EasyVFX = {}
-EasyVFX.Version = 3
+EasyVFX.Version = 4
 EasyVFX.Tag = "EasyVFX"
 -- 0.25 .. 1. Multiplies particle, line and rock counts. Lowered automatically on the
 -- client when the player picks a low graphics level.
@@ -1336,13 +1471,15 @@ local function pulse(inst: Instance, delay: number, duration: number)
 		local baseBrightness = num(light, "BaseBrightness", light.Brightness)
 		light:SetAttribute("BaseBrightness", baseBrightness)
 		addAnim(delay, duration, function()
-			light.Enabled = true
+			if light.Parent then
+				light.Enabled = true
+			end
 		end, function(alpha)
-			if pulseTokens[light] == token then
+			if pulseTokens[light] == token and light.Parent then
 				light.Brightness = baseBrightness * (1 - alpha) ^ 2
 			end
 		end, function()
-			if pulseTokens[light] == token then
+			if pulseTokens[light] == token and light.Parent then
 				light.Enabled = false
 				light.Brightness = baseBrightness
 			end
@@ -1460,6 +1597,23 @@ function EasyVFX.PlayLocal(target: Instance | string, at: CFrame?): number
 		rng = Random.new(),
 		ignore = ignore,
 	}
+
+	-- Re-roll random tilts so HD slashes swing at a new angle every time.
+	for _, d in root:GetDescendants() do
+		if d:IsA("Attachment") then
+			local tilt = d:GetAttribute("RandomTilt")
+			local base = d:GetAttribute("BaseCFrame")
+			if type(tilt) == "number" and typeof(base) == "CFrame" then
+				local rng = ctx.rng
+				d.CFrame = base
+					* CFrame.Angles(
+						math.rad(rng:NextNumber(-tilt, tilt)),
+						math.rad(rng:NextNumber(-tilt, tilt) * 0.5),
+						math.rad(rng:NextNumber(-tilt, tilt))
+					)
+			end
+		end
+	end
 
 	local length = 0
 	for _, d in root:GetDescendants() do
@@ -1783,7 +1937,11 @@ export type Params = {
 	duration: number,
 	promptText: string,
 	texture: string,
+	rotation: number, -- extra in-plane rotation (degrees) for flat HD slashes
 }
+
+-- Asset pack: texture key -> "rbxassetid://..." (see blender/make_vfx_pack.py)
+export type Assets = { [string]: string }
 
 export type Placement = {
 	cframe: CFrame,
@@ -1809,6 +1967,7 @@ local ATTRS: { [string]: string } = {
 	duration = "VFX_Duration",
 	promptText = "VFX_PromptText",
 	texture = "VFX_Texture",
+	rotation = "VFX_Rotation",
 }
 Builder.Attributes = ATTRS
 
@@ -1843,6 +2002,7 @@ function Builder.defaultParams(presetId: string): Params
 		duration = d.duration or 2,
 		promptText = d.promptText or "Use",
 		texture = "",
+		rotation = d.rotation or 0,
 	}
 end
 
@@ -1999,10 +2159,17 @@ local function getOrCreate(existing: Existing, wanted: { [string]: boolean }, ke
 	return inst
 end
 
-local function attachment(ctx: any, key: string, position: Vector3): Attachment
+local function attachment(ctx: any, key: string, position: Vector3, tilt: Vector3?, randomTilt: number?): Attachment
 	local a = getOrCreate(ctx.existing, ctx.wanted, key, "Attachment", ctx.root) :: Attachment
 	a.Name = "VFX_Point"
-	a.CFrame = CFrame.new(position)
+	local cf = CFrame.new(position)
+	if tilt then
+		cf *= CFrame.Angles(math.rad(tilt.X), math.rad(tilt.Y), math.rad(tilt.Z))
+	end
+	a.CFrame = cf
+	-- the runtime re-rolls a random tilt around BaseCFrame on every play
+	a:SetAttribute("BaseCFrame", if randomTilt then cf else nil)
+	a:SetAttribute("RandomTilt", randomTilt)
 	return a
 end
 
@@ -2019,15 +2186,45 @@ local function setStreaming(inst: Instance, ctx: any, onProperty: () -> (), offP
 	inst:SetAttribute("EmitDelay", nil)
 end
 
-local function layerParent(ctx: any, key: string, at: any): Instance
-	if at == nil or at == "part" then
+-- Where a particle/light layer lives. Layers sharing a `group` share one attachment
+-- (so all pieces of an HD slash get the same random tilt).
+local function layerParent(ctx: any, key: string, layer: { [string]: any }, defaultAt: string?): Instance
+	local at = layer.at or defaultAt
+	if (at == nil or at == "part") and not layer.group then
 		return ctx.root
-	elseif at == "center" then
-		return attachment(ctx, key .. ":a", Vector3.zero)
-	elseif typeof(at) == "Vector3" then
-		return attachment(ctx, key .. ":a", at * ctx.params.size)
 	end
-	return ctx.root
+	local position = if typeof(at) == "Vector3" then at * ctx.params.size else Vector3.zero
+	local attachKey = if layer.group then "g:" .. layer.group else key .. ":a"
+	-- a shared group attachment is set up once, by the first layer that uses it
+	local done = ctx.configured[attachKey]
+	if done then
+		ctx.wanted[attachKey] = true
+		return done
+	end
+	local a = attachment(ctx, attachKey, position, layer.tilt, layer.randomTilt)
+	ctx.configured[attachKey] = a
+	return a
+end
+
+local T = Presets.Textures
+
+-- In HD mode the soft built-in textures are swapped for the sharp Blender ones.
+local function hdTexture(ctx: any, layer: { [string]: any }): string?
+	local assets = ctx.assets
+	if layer.pack then
+		return assets[layer.pack]
+	end
+	if not ctx.hd then
+		return layer.texture
+	end
+	if layer.texture == T.Star then
+		return assets.spark_star or layer.texture
+	elseif layer.texture == T.Glow and not layer.keepTexture then
+		return assets.glow_soft or layer.texture
+	elseif layer.texture == T.Square and layer.orientation == "VelocityParallel" then
+		return assets.spark_streak or layer.texture
+	end
+	return layer.texture
 end
 
 ------------------------------------------------------------------------------------
@@ -2038,11 +2235,17 @@ local LayerBuilders: { [string]: (ctx: any, key: string, layer: { [string]: any 
 
 LayerBuilders.particles = function(ctx, key, layer)
 	local params: Params = ctx.params
-	local parent = layerParent(ctx, key, layer.at)
+	local parent = layerParent(ctx, key, layer)
 	local e = getOrCreate(ctx.existing, ctx.wanted, key, "ParticleEmitter", parent) :: ParticleEmitter
 	e.Name = layer.name or (if layer.burst then "Burst" else "Stream")
-	local texture = if params.texture ~= "" then params.texture else layer.texture
+	local texture = hdTexture(ctx, layer)
+	if params.texture ~= "" and not layer.pack then
+		texture = params.texture
+	end
 	e.Texture = texture or Presets.Textures.Glow
+	e.FlipbookLayout = enumItem(Enum.ParticleFlipbookLayout, layer.flipbook, Enum.ParticleFlipbookLayout.None) :: any
+	e.FlipbookMode = enumItem(Enum.ParticleFlipbookMode, layer.flipMode, Enum.ParticleFlipbookMode.OneShot) :: any
+	e.FlipbookStartRandom = layer.flipRandom == true
 	e.Color = colorSequence(layer.color, params)
 	e.Size = numberSequence(layer.size or 1, params.size, 0)
 	e.Transparency = numberSequence(layer.transparency or 0, 1, 0, 1)
@@ -2053,7 +2256,11 @@ LayerBuilders.particles = function(ctx, key, layer)
 	e.SpreadAngle = Vector2.new(spread[1], spread[2])
 	e.Acceleration = (layer.accel or Vector3.zero) * params.speed * math.sqrt(params.size)
 	e.Drag = layer.drag or 0
-	e.Rotation = range(layer.rotation or 0, 1, 0)
+	local rotation = range(layer.rotation or 0, 1, 0)
+	if layer.rotatable then
+		rotation = NumberRange.new(rotation.Min + params.rotation, rotation.Max + params.rotation)
+	end
+	e.Rotation = rotation
 	e.RotSpeed = range(layer.rotSpeed or 0, params.speed, 0)
 	e.Orientation = enumItem(Enum.ParticleOrientation, layer.orientation, Enum.ParticleOrientation.FacingCamera) :: any
 	e.EmissionDirection = enumItem(Enum.NormalId, layer.direction, Enum.NormalId.Top) :: any
@@ -2126,7 +2333,7 @@ end
 
 LayerBuilders.light = function(ctx, key, layer)
 	local params: Params = ctx.params
-	local parent = layerParent(ctx, key, layer.at or "center")
+	local parent = layerParent(ctx, key, layer, "center")
 	local light = getOrCreate(ctx.existing, ctx.wanted, key, "PointLight", parent) :: PointLight
 	light.Name = "Light"
 	local brightness = (layer.brightness or 1) * params.glow
@@ -2263,7 +2470,26 @@ end
 ------------------------------------------------------------------------------------
 
 -- Creates or updates every layer of the effect to match `params`.
-function Builder.apply(root: BasePart, params: Params)
+-- True when the asset pack has been imported (the key HD texture is known).
+function Builder.isHD(assets: Assets?): boolean
+	return assets ~= nil and type(assets.slash_arc) == "string" and assets.slash_arc ~= ""
+end
+
+-- Does this preset change when the HD pack is present?
+function Builder.hasHD(presetId: string): boolean
+	local preset = Presets.ById[presetId]
+	if not preset then
+		return false
+	end
+	for _, layer in preset.layers do
+		if layer.hd or layer.pack then
+			return true
+		end
+	end
+	return false
+end
+
+function Builder.apply(root: BasePart, params: Params, assets: Assets?)
 	local preset = Presets.ById[params.preset]
 	assert(preset, "Unknown preset " .. tostring(params.preset))
 	Builder.writeParams(root, params)
@@ -2271,10 +2497,18 @@ function Builder.apply(root: BasePart, params: Params)
 		root = root,
 		params = params,
 		alwaysOn = params.trigger == "Always",
+		assets = assets or {},
+		hd = Builder.isHD(assets),
+		configured = {} :: { [string]: Attachment },
 		existing = collectExisting(root),
 		wanted = {} :: { [string]: boolean },
 	}
+	root:SetAttribute("VFX_HD", ctx.hd)
 	for i, layer in preset.layers do
+		local skip = (layer.hd and not ctx.hd) or (layer.basic and ctx.hd) or (layer.pack and not ctx.assets[layer.pack])
+		if skip then
+			continue
+		end
 		local build = LayerBuilders[layer.type]
 		if build then
 			build(ctx, tostring(i), layer)
@@ -2305,7 +2539,7 @@ function Builder.effectName(presetId: string): string
 end
 
 -- Makes a brand new effect part.
-function Builder.create(params: Params, placement: Placement): BasePart
+function Builder.create(params: Params, placement: Placement, assets: Assets?): BasePart
 	local root = Instance.new("Part")
 	root.Name = Builder.effectName(params.preset)
 	root.Size = Vector3.new(
@@ -2334,7 +2568,7 @@ function Builder.create(params: Params, placement: Placement): BasePart
 	end
 	root:AddTag(Builder.TAG)
 	root.Parent = placement.parent
-	Builder.apply(root, params)
+	Builder.apply(root, params, assets)
 	return root
 end
 
@@ -2429,6 +2663,160 @@ local function sparks(count: number, speed: number, at: any?): Layer
 	}
 end
 
+-- HD (asset pack) layers ------------------------------------------------------
+-- These only appear after the Blender pack is imported. They are flat particles
+-- (VelocityPerpendicular + tiny speed), so the texture lies in the attachment's
+-- plane; `rotatable` adds the plugin's Rotation slider to their angle.
+
+local function hdSlash(o: { [string]: any }): { Layer }
+	local radius = o.radius or 5
+	local quad = radius / 0.48 -- the crescent's outer edge is at 48% of the texture
+	local life = o.life or 0.34
+	local rot = o.rotation or 0
+	local spin = (o.sweep or 50) / life
+	local common = {
+		hd = true,
+		group = o.group,
+		tilt = o.tilt,
+		randomTilt = o.randomTilt,
+		delay = o.delay,
+		orientation = "VelocityPerpendicular",
+		direction = "Top",
+		speed = { 0.01, 0.01 },
+		rotation = { rot, rot },
+		rotSpeed = { spin, spin },
+		rotatable = true,
+		lightEmission = 1,
+		at = o.at or "center",
+	}
+	local function with(extra: { [string]: any }): Layer
+		local layer = table.clone(common)
+		for k, v in extra do
+			layer[k] = v
+		end
+		return layer
+	end
+	return {
+		with({
+			type = "particles",
+			name = "SlashHD",
+			pack = "slash_arc",
+			burst = 1,
+			size = { { 0, quad * 0.82 }, { 0.12, quad }, { 1, quad * 1.12 } },
+			transparency = { { 0, 0 }, { 0.45, 0.05 }, { 1, 1 } },
+			lifetime = { life, life },
+			color = { "w", "w", "p", "s" },
+			brightness = 4,
+			zOffset = 1,
+		}),
+		with({
+			type = "particles",
+			name = "SlashDissolve",
+			pack = "flip_slash",
+			flipbook = "Grid4x4",
+			flipMode = "OneShot",
+			burst = 1,
+			size = { { 0, quad * 1.0 }, { 1, quad * 1.16 } },
+			transparency = { { 0, 0.15 }, { 1, 0.35 } },
+			lifetime = { life * 1.3, life * 1.3 },
+			color = { "p", "s" },
+			brightness = 2,
+			zOffset = 0.5,
+		}),
+		{
+			type = "particles",
+			name = "Twinkles",
+			hd = true,
+			group = o.group,
+			tilt = o.tilt,
+			randomTilt = o.randomTilt,
+			pack = "spark_star",
+			at = o.at or "center",
+			delay = (o.delay or 0) + 0.04,
+			burst = o.twinkles or 16,
+			direction = "Front",
+			speed = { radius * 3, radius * 6 },
+			drag = 5,
+			spread = { 80, 80 },
+			size = { { 0, 0 }, { 0.15, 0.8 }, { 1, 0 } },
+			lifetime = { 0.35, 0.8 },
+			rotation = { 0, 360 },
+			color = { "w", "p" },
+			lightEmission = 1,
+			brightness = 2,
+		},
+	}
+end
+
+local hdSlashLayers = hdSlash
+
+-- Marks a layer as "only without the HD pack".
+local function basic(layer: Layer): Layer
+	layer.basic = true
+	return layer
+end
+
+local function hdRing(at: any, size1: number, life: number, tilt: Vector3?, delay: number?): Layer
+	return {
+		type = "particles",
+		name = "RingHD",
+		hd = true,
+		pack = "ring_wave",
+		at = at,
+		tilt = tilt,
+		delay = delay,
+		burst = 1,
+		orientation = "VelocityPerpendicular",
+		direction = "Top",
+		speed = { 0.01, 0.01 },
+		size = { { 0, size1 * 0.08 }, { 1, size1 } },
+		transparency = { { 0, 0 }, { 0.6, 0.25 }, { 1, 1 } },
+		lifetime = { life, life },
+		rotation = { 0, 360 },
+		color = { "w", "p", "s" },
+		lightEmission = 1,
+		brightness = 2,
+	}
+end
+
+local function hdFlip(pack: string, at: any, count: number, size: { any }, life: { number }, extra: { [string]: any }?): Layer
+	local layer: Layer = {
+		type = "particles",
+		name = "FlipHD",
+		hd = true,
+		pack = pack,
+		at = at,
+		flipbook = "Grid4x4",
+		flipMode = "OneShot",
+		burst = count,
+		size = size,
+		lifetime = life,
+		rotation = { 0, 360 },
+		color = { "w", "p" },
+		lightEmission = 1,
+		brightness = 2,
+	}
+	if extra then
+		for k, v in extra do
+			layer[k] = v
+		end
+	end
+	return layer
+end
+
+local function hdDust(count: number): Layer
+	return hdFlip("flip_smoke", Vector3.new(0, -1.6, 0), count, { { 0, 2.5 }, { 1, 6 } }, { 0.9, 1.4 }, {
+		color = { "g" },
+		lightEmission = 0,
+		lightInfluence = 1,
+		brightness = 1,
+		speed = { 8, 14 },
+		spread = { 90, 90 },
+		drag = 4,
+		transparency = { { 0, 0.15 }, { 1, 0.6 } },
+	})
+end
+
 local function dust(count: number, at: any?): Layer
 	return {
 		type = "particles",
@@ -2464,10 +2852,12 @@ Presets.List = ({
 			{
 				type = "shape",
 				kind = "Slash",
+				basic = true,
 				attrs = { Radius = 5, Arc = 170, Width = 1.6, Sweep = 60, Duration = 0.4, Brightness = 2, TailFade = 0.8 },
 				color0 = "p",
 				color1 = "s",
 			},
+			hdSlashLayers({ group = "a", radius = 5, sweep = 60 }),
 			{
 				type = "shape",
 				kind = "Lines",
@@ -2491,14 +2881,22 @@ Presets.List = ({
 			{
 				type = "shape",
 				kind = "Slash",
+				basic = true,
 				attrs = { Count = 5, Stagger = 0.07, RandomTilt = 70, Radius = 4.5, Arc = 150, Width = 1.2, Sweep = 40, Duration = 0.35, Brightness = 2 },
 				color0 = "p",
 				color1 = "s",
 			},
+			-- upright planes facing forward, crossing at different angles (an "X" flurry)
+			-- upright planes facing forward, off-centre and crossing (an anime "X" flurry)
+			hdSlashLayers({ group = "a", at = Vector3.new(-1.4, 0.9, 0), radius = 3.8, tilt = Vector3.new(90, 0, 0), randomTilt = 15, rotation = 20, twinkles = 8 }),
+			hdSlashLayers({ group = "b", at = Vector3.new(1.5, -0.7, 0), radius = 3.6, tilt = Vector3.new(90, 0, 0), randomTilt = 15, rotation = 200, delay = 0.07, twinkles = 8 }),
+			hdSlashLayers({ group = "c", at = Vector3.new(0.5, 1.6, 0), radius = 4.0, tilt = Vector3.new(90, 0, 0), randomTilt = 15, rotation = 120, delay = 0.14, twinkles = 8 }),
+			hdSlashLayers({ group = "d", at = Vector3.new(-0.7, -1.3, 0), radius = 3.7, tilt = Vector3.new(90, 0, 0), randomTilt = 15, rotation = 300, delay = 0.21, twinkles = 8 }),
 			{
 				type = "shape",
 				kind = "Orb",
-				attrs = { Size0 = 1, Size1 = 7, Duration = 0.2, Transparency = 0.3, FadeStart = 0 },
+				basic = true,
+				attrs = { Size0 = 0.6, Size1 = 3, Duration = 0.15, Transparency = 0.45, FadeStart = 0 },
 				color0 = "w",
 				color1 = "p",
 			},
@@ -2518,7 +2916,7 @@ Presets.List = ({
 			{
 				type = "shape",
 				kind = "Orb",
-				attrs = { Size0 = 0.5, Size1 = 5, Duration = 0.18, Transparency = 0, FadeStart = 0.2 },
+				attrs = { Size0 = 0.5, Size1 = 3.5, Duration = 0.15, Transparency = 0.2, FadeStart = 0 },
 				color0 = "w",
 				color1 = "p",
 			},
@@ -2532,10 +2930,13 @@ Presets.List = ({
 			{
 				type = "shape",
 				kind = "Ring",
+				basic = true,
 				attrs = { Radius0 = 0.5, Radius1 = 6, Width0 = 0.8, Width1 = 0.05, Duration = 0.35, Tilt = Vector3.new(90, 0, 0) },
 				color0 = "p",
 				color1 = "s",
 			},
+			hdFlip("flip_impact", "center", 1, { { 0, 6 }, { 1, 9 } }, { 0.4, 0.4 }, { zOffset = 1, color = { "p", "s" }, brightness = 1.2 }),
+			hdRing("center", 13, 0.35, Vector3.new(90, 0, 0)),
 			sparks(16, 30),
 			{ type = "light", brightness = 4, range = 14, color = "p", flash = 0.2 },
 		},
@@ -2565,7 +2966,10 @@ Presets.List = ({
 				color0 = "p",
 				color1 = "s",
 			},
-			dust(14),
+			basic(dust(14)),
+			hdDust(12),
+			hdRing(Vector3.new(0, -1.8, 0), 30, 0.55),
+			hdFlip("flip_impact", Vector3.new(0, -1, 0), 1, { { 0, 7 }, { 1, 11 } }, { 0.35, 0.35 }, { color = { "p", "s" }, brightness = 1.2 }),
 			{ type = "light", brightness = 5, range = 22, color = "p", flash = 0.35 },
 		},
 	},
@@ -2611,6 +3015,7 @@ Presets.List = ({
 				color1 = "s",
 			},
 			sparks(18, 45),
+			hdFlip("flip_electric", "center", 2, { { 0, 4 }, { 1, 7 } }, { 0.3, 0.4 }, { color = { "w", "s" }, brightness = 3 }),
 			{ type = "light", brightness = 4, range = 20, color = "s", flash = 0.4 },
 		},
 	},
@@ -2626,7 +3031,7 @@ Presets.List = ({
 			{
 				type = "shape",
 				kind = "Orb",
-				attrs = { Size0 = 1, Size1 = 12, Duration = 0.3, Transparency = 0, FadeStart = 0.1 },
+				attrs = { Size0 = 1, Size1 = 9, Duration = 0.25, Transparency = 0.15, FadeStart = 0 },
 				color0 = "w",
 				color1 = "p",
 			},
@@ -2652,6 +3057,7 @@ Presets.List = ({
 				texture = T.Smoke,
 				burst = 10,
 				delay = 0.1,
+				basic = true,
 				color = { "k" },
 				size = { { 0, 4 }, { 1, 10 } },
 				transparency = { { 0, 0.3 }, { 1, 1 } },
@@ -2673,6 +3079,20 @@ Presets.List = ({
 				color1 = "s",
 			},
 			{ type = "shape", kind = "Debris", attrs = { Count = 10, Force = 45, Duration = 2, Ground = true } },
+			hdFlip("flip_impact", "center", 1, { { 0, 9 }, { 1, 15 } }, { 0.45, 0.45 }, { zOffset = 2, color = { "p", "s" }, brightness = 1.2 }),
+			hdFlip("flip_smoke", "center", 9, { { 0, 5 }, { 1, 12 } }, { 1.6, 2.4 }, {
+				delay = 0.1,
+				color = { "k" },
+				lightEmission = 0,
+				lightInfluence = 1,
+				brightness = 1,
+				speed = { 5, 10 },
+				spread = { 180, 180 },
+				drag = 3,
+				accel = Vector3.new(0, 3, 0),
+				transparency = { { 0, 0.1 }, { 1, 0.5 } },
+			}),
+			hdRing(Vector3.new(0, -1.8, 0), 36, 0.55),
 			sparks(30, 50),
 			{ type = "light", brightness = 8, range = 30, color = "p", flash = 0.5 },
 		},
@@ -2708,6 +3128,8 @@ Presets.List = ({
 				color1 = "p",
 			},
 			sparks(20, 30, Vector3.new(0, -1.8, 0)),
+			hdFlip("flip_electric", Vector3.new(0, -1.2, 0), 2, { { 0, 6 }, { 1, 9 } }, { 0.35, 0.45 }, { color = { "w", "p", "s" }, brightness = 3 }),
+			hdFlip("flip_impact", Vector3.new(0, -1.2, 0), 1, { { 0, 5 }, { 1, 8 } }, { 0.3, 0.3 }),
 			{ type = "light", brightness = 10, range = 40, color = "p", flash = 0.35 },
 		},
 	},
@@ -2727,7 +3149,10 @@ Presets.List = ({
 				color0 = "p",
 				color1 = "s",
 			},
-			dust(18),
+			basic(dust(18)),
+			hdDust(16),
+			hdRing(Vector3.new(0, -1.8, 0), 34, 0.7),
+			hdRing(Vector3.new(0, -1.8, 0), 24, 0.6, nil, 0.12),
 		},
 	},
 	{
@@ -2843,9 +3268,9 @@ Presets.List = ({
 			{
 				type = "shape",
 				kind = "Orb",
-				attrs = { Shape = "Cylinder", Length = 26, Size0 = 5, Size1 = 0.1, Tilt = Vector3.new(0, 0, 90), Offset = Vector3.new(0, 11, 0), Duration = 0.9, Transparency = 0.2, Ease = "In" },
+				attrs = { Shape = "Cylinder", Length = 26, Size0 = 3, Size1 = 0.1, Tilt = Vector3.new(0, 0, 90), Offset = Vector3.new(0, 11, 0), Duration = 0.9, Transparency = 0.35, FadeStart = 0.2, Ease = "Out" },
 				color0 = "p",
-				color1 = "w",
+				color1 = "s",
 			},
 			{
 				type = "shape",
@@ -3447,6 +3872,21 @@ Presets.List = ({
 	},
 } :: any) :: { Preset }
 
+-- Helpers like hdSlash() return several layers; flatten them into the list.
+for _, preset in Presets.List do
+	local flat = {}
+	for _, layer in preset.layers do
+		if layer.type == nil and #layer > 0 then
+			for _, inner in layer do
+				table.insert(flat, inner)
+			end
+		else
+			table.insert(flat, layer)
+		end
+	end
+	preset.layers = flat
+end
+
 Presets.ById = {} :: { [string]: Preset }
 for _, preset in Presets.List do
 	Presets.ById[preset.id] = preset :: any
@@ -3569,6 +4009,24 @@ Strings.vi = {
 	helpBody = "• Hiệu ứng thật sự chạy khi bấm Play (F5). Nút \"Xem thử\" chỉ để xem trong Studio.\n• Mỗi hiệu ứng là 1 Part vô hình tên VFX_... — kéo, xoay, nhân bản như Part bình thường.\n• Hiệu ứng chạy trên máy người chơi (client) nên mượt và nhẹ mạng.\n• Muốn sắc nét kiểu anime: bật Bloom bên dưới, giữ \"Độ phát sáng\" ≥ 1.\n• Script: require(game.ReplicatedStorage.EasyVFX).Play(effect)",
 	close = "Đóng",
 	replayGuide = "Xem lại hướng dẫn",
+
+	hdTitle = "Chất lượng HD (gói Blender)",
+	hdBodyOff = "Hiện đang dùng bản cơ bản. Bật HD để lưỡi chém có vân sợi, đuôi tan dần, flipbook va chạm/khói/điện:\n1. Studio → File → Import 3D → chọn EasyVFX_Pack.fbx → Import.\n2. Bấm \"Quét gói\" bên dưới. Xong!",
+	hdBodyOn = "HD đang bật: %d texture. Hiệu ứng mới tự dùng HD.",
+	hdScan = "Quét gói",
+	hdPaste = "Dán ID",
+	hdPasteLabel = "Mỗi dòng: tên = ID ảnh",
+	hdPastePlaceholder = "slash_arc = 1234567890",
+	hdSave = "Lưu ID",
+	hdApplyAll = "Áp dụng cho tất cả",
+	hdDisable = "Tắt HD",
+	hdScanNone = "Chưa thấy gói. Hãy Import 3D file EasyVFX_Pack.fbx trước (các part tên EVFX_Tex_...).",
+	hdScanFound = "Đã nhận %d texture HD. Có thể xóa model vừa import.",
+	hdApplied = "Đã cập nhật %d hiệu ứng.",
+	hdDisabled = "Đã tắt HD. Bấm \"Áp dụng cho tất cả\" để đổi các hiệu ứng cũ.",
+	hdMissing = "Thiếu texture chính (slash_arc) nên HD chưa bật.",
+	rotation = "Góc xoay",
+	rotationHint = "Xoay lưỡi chém HD trong mặt phẳng của nó",
 }
 
 Strings.en = {
@@ -3676,6 +4134,24 @@ Strings.en = {
 	helpBody = "• Effects really run when you press Play (F5). \"Preview\" is just for looking in Studio.\n• Each effect is one invisible Part named VFX_... — move, rotate, duplicate it like any Part.\n• Effects run on each player's device (client), so they're smooth and light on the network.\n• For a crisp anime look: add Bloom below and keep Glow at 1 or more.\n• Script: require(game.ReplicatedStorage.EasyVFX).Play(effect)",
 	close = "Close",
 	replayGuide = "Replay the guide",
+
+	hdTitle = "HD quality (Blender pack)",
+	hdBodyOff = "Using basic quality. Turn on HD for fibrous slashes with dissolving tails and impact/smoke/electric flipbooks:\n1. Studio → File → Import 3D → pick EasyVFX_Pack.fbx → Import.\n2. Click \"Scan pack\" below. Done!",
+	hdBodyOn = "HD is on: %d textures. New effects use HD automatically.",
+	hdScan = "Scan pack",
+	hdPaste = "Paste IDs",
+	hdPasteLabel = "One per line: name = image ID",
+	hdPastePlaceholder = "slash_arc = 1234567890",
+	hdSave = "Save IDs",
+	hdApplyAll = "Apply to all effects",
+	hdDisable = "Turn off HD",
+	hdScanNone = "No pack found. Import 3D the EasyVFX_Pack.fbx file first (parts named EVFX_Tex_...).",
+	hdScanFound = "Found %d HD textures. You can delete the imported model.",
+	hdApplied = "Updated %d effects.",
+	hdDisabled = "HD turned off. Click \"Apply to all effects\" to change existing ones.",
+	hdMissing = "The main texture (slash_arc) is missing, so HD is not on yet.",
+	rotation = "Rotation",
+	rotationHint = "Turns the HD slash within its plane",
 }
 
 return Strings
@@ -3731,6 +4207,12 @@ export type Api = {
 	selectionInfo: () -> SelectionInfo,
 	loadFavorites: () -> { Favorite },
 	saveFavorites: (favorites: { Favorite }) -> (),
+	getAssets: () -> Builder.Assets?,
+	countAssets: () -> number,
+	scanAssets: () -> number,
+	assetsFromText: (text: string) -> number,
+	disableHD: () -> (),
+	applyAll: () -> number,
 }
 
 local App = {}
@@ -3762,6 +4244,7 @@ function App.new(api: Api)
 		lang = if lang == "en" then "en" else "vi",
 		autoPreview = api.getSetting("EasyVFX_AutoPreview") ~= false,
 		advancedOpen = false,
+		pasteOpen = false,
 		onboardStep = if api.getSetting("EasyVFX_Onboarded") then nil else 1,
 		helpOpen = false,
 		root = nil,
@@ -4066,6 +4549,8 @@ function App:renderLibrary()
 		end, i).Parent = chips
 	end
 
+	self:hdCard(content, 0)
+
 	-- Favorites
 	local favorites = api.loadFavorites()
 	if #favorites > 0 then
@@ -4157,6 +4642,139 @@ function App:renderLibrary()
 	self.emptyNote.Visible = false
 	self.emptyNote.Parent = content
 	self:renderCards()
+end
+
+-- "HD quality" card: how to import the Blender pack, scan it, or paste IDs.
+function App:hdCard(parent: Instance, order: number)
+	local t = self.t
+	local api: Api = self.api
+	local count = api.countAssets()
+	local on = api.getAssets() ~= nil
+	local card = C.stack({ LayoutOrder = order, BackgroundColor3 = t.card, BackgroundTransparency = 0 }, 10)
+	C.corner(Theme.Radius.lg).Parent = card
+	C.stroke(if on then t.accent else t.border, 1).Parent = card
+	C.padding(12).Parent = card
+	local head = C.new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 22), LayoutOrder = 1, Parent = card })
+	C.new("TextLabel", {
+		BackgroundTransparency = 1,
+		Text = self:L("hdTitle"),
+		TextColor3 = t.fg,
+		TextSize = Theme.Text.label,
+		FontFace = Theme.Font.bold,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Size = UDim2.new(1, -56, 1, 0),
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		Parent = head,
+	})
+	C.new("TextLabel", {
+		BackgroundColor3 = if on then t.accent else t.muted,
+		Text = if on then "HD" else "BASIC",
+		TextColor3 = if on then t.onAccent else t.mutedFg,
+		TextSize = Theme.Text.caption,
+		FontFace = Theme.Font.bold,
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, 0, 0.5, 0),
+		Size = UDim2.new(0, 0, 0, 20),
+		AutomaticSize = Enum.AutomaticSize.X,
+		Parent = head,
+	}, { C.round(), C.padding(0, 8) })
+	C.text(t, {
+		text = if on then self:L("hdBodyOn"):format(count) else self:L("hdBodyOff"),
+		size = Theme.Text.caption,
+		color = t.mutedFg,
+		order = 2,
+	}).Parent = card
+
+	local row = C.new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 30), LayoutOrder = 3, Parent = card })
+	C.new("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		Padding = UDim.new(0, 6),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Parent = row,
+	})
+	local function toastApplied()
+		local n = api.applyAll()
+		self:toastMessage(self:L("hdApplied"):format(n), "success")
+		self:renderEdit()
+	end
+	if on then
+		C.button(t, { text = self:L("hdApplyAll"), variant = "primary", width = UDim.new(0.6, -3), height = 30, order = 1, onClick = toastApplied }).Parent =
+			row
+		C.button(t, {
+			text = self:L("hdDisable"),
+			width = UDim.new(0.4, -3),
+			height = 30,
+			order = 2,
+			onClick = function()
+				api.disableHD()
+				self:toastMessage(self:L("hdDisabled"), "success")
+				self:renderLibrary()
+			end,
+		}).Parent = row
+	else
+		C.button(t, {
+			text = self:L("hdScan"),
+			variant = "primary",
+			width = UDim.new(0.5, -3),
+			height = 30,
+			order = 1,
+			onClick = function()
+				local n = api.scanAssets()
+				if n == 0 then
+					self:toastMessage(self:L("hdScanNone"), "error")
+				elseif api.getAssets() == nil then
+					self:toastMessage(self:L("hdMissing"), "error")
+				else
+					self:toastMessage(self:L("hdScanFound"):format(n), "success")
+					api.applyAll()
+				end
+				self:renderLibrary()
+			end,
+		}).Parent = row
+		C.button(t, {
+			text = self:L("hdPaste"),
+			width = UDim.new(0.5, -3),
+			height = 30,
+			order = 2,
+			onClick = function()
+				self.state.pasteOpen = not self.state.pasteOpen
+				self:renderLibrary()
+			end,
+		}).Parent = row
+	end
+	if self.state.pasteOpen and not on then
+		local wrap, box = C.input(t, {
+			label = self:L("hdPasteLabel"),
+			text = "",
+			placeholder = self:L("hdPastePlaceholder"),
+			order = 4,
+			mono = true,
+		})
+		box.MultiLine = true
+		box.TextWrapped = true
+		box.TextYAlignment = Enum.TextYAlignment.Top
+		box.Size = UDim2.new(1, 0, 0, 110)
+		C.padding(8, 10).Parent = box
+		wrap.Parent = card
+		C.button(t, {
+			text = self:L("hdSave"),
+			variant = "primary",
+			order = 5,
+			height = 30,
+			onClick = function()
+				local n = api.assetsFromText(box.Text)
+				if api.getAssets() == nil then
+					self:toastMessage(self:L("hdMissing"), "error")
+				else
+					self.state.pasteOpen = false
+					self:toastMessage(self:L("hdScanFound"):format(n), "success")
+					api.applyAll()
+				end
+				self:renderLibrary()
+			end,
+		}).Parent = card
+	end
+	card.Parent = parent
 end
 
 function App:card(preset: Presets.Preset, order: number): TextButton
@@ -4482,6 +5100,23 @@ function App:renderEdit()
 			onBegin = edit(self:L(s.label)),
 			onChange = function(v, final)
 				(p :: any)[s.key] = v
+				apply(final)
+			end,
+		}).Parent = look
+	end
+	if api.getAssets() ~= nil and Builder.hasHD(p.preset) then
+		C.slider(t, slider, {
+			label = self:L("rotation"),
+			hint = self:L("rotationHint"),
+			min = 0,
+			max = 360,
+			step = 5,
+			value = p.rotation,
+			suffix = "°",
+			order = #sliders + 1,
+			onBegin = edit(self:L("rotation")),
+			onChange = function(v, final)
+				p.rotation = v
 				apply(final)
 			end,
 		}).Parent = look

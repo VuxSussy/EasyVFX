@@ -31,7 +31,11 @@ export type Params = {
 	duration: number,
 	promptText: string,
 	texture: string,
+	rotation: number, -- extra in-plane rotation (degrees) for flat HD slashes
 }
+
+-- Asset pack: texture key -> "rbxassetid://..." (see blender/make_vfx_pack.py)
+export type Assets = { [string]: string }
 
 export type Placement = {
 	cframe: CFrame,
@@ -57,6 +61,7 @@ local ATTRS: { [string]: string } = {
 	duration = "VFX_Duration",
 	promptText = "VFX_PromptText",
 	texture = "VFX_Texture",
+	rotation = "VFX_Rotation",
 }
 Builder.Attributes = ATTRS
 
@@ -91,6 +96,7 @@ function Builder.defaultParams(presetId: string): Params
 		duration = d.duration or 2,
 		promptText = d.promptText or "Use",
 		texture = "",
+		rotation = d.rotation or 0,
 	}
 end
 
@@ -247,10 +253,17 @@ local function getOrCreate(existing: Existing, wanted: { [string]: boolean }, ke
 	return inst
 end
 
-local function attachment(ctx: any, key: string, position: Vector3): Attachment
+local function attachment(ctx: any, key: string, position: Vector3, tilt: Vector3?, randomTilt: number?): Attachment
 	local a = getOrCreate(ctx.existing, ctx.wanted, key, "Attachment", ctx.root) :: Attachment
 	a.Name = "VFX_Point"
-	a.CFrame = CFrame.new(position)
+	local cf = CFrame.new(position)
+	if tilt then
+		cf *= CFrame.Angles(math.rad(tilt.X), math.rad(tilt.Y), math.rad(tilt.Z))
+	end
+	a.CFrame = cf
+	-- the runtime re-rolls a random tilt around BaseCFrame on every play
+	a:SetAttribute("BaseCFrame", if randomTilt then cf else nil)
+	a:SetAttribute("RandomTilt", randomTilt)
 	return a
 end
 
@@ -267,15 +280,45 @@ local function setStreaming(inst: Instance, ctx: any, onProperty: () -> (), offP
 	inst:SetAttribute("EmitDelay", nil)
 end
 
-local function layerParent(ctx: any, key: string, at: any): Instance
-	if at == nil or at == "part" then
+-- Where a particle/light layer lives. Layers sharing a `group` share one attachment
+-- (so all pieces of an HD slash get the same random tilt).
+local function layerParent(ctx: any, key: string, layer: { [string]: any }, defaultAt: string?): Instance
+	local at = layer.at or defaultAt
+	if (at == nil or at == "part") and not layer.group then
 		return ctx.root
-	elseif at == "center" then
-		return attachment(ctx, key .. ":a", Vector3.zero)
-	elseif typeof(at) == "Vector3" then
-		return attachment(ctx, key .. ":a", at * ctx.params.size)
 	end
-	return ctx.root
+	local position = if typeof(at) == "Vector3" then at * ctx.params.size else Vector3.zero
+	local attachKey = if layer.group then "g:" .. layer.group else key .. ":a"
+	-- a shared group attachment is set up once, by the first layer that uses it
+	local done = ctx.configured[attachKey]
+	if done then
+		ctx.wanted[attachKey] = true
+		return done
+	end
+	local a = attachment(ctx, attachKey, position, layer.tilt, layer.randomTilt)
+	ctx.configured[attachKey] = a
+	return a
+end
+
+local T = Presets.Textures
+
+-- In HD mode the soft built-in textures are swapped for the sharp Blender ones.
+local function hdTexture(ctx: any, layer: { [string]: any }): string?
+	local assets = ctx.assets
+	if layer.pack then
+		return assets[layer.pack]
+	end
+	if not ctx.hd then
+		return layer.texture
+	end
+	if layer.texture == T.Star then
+		return assets.spark_star or layer.texture
+	elseif layer.texture == T.Glow and not layer.keepTexture then
+		return assets.glow_soft or layer.texture
+	elseif layer.texture == T.Square and layer.orientation == "VelocityParallel" then
+		return assets.spark_streak or layer.texture
+	end
+	return layer.texture
 end
 
 ------------------------------------------------------------------------------------
@@ -286,11 +329,17 @@ local LayerBuilders: { [string]: (ctx: any, key: string, layer: { [string]: any 
 
 LayerBuilders.particles = function(ctx, key, layer)
 	local params: Params = ctx.params
-	local parent = layerParent(ctx, key, layer.at)
+	local parent = layerParent(ctx, key, layer)
 	local e = getOrCreate(ctx.existing, ctx.wanted, key, "ParticleEmitter", parent) :: ParticleEmitter
 	e.Name = layer.name or (if layer.burst then "Burst" else "Stream")
-	local texture = if params.texture ~= "" then params.texture else layer.texture
+	local texture = hdTexture(ctx, layer)
+	if params.texture ~= "" and not layer.pack then
+		texture = params.texture
+	end
 	e.Texture = texture or Presets.Textures.Glow
+	e.FlipbookLayout = enumItem(Enum.ParticleFlipbookLayout, layer.flipbook, Enum.ParticleFlipbookLayout.None) :: any
+	e.FlipbookMode = enumItem(Enum.ParticleFlipbookMode, layer.flipMode, Enum.ParticleFlipbookMode.OneShot) :: any
+	e.FlipbookStartRandom = layer.flipRandom == true
 	e.Color = colorSequence(layer.color, params)
 	e.Size = numberSequence(layer.size or 1, params.size, 0)
 	e.Transparency = numberSequence(layer.transparency or 0, 1, 0, 1)
@@ -301,7 +350,11 @@ LayerBuilders.particles = function(ctx, key, layer)
 	e.SpreadAngle = Vector2.new(spread[1], spread[2])
 	e.Acceleration = (layer.accel or Vector3.zero) * params.speed * math.sqrt(params.size)
 	e.Drag = layer.drag or 0
-	e.Rotation = range(layer.rotation or 0, 1, 0)
+	local rotation = range(layer.rotation or 0, 1, 0)
+	if layer.rotatable then
+		rotation = NumberRange.new(rotation.Min + params.rotation, rotation.Max + params.rotation)
+	end
+	e.Rotation = rotation
 	e.RotSpeed = range(layer.rotSpeed or 0, params.speed, 0)
 	e.Orientation = enumItem(Enum.ParticleOrientation, layer.orientation, Enum.ParticleOrientation.FacingCamera) :: any
 	e.EmissionDirection = enumItem(Enum.NormalId, layer.direction, Enum.NormalId.Top) :: any
@@ -374,7 +427,7 @@ end
 
 LayerBuilders.light = function(ctx, key, layer)
 	local params: Params = ctx.params
-	local parent = layerParent(ctx, key, layer.at or "center")
+	local parent = layerParent(ctx, key, layer, "center")
 	local light = getOrCreate(ctx.existing, ctx.wanted, key, "PointLight", parent) :: PointLight
 	light.Name = "Light"
 	local brightness = (layer.brightness or 1) * params.glow
@@ -511,7 +564,26 @@ end
 ------------------------------------------------------------------------------------
 
 -- Creates or updates every layer of the effect to match `params`.
-function Builder.apply(root: BasePart, params: Params)
+-- True when the asset pack has been imported (the key HD texture is known).
+function Builder.isHD(assets: Assets?): boolean
+	return assets ~= nil and type(assets.slash_arc) == "string" and assets.slash_arc ~= ""
+end
+
+-- Does this preset change when the HD pack is present?
+function Builder.hasHD(presetId: string): boolean
+	local preset = Presets.ById[presetId]
+	if not preset then
+		return false
+	end
+	for _, layer in preset.layers do
+		if layer.hd or layer.pack then
+			return true
+		end
+	end
+	return false
+end
+
+function Builder.apply(root: BasePart, params: Params, assets: Assets?)
 	local preset = Presets.ById[params.preset]
 	assert(preset, "Unknown preset " .. tostring(params.preset))
 	Builder.writeParams(root, params)
@@ -519,10 +591,18 @@ function Builder.apply(root: BasePart, params: Params)
 		root = root,
 		params = params,
 		alwaysOn = params.trigger == "Always",
+		assets = assets or {},
+		hd = Builder.isHD(assets),
+		configured = {} :: { [string]: Attachment },
 		existing = collectExisting(root),
 		wanted = {} :: { [string]: boolean },
 	}
+	root:SetAttribute("VFX_HD", ctx.hd)
 	for i, layer in preset.layers do
+		local skip = (layer.hd and not ctx.hd) or (layer.basic and ctx.hd) or (layer.pack and not ctx.assets[layer.pack])
+		if skip then
+			continue
+		end
 		local build = LayerBuilders[layer.type]
 		if build then
 			build(ctx, tostring(i), layer)
@@ -553,7 +633,7 @@ function Builder.effectName(presetId: string): string
 end
 
 -- Makes a brand new effect part.
-function Builder.create(params: Params, placement: Placement): BasePart
+function Builder.create(params: Params, placement: Placement, assets: Assets?): BasePart
 	local root = Instance.new("Part")
 	root.Name = Builder.effectName(params.preset)
 	root.Size = Vector3.new(
@@ -582,7 +662,7 @@ function Builder.create(params: Params, placement: Placement): BasePart
 	end
 	root:AddTag(Builder.TAG)
 	root.Parent = placement.parent
-	Builder.apply(root, params)
+	Builder.apply(root, params, assets)
 	return root
 end
 

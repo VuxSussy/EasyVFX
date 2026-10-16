@@ -108,6 +108,24 @@ Strings.vi = {
 	helpBody = "• Hiệu ứng thật sự chạy khi bấm Play (F5). Nút \"Xem thử\" chỉ để xem trong Studio.\n• Mỗi hiệu ứng là 1 Part vô hình tên VFX_... — kéo, xoay, nhân bản như Part bình thường.\n• Hiệu ứng chạy trên máy người chơi (client) nên mượt và nhẹ mạng.\n• Muốn sắc nét kiểu anime: bật Bloom bên dưới, giữ \"Độ phát sáng\" ≥ 1.\n• Script: require(game.ReplicatedStorage.EasyVFX).Play(effect)",
 	close = "Đóng",
 	replayGuide = "Xem lại hướng dẫn",
+
+	hdTitle = "Chất lượng HD (gói Blender)",
+	hdBodyOff = "Hiện đang dùng bản cơ bản. Bật HD để lưỡi chém có vân sợi, đuôi tan dần, flipbook va chạm/khói/điện:\n1. Studio → File → Import 3D → chọn EasyVFX_Pack.fbx → Import.\n2. Bấm \"Quét gói\" bên dưới. Xong!",
+	hdBodyOn = "HD đang bật: %d texture. Hiệu ứng mới tự dùng HD.",
+	hdScan = "Quét gói",
+	hdPaste = "Dán ID",
+	hdPasteLabel = "Mỗi dòng: tên = ID ảnh",
+	hdPastePlaceholder = "slash_arc = 1234567890",
+	hdSave = "Lưu ID",
+	hdApplyAll = "Áp dụng cho tất cả",
+	hdDisable = "Tắt HD",
+	hdScanNone = "Chưa thấy gói. Hãy Import 3D file EasyVFX_Pack.fbx trước (các part tên EVFX_Tex_...).",
+	hdScanFound = "Đã nhận %d texture HD. Có thể xóa model vừa import.",
+	hdApplied = "Đã cập nhật %d hiệu ứng.",
+	hdDisabled = "Đã tắt HD. Bấm \"Áp dụng cho tất cả\" để đổi các hiệu ứng cũ.",
+	hdMissing = "Thiếu texture chính (slash_arc) nên HD chưa bật.",
+	rotation = "Góc xoay",
+	rotationHint = "Xoay lưỡi chém HD trong mặt phẳng của nó",
 }
 
 Strings.en = {
@@ -215,6 +233,24 @@ Strings.en = {
 	helpBody = "• Effects really run when you press Play (F5). \"Preview\" is just for looking in Studio.\n• Each effect is one invisible Part named VFX_... — move, rotate, duplicate it like any Part.\n• Effects run on each player's device (client), so they're smooth and light on the network.\n• For a crisp anime look: add Bloom below and keep Glow at 1 or more.\n• Script: require(game.ReplicatedStorage.EasyVFX).Play(effect)",
 	close = "Close",
 	replayGuide = "Replay the guide",
+
+	hdTitle = "HD quality (Blender pack)",
+	hdBodyOff = "Using basic quality. Turn on HD for fibrous slashes with dissolving tails and impact/smoke/electric flipbooks:\n1. Studio → File → Import 3D → pick EasyVFX_Pack.fbx → Import.\n2. Click \"Scan pack\" below. Done!",
+	hdBodyOn = "HD is on: %d textures. New effects use HD automatically.",
+	hdScan = "Scan pack",
+	hdPaste = "Paste IDs",
+	hdPasteLabel = "One per line: name = image ID",
+	hdPastePlaceholder = "slash_arc = 1234567890",
+	hdSave = "Save IDs",
+	hdApplyAll = "Apply to all effects",
+	hdDisable = "Turn off HD",
+	hdScanNone = "No pack found. Import 3D the EasyVFX_Pack.fbx file first (parts named EVFX_Tex_...).",
+	hdScanFound = "Found %d HD textures. You can delete the imported model.",
+	hdApplied = "Updated %d effects.",
+	hdDisabled = "HD turned off. Click \"Apply to all effects\" to change existing ones.",
+	hdMissing = "The main texture (slash_arc) is missing, so HD is not on yet.",
+	rotation = "Rotation",
+	rotationHint = "Turns the HD slash within its plane",
 }
 
 return Strings
