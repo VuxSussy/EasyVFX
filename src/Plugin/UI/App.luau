@@ -73,7 +73,7 @@ function App.new(api: Api)
 		tab = "library",
 		category = "all",
 		search = "",
-		lang = if lang == "en" then "en" else "vi",
+		lang = if lang == "vi" then "vi" else "en",
 		autoPreview = api.getSetting("EasyVFX_AutoPreview") ~= false,
 		advancedOpen = false,
 		pasteOpen = false,

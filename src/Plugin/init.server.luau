@@ -44,7 +44,7 @@ local function setSetting(key: string, value: any)
 end
 
 local function lang(): string
-	return if setting("EasyVFX_Lang") == "en" then "en" else "vi"
+	return if setting("EasyVFX_Lang") == "vi" then "vi" else "en" -- English unless the user picked Vietnamese
 end
 
 local function L(key: string): string
