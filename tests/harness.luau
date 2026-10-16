@@ -214,6 +214,19 @@ env = setmetatable({
 }, { __index = _G })
 
 function Harness.install()
+	local serde = require("@lune/serde")
+	local guidCount = 0
+	roblox.implementMethod("HttpService", "JSONEncode", function(_hs, value)
+		return serde.encode("json", value)
+	end)
+	roblox.implementMethod("HttpService", "JSONDecode", function(_hs, text)
+		return serde.decode("json", text)
+	end)
+	roblox.implementMethod("HttpService", "GenerateGUID", function(_hs, braces)
+		guidCount += 1
+		local g = string.format("%08x-0000-4000-8000-%012x", math.random(0, 0x7fffffff), guidCount)
+		return if braces == false then g else "{" .. g .. "}"
+	end)
 	roblox.implementMethod("RunService", "IsRunning", function()
 		return isRunning
 	end)

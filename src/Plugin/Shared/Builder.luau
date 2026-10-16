@@ -9,6 +9,7 @@
 ]]
 
 local Presets = require(script.Parent.Presets)
+local Custom = require(script.Parent.Custom)
 
 local Builder = {}
 
@@ -118,6 +119,13 @@ end
 
 function Builder.readParams(root: Instance): Params?
 	local presetId = root:GetAttribute(ATTRS.preset)
+	if type(presetId) == "string" and not Presets.ById[presetId] then
+		-- A custom effect made elsewhere carries its own definition: learn it.
+		local def = Custom.decode(root:GetAttribute("VFX_CustomDef") :: any)
+		if def and def.id == presetId then
+			Custom.registerOne(def)
+		end
+	end
 	if type(presetId) ~= "string" or not Presets.ById[presetId] then
 		return nil
 	end
@@ -157,6 +165,9 @@ local function resolveColor(token: any, params: Params): Color3
 		return Color3.fromRGB(150, 145, 140)
 	elseif token == "d" then
 		return params.color1:Lerp(Color3.new(0, 0, 0), 0.65)
+	elseif token == "x" then
+		-- "void": near black, tinted by the second color (dark fantasy bodies)
+		return params.color2:Lerp(Color3.fromRGB(6, 4, 8), 0.82)
 	end
 	return Color3.new(1, 1, 1)
 end
@@ -414,6 +425,12 @@ LayerBuilders.shape = function(ctx, key, layer)
 		attrs.Count = math.max(1, math.floor(attrs.Count * params.amount + 0.5))
 	end
 	attrs.Glow = math.clamp((attrs.Glow or 1) * params.glow, 0, 1)
+	if type(attrs.CoreGlow) == "number" then
+		attrs.CoreGlow = math.clamp(attrs.CoreGlow * params.glow, 0, 1)
+	end
+	if layer.core then
+		attrs.CoreColor = resolveColor(layer.core, params)
+	end
 	attrs.Brightness = (attrs.Brightness or 1) * params.glow
 	attrs.Color0 = resolveColor(layer.color0 or "p", params)
 	attrs.Color1 = resolveColor(layer.color1 or layer.color0 or "s", params)
@@ -599,6 +616,8 @@ function Builder.apply(root: BasePart, params: Params, assets: Assets?)
 		wanted = {} :: { [string]: boolean },
 	}
 	root:SetAttribute("VFX_HD", ctx.hd)
+	local custom = (preset :: any).custom
+	root:SetAttribute("VFX_CustomDef", if custom then Custom.encode(custom) else nil)
 	for i, layer in preset.layers do
 		local skip = (layer.hd and not ctx.hd) or (layer.basic and ctx.hd) or (layer.pack and not ctx.assets[layer.pack])
 		if skip then

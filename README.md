@@ -47,15 +47,27 @@ Each effect is **one invisible Part** named `VFX_…` — move, rotate, duplicat
 
 The panel is in English by default; the **VI** button switches it to Vietnamese.
 
-### 34 built-in effects
+### 42 built-in effects
 
 - **Combat:** Fireball, Impact Frame, Crescent Slash, Slash Flurry, Hit Impact, Ground Slam (crater + flying rocks), Energy Blast, Explosion, Lightning Strike, Shockwave, Weapon Trail.
 - **Magic:** Magic Circle, Heal, Level Up, Power Aura, Portal, Energy Shield, Energy Orb, Sparkles, Charge Up.
 - **Elements:** Fire, Smoke, Frost, Fountain, Tornado.
 - **World:** Rain, Snow, Fireflies, Ground Fog, Confetti, Bubbles.
 - **Light:** Laser Beam, Soft Glow, Glowing Outline (Highlight).
+- **Dark Fantasy:** Shadow Slash, Soul Flame, Blood Burst, Void Rift, Cursed Sigil, Necrotic Aura, Soul Release, Ash & Embers. Unlit black bodies with bright edges; see [docs/dark-fantasy-vfx.md](docs/dark-fantasy-vfx.md) for the research behind them and where to find more VFX material legally.
 
 Effects you use often can be saved with **Advanced → Save to Favorites** and re-added with one click from the top of the Library tab.
+
+### Make your own effects (Create tab)
+
+Open the **Create** tab to build an effect from blocks: slash, ring, burst lines, spiral, flash orb, lightning, projectile, crater, flying rocks, sparks, smoke, embers, aura, light, camera shake and impact frame.
+
+- **Per block:** pick a color (main, second, white or void), turn on **Dark style** (black body, bright edge), and set delay, size and amount.
+- **Saving:** **Save** puts the effect in the library under **My Effects**. It works in every place, and is tuned in the Customize tab like any preset. **Save & add to game** saves it and places it right away.
+- **Sharing:** **Share** shows a code (`EVFX1:…`) a friend can paste into **Import**. Codes are checked: only known blocks, and every number is clamped.
+- **Moving between computers:** each placed effect keeps its own definition (`VFX_CustomDef`), so it stays editable on another computer.
+
+![A custom effect made in the Create tab](docs/custom-effect-studio.png)
 
 ---
 
@@ -200,7 +212,8 @@ Designed with the **UI UX Pro Max** skill (design system *Minimalism & Swiss Sty
 ```
 src/Plugin/
   init.server.luau        plugin: toolbar, dock panel, inserting effects, undo, runtime install
-  Shared/Presets.luau     34 presets (plain data)
+  Shared/Presets.luau     42 presets (plain data)
+  Shared/Custom.luau      "My Effects": blocks, validation, share codes, registration
   Shared/Builder.luau     preset + settings -> instances (updated in place, no flicker)
   Shared/Strings.luau     English / Vietnamese text
   Runtime/EasyVFX.luau    runtime: emit, Ring/Slash/Lines/Bolt/Orb/Debris/Crater, triggers
@@ -221,8 +234,8 @@ curl -fsSL -o globalTypes.d.luau https://raw.githubusercontent.com/JohnnyMorganz
 
 ```bash
 rojo build default.project.json -o build/EasyVFX.rbxmx   # build the plugin
-lune run tests/run.luau        # 1382 checks: create/update/play/clean up every preset, Basic and HD, new shapes
-lune run tests/ui.luau         # 965 checks: every button, tab, slider, trigger and the HD card
+lune run tests/run.luau        # 1752 checks: every preset (Basic and HD), shapes, custom effects and share codes
+lune run tests/ui.luau         # 1204 checks: every button, tab, slider, trigger, the HD card and the Create tab
 tools/check.sh                 # all of the above + strict type check (what CI runs)
 
 # Blender previews from runtime data (pip install bpy, or run with blender -b -P)

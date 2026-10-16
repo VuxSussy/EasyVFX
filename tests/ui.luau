@@ -97,6 +97,7 @@ roblox.implementMethod("TweenService", "Create", function(_ts, inst, _info, goal
 end)
 
 local function fire(inst, name, ...)
+	assert(inst ~= nil, "fire: no instance for " .. name .. " at " .. debug.traceback())
 	signalFor(inst, name):Fire(...)
 end
 
@@ -475,6 +476,101 @@ run("empty customize", function()
 	check(b ~= nil, "empty state action")
 	fire(b, "Activated")
 	check(app.libraryPage.Visible, "empty action opens library")
+end)
+print("== Create tab: build, save, share, import, delete")
+local Custom = H.require("Shared/Custom")
+run("create", function()
+	fire(buttonWithText(app.frame, app:L("tabCreate")), "Activated")
+	check(app.createPage.Visible, "create tab visible")
+	local function blocksTitle()
+		for _, d in app.createPage:GetDescendants() do
+			if d:IsA("TextLabel") and d.Text == string.format(app:L("createBlocks"), #app.state.draft.blocks):upper() then
+				return d.Text
+			end
+		end
+		return ""
+	end
+	check(#app.state.draft.blocks == 3, "starts with 3 blocks")
+	check(blocksTitle() ~= "", "blocks section title")
+	fire(buttonWithText(app.createPage, "+ Spiral"), "Activated")
+	fire(buttonWithText(app.createPage, "+ Camera shake"), "Activated")
+	check(#app.state.draft.blocks == 5, "added blocks: " .. #app.state.draft.blocks)
+	local voids = findAll(app.createPage, function(d)
+		return d:IsA("TextButton") and d.Text == app:L("colorVoid")
+	end)
+	fire(voids[1], "Activated")
+	local voided = 0
+	for _, b in app.state.draft.blocks do
+		if b.color == "x" then
+			voided += 1
+		end
+	end
+	check(voided == 1, "one block color changed")
+	fire(buttonWithText(app.createPage, app:L("blockRemove")), "Activated")
+	check(#app.state.draft.blocks == 4, "removed a block")
+	fire(buttonWithText(app.createPage, app:L("badgeLoop")), "Activated")
+	check(app.state.draft.kind == "loop", "kind switched to loop")
+	for _, box in findAll(app.createPage, function(d)
+		return d:IsA("TextBox") and d.Text == "My Effect"
+	end) do
+		box.Text = "Doom Burst"
+		fire(box, "FocusLost", true)
+	end
+	check(app.state.draft.name == "Doom Burst", "renamed: " .. app.state.draft.name)
+	app.state.draft.blocks[1].dark = true
+
+	local before = #inserted
+	fire(buttonWithText(app.createPage, app:L("createSaveAdd")), "Activated")
+	check(#inserted == before + 1, "save & add inserted an effect")
+	local root = inserted[#inserted]
+	local def = Custom.decode(root:GetAttribute("VFX_CustomDef"))
+	check(def ~= nil and def.name == "Doom Burst", "effect carries its definition")
+	check(type(settingsStore[Custom.SETTING]) == "string", "saved in plugin settings")
+	local preset = Presets.ById[app.state.draft.id]
+	check(preset ~= nil and preset.category == "custom", "registered in library")
+
+	fire(buttonWithText(app.frame, app:L("tabLibrary")), "Activated")
+	local chip = buttonWithText(app.libraryPage, "My Effects")
+	check(chip ~= nil, "My Effects category chip")
+	fire(chip, "Activated")
+	local card = nil
+	for _, d in app.libraryPage:GetDescendants() do
+		if d:IsA("TextLabel") and d.Text == "Doom Burst" then
+			card = d
+		end
+	end
+	check(card ~= nil, "custom effect card in library")
+
+	fire(buttonWithText(app.frame, app:L("tabCreate")), "Activated")
+	fire(buttonWithText(app.createPage, app:L("myShare")), "Activated")
+	local code = nil
+	for _, d in app.createPage:GetDescendants() do
+		if d:IsA("TextBox") and d.Text:sub(1, #Custom.PREFIX) == Custom.PREFIX then
+			code = d.Text
+		end
+	end
+	check(code ~= nil, "share code shown")
+	local function importText(text)
+		for _, d in app.createPage:GetDescendants() do
+			if d:IsA("TextBox") and d.PlaceholderText:sub(1, #Custom.PREFIX) == Custom.PREFIX then
+				d.Text = text
+			end
+		end
+		fire(buttonWithText(app.createPage, app:L("importButton")), "Activated")
+	end
+	importText(code)
+	check(#Custom.load(settingsStore[Custom.SETTING]) == 2, "imported a copy")
+	importText("EVFX1:{not json")
+	importText('EVFX1:{"name":"x","blocks":[{"block":"rm -rf"}]}')
+	check(#Custom.load(settingsStore[Custom.SETTING]) == 2, "bad codes rejected")
+	local del = buttonWithText(app.createPage, app:L("myDelete"))
+	fire(del, "Activated")
+	fire(del, "Activated")
+	check(#Custom.load(settingsStore[Custom.SETTING]) == 1, "deleted one")
+	fire(buttonWithText(app.createPage, app:L("myEdit")), "Activated")
+	check(app.state.draft.name == "Doom Burst", "edit loads the definition")
+	fire(buttonWithText(app.createPage, app:L("createNew")), "Activated")
+	check(app.state.draft.name == "My Effect", "new draft")
 end)
 run("destroy", function()
 	app:destroy()

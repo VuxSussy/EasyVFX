@@ -3,12 +3,14 @@
 	The EasyVFX panel.
 	  Header      title, language switch, help
 	  Tabs        Library (pick an effect) | Customize (tune the selected effect)
+	              | Create (build your own effect from blocks, "My Effects")
 	  Status bar  what the next effect will attach to
 	  Overlays    toast messages, 3-step first-run guide, help card
 ]]
 
 local Presets = require(script.Parent.Parent.Shared.Presets)
 local Builder = require(script.Parent.Parent.Shared.Builder)
+local Custom = require(script.Parent.Parent.Shared.Custom)
 local Strings = require(script.Parent.Parent.Shared.Strings)
 local Theme = require(script.Parent.Theme)
 local C = require(script.Parent.Components)
@@ -195,15 +197,16 @@ function App:render()
 		Parent = tabs,
 	})
 	self.tabButtons = {}
-	for i, tab in { { id = "library", key = "tabLibrary" }, { id = "edit", key = "tabEdit" } } do
+	local tabList = { { id = "library", key = "tabLibrary" }, { id = "edit", key = "tabEdit" }, { id = "create", key = "tabCreate" } }
+	for i, tab in tabList do
 		local b = C.new("TextButton", {
 			AutoButtonColor = false,
 			BackgroundTransparency = 1,
 			Text = self:L(tab.key),
 			TextSize = Theme.Text.body,
 			FontFace = Theme.Font.semibold,
-			Position = UDim2.new((i - 1) * 0.5, 0, 0, 0),
-			Size = UDim2.new(0.5, 0, 1, 0),
+			Position = UDim2.new((i - 1) / #tabList, 0, 0, 0),
+			Size = UDim2.new(1 / #tabList, 0, 1, 0),
 			Parent = tabs,
 		})
 		local underline = C.new("Frame", {
@@ -243,6 +246,7 @@ function App:render()
 	end
 	self.libraryPage = page()
 	self.editPage = page()
+	self.createPage = page()
 
 	-- Status bar
 	local status = C.new("Frame", {
@@ -306,6 +310,7 @@ function App:render()
 
 	self:renderLibrary()
 	self:renderEdit()
+	self:renderCreate()
 	self:setTab(self.state.tab)
 	self:renderStatus()
 	self:renderOverlay()
@@ -322,6 +327,344 @@ function App:setTab(id: string)
 	end
 	self.libraryPage.Visible = id == "library"
 	self.editPage.Visible = id == "edit"
+	self.createPage.Visible = id == "create"
+end
+
+------------------------------------------------------------------------------------
+-- Create tab: build your own effect from blocks ("My Effects")
+------------------------------------------------------------------------------------
+
+function App:loadCustom(): { Custom.Def }
+	return Custom.load(self.api.getSetting(Custom.SETTING))
+end
+
+function App:saveCustom(defs: { Custom.Def })
+	self.api.setSetting(Custom.SETTING, Custom.save(defs))
+	Custom.register(defs)
+	self:renderLibrary()
+end
+
+local function deepCopy(v: any): any
+	if type(v) ~= "table" then
+		return v
+	end
+	local out = {}
+	for k, x in v do
+		out[k] = deepCopy(x)
+	end
+	return out
+end
+
+function App:renderCreate()
+	local t = self.t
+	local api: Api = self.api
+	local pageFrame: ScrollingFrame = self.createPage
+	local scroll = pageFrame.CanvasPosition
+	for _, child in pageFrame:GetChildren() do
+		child:Destroy()
+	end
+	local content = C.stack({ Parent = pageFrame }, 16)
+	C.padding(12, 12, 16, 12).Parent = content
+	local slider: C.SliderCtx = { widget = api.widget, root = self.frame }
+	local lang = self.state.lang
+	self.state.draft = self.state.draft or Custom.newDef()
+	local draft: Custom.Def = self.state.draft
+	local function rerender()
+		self:renderCreate()
+	end
+	local function row(order: number, height: number?): Frame
+		local r = C.new("Frame", {
+			BackgroundTransparency = 1,
+			Size = UDim2.new(1, 0, 0, height or 0),
+			AutomaticSize = if height then Enum.AutomaticSize.None else Enum.AutomaticSize.Y,
+			LayoutOrder = order,
+		})
+		C.list(Enum.FillDirection.Horizontal, 6, height == nil).Parent = r
+		return r
+	end
+
+	-- Intro + name, kind and colors
+	local head = C.stack({ LayoutOrder = 1, BackgroundColor3 = t.card, BackgroundTransparency = 0 }, 10)
+	C.corner(Theme.Radius.lg).Parent = head
+	C.stroke(t.border, 1).Parent = head
+	C.padding(12).Parent = head
+	C.text(t, { text = self:L("createTitle"), size = Theme.Text.title, font = Theme.Font.bold, order = 1 }).Parent = head
+	C.text(t, { text = self:L("createIntro"), size = Theme.Text.label, color = t.mutedFg, order = 2 }).Parent = head
+	local nameWrap = C.input(t, {
+		label = self:L("createName"),
+		text = draft.name,
+		order = 3,
+		onCommit = function(text)
+			local clean = text:gsub("[%c]", ""):sub(1, 40)
+			if clean ~= "" then
+				draft.name = clean
+			end
+		end,
+	})
+	nameWrap.Parent = head
+	C.text(t, { text = self:L("createKind"), size = Theme.Text.caption, font = Theme.Font.semibold, color = t.mutedFg, order = 4 }).Parent = head
+	local kinds = row(5)
+	kinds.Parent = head
+	for i, k in { { id = "burst", key = "badgeBurst" }, { id = "loop", key = "badgeLoop" } } do
+		C.chip(t, self:L(k.key), draft.kind == k.id, function()
+			draft.kind = k.id
+			rerender()
+		end, i).Parent = kinds
+	end
+	local function invalid()
+		self:toastMessage(self:L("hexInvalid"), "error")
+	end
+	C.colorPicker(t, self:L("color1"), self:L("hexLabel"), Custom.color(draft.color1, Color3.new(1, 1, 1)), function(color)
+		draft.color1 = Custom.hex(color)
+	end, invalid, 6).Parent = head
+	C.colorPicker(t, self:L("color2"), self:L("hexLabel"), Custom.color(draft.color2, Color3.new(1, 1, 1)), function(color)
+		draft.color2 = Custom.hex(color)
+	end, invalid, 7).Parent = head
+	head.Parent = content
+
+	-- Blocks
+	local blocksOuter, blocks = C.section(t, string.format(self:L("createBlocks"), #draft.blocks), 2)
+	local colorChoices = { { id = "p", key = "colorMain" }, { id = "s", key = "colorSecond" }, { id = "w", key = "colorWhite" }, { id = "x", key = "colorVoid" } }
+	for i, b in draft.blocks do
+		local info = Custom.BlockById[b.block]
+		local card = C.stack({ LayoutOrder = i, BackgroundColor3 = t.bg, BackgroundTransparency = 0 }, 8)
+		C.corner(Theme.Radius.md).Parent = card
+		C.stroke(t.border, 1).Parent = card
+		C.padding(10).Parent = card
+		local top = row(1, 28)
+		top.Parent = card
+		local title = C.text(t, { text = i .. ". " .. info[lang], size = Theme.Text.body, font = Theme.Font.semibold, order = 1 })
+		title.Size = UDim2.new(1, -136, 0, 28)
+		title.AutomaticSize = Enum.AutomaticSize.None
+		title.TextYAlignment = Enum.TextYAlignment.Center
+		title.Parent = top
+		C.button(t, {
+			text = self:L("blockUp"),
+			variant = "ghost",
+			height = 28,
+			width = UDim.new(0, 60),
+			order = 2,
+			onClick = function()
+				if i > 1 then
+					draft.blocks[i], draft.blocks[i - 1] = draft.blocks[i - 1], draft.blocks[i]
+					rerender()
+				end
+			end,
+		}).Parent = top
+		C.button(t, {
+			text = self:L("blockRemove"),
+			variant = "danger",
+			height = 28,
+			width = UDim.new(0, 64),
+			order = 3,
+			onClick = function()
+				table.remove(draft.blocks, i)
+				rerender()
+			end,
+		}).Parent = top
+		local colorsRow = row(2)
+		colorsRow.Parent = card
+		for j, c in colorChoices do
+			C.chip(t, self:L(c.key), b.color == c.id, function()
+				b.color = c.id
+				rerender()
+			end, j).Parent = colorsRow
+		end
+		C.toggle(t, self:L("blockDark"), b.dark, function(on)
+			b.dark = on
+		end, 3).Parent = card
+		for j, sl in {
+			{ key = "delay", label = "blockDelay", min = 0, max = 3, step = 0.05, suffix = "s" },
+			{ key = "size", label = "blockSize", min = 0.25, max = 4, step = 0.05, suffix = "x" },
+			{ key = "amount", label = "blockAmount", min = 0.2, max = 3, step = 0.05, suffix = "x" },
+		} do
+			C.slider(t, slider, {
+				label = self:L(sl.label),
+				min = sl.min,
+				max = sl.max,
+				step = sl.step,
+				value = (b :: any)[sl.key],
+				suffix = sl.suffix,
+				order = 3 + j,
+				onChange = function(v)
+					(b :: any)[sl.key] = v
+				end,
+			}).Parent = card
+		end
+		card.Parent = blocks
+	end
+	C.text(t, { text = self:L("createAdd"), size = Theme.Text.caption, font = Theme.Font.semibold, color = t.mutedFg, order = 100 }).Parent =
+		blocks
+	local adds = row(101)
+	adds.Parent = blocks
+	for i, info in Custom.Blocks do
+		C.chip(t, "+ " .. info[lang], false, function()
+			if #draft.blocks < Custom.MAX_BLOCKS then
+				table.insert(draft.blocks, Custom.newBlock(info.id))
+				rerender()
+			end
+		end, i).Parent = adds
+	end
+	blocksOuter.Parent = content
+
+	-- Save
+	local function save(): Custom.Def?
+		local def = Custom.validate(draft)
+		if not def then
+			self:toastMessage(self:L("createNeedBlock"), "error")
+			return nil
+		end
+		local defs = self:loadCustom()
+		local replaced = false
+		for i, d in defs do
+			if d.id == def.id then
+				defs[i] = def
+				replaced = true
+			end
+		end
+		if not replaced then
+			table.insert(defs, 1, def)
+			while #defs > Custom.MAX_EFFECTS do
+				table.remove(defs)
+			end
+		end
+		self:saveCustom(defs)
+		self:toastMessage(string.format(self:L("createSaved"), def.name), "success")
+		return def
+	end
+	local actions = row(3, 34)
+	actions.Parent = content
+	C.button(t, {
+		text = self:L("createSaveAdd"),
+		variant = "primary",
+		width = UDim.new(0.5, -4),
+		order = 1,
+		onClick = function()
+			local def = save()
+			if def then
+				rerender()
+				api.insert(def.id)
+			end
+		end,
+	}).Parent = actions
+	C.button(t, {
+		text = self:L("createSave"),
+		width = UDim.new(0.25, -4),
+		order = 2,
+		onClick = function()
+			save()
+			rerender()
+		end,
+	}).Parent = actions
+	C.button(t, {
+		text = self:L("createNew"),
+		variant = "ghost",
+		width = UDim.new(0.25, -4),
+		order = 3,
+		onClick = function()
+			self.state.draft = Custom.newDef()
+			rerender()
+		end,
+	}).Parent = actions
+
+	-- My effects: edit, share, delete, import
+	local mineOuter, mine = C.section(t, self:L("myEffects"), 4)
+	local defs = self:loadCustom()
+	if #defs == 0 then
+		C.text(t, { text = self:L("myEmpty"), size = Theme.Text.label, color = t.mutedFg, order = 1 }).Parent = mine
+	end
+	for i, def in defs do
+		local item = C.stack({ LayoutOrder = i }, 6)
+		local r = row(1, 30)
+		r.Parent = item
+		local label = C.text(t, { text = def.name, size = Theme.Text.body, font = Theme.Font.medium, order = 1 })
+		label.Size = UDim2.new(1, -198, 0, 30)
+		label.AutomaticSize = Enum.AutomaticSize.None
+		label.TextYAlignment = Enum.TextYAlignment.Center
+		label.TextTruncate = Enum.TextTruncate.AtEnd
+		label.Parent = r
+		C.button(t, {
+			text = self:L("myEdit"),
+			height = 30,
+			width = UDim.new(0, 56),
+			order = 2,
+			onClick = function()
+				self.state.draft = deepCopy(def)
+				pageFrame.CanvasPosition = Vector2.zero
+				rerender()
+			end,
+		}).Parent = r
+		C.button(t, {
+			text = self:L("myShare"),
+			height = 30,
+			width = UDim.new(0, 70),
+			order = 3,
+			onClick = function()
+				self.state.shareId = if self.state.shareId == def.id then nil else def.id
+				rerender()
+			end,
+		}).Parent = r
+		local armed = false
+		local del: TextButton
+		del = C.button(t, {
+			text = self:L("myDelete"),
+			variant = "danger",
+			height = 30,
+			width = UDim.new(0, 56),
+			order = 4,
+			onClick = function()
+				if not armed then
+					armed = true
+					del.Text = self:L("deleteConfirm")
+					return
+				end
+				local keep = {}
+				for _, d in self:loadCustom() do
+					if d.id ~= def.id then
+						table.insert(keep, d)
+					end
+				end
+				self:saveCustom(keep)
+				rerender()
+			end,
+		})
+		del.Parent = r
+		if self.state.shareId == def.id then
+			local shareWrap = C.input(t, { label = self:L("shareLabel"), text = Custom.shareCode(def), order = 2, readOnly = true })
+			shareWrap.Parent = item
+		end
+		item.Parent = mine
+	end
+	local importWrap, importBox = C.input(t, { label = self:L("importLabel"), text = "", placeholder = Custom.PREFIX .. "{...}", order = 1000 })
+	importWrap.Parent = mine
+	C.button(t, {
+		text = self:L("importButton"),
+		width = UDim.new(1, 0),
+		order = 1001,
+		onClick = function()
+			local def = Custom.decode(importBox.Text)
+			if not def then
+				self:toastMessage(self:L("importBad"), "error")
+				return
+			end
+			def.id = Custom.newId() -- an import never overwrites one of yours
+			local list = self:loadCustom()
+			table.insert(list, 1, def)
+			while #list > Custom.MAX_EFFECTS do
+				table.remove(list)
+			end
+			self:saveCustom(list)
+			self:toastMessage(string.format(self:L("importOk"), def.name), "success")
+			rerender()
+		end,
+	}).Parent = mine
+	mineOuter.Parent = content
+
+	task.defer(function()
+		if C.alive(pageFrame) then
+			pageFrame.CanvasPosition = scroll
+		end
+	end)
 end
 
 ------------------------------------------------------------------------------------

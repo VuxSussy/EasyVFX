@@ -22,6 +22,7 @@ end
 
 local Presets = require(script.Shared.Presets)
 local Builder = require(script.Shared.Builder)
+local Custom = require(script.Shared.Custom)
 local Strings = require(script.Shared.Strings)
 local Runtime = require(script.Runtime.EasyVFX)
 local App = require(script.UI.App)
@@ -42,6 +43,9 @@ local function setSetting(key: string, value: any)
 		plugin:SetSetting(key, value)
 	end)
 end
+
+-- Effects people made themselves ("My Effects") join the library on start.
+Custom.register(Custom.load(setting(Custom.SETTING)))
 
 local function lang(): string
 	return if setting("EasyVFX_Lang") == "vi" then "vi" else "en" -- English unless the user picked Vietnamese

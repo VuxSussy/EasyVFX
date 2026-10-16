@@ -458,6 +458,79 @@ do
 	holder:Destroy()
 end
 
+print("== Custom effects (My Effects)")
+do
+	local Custom = H.require("Shared/Custom")
+	-- every block, normal and dark, builds and plays cleanly
+	for _, dark in { false, true } do
+		local def = Custom.newDef()
+		def.blocks = {}
+		for _, info in Custom.Blocks do
+			local b = Custom.newBlock(info.id)
+			b.dark = dark
+			b.delay = 0.05
+			table.insert(def.blocks, b)
+		end
+		def = Custom.validate(def)
+		check(def ~= nil and #def.blocks == #Custom.Blocks, "all blocks valid")
+		Custom.registerOne(def)
+		H.warnings = {}
+		local holder = roblox.Instance.new("Part")
+		holder.Anchored = true
+		holder.Parent = H.workspace
+		local ok, root = pcall(Builder.create, Builder.defaultParams(def.id), {
+			cframe = roblox.CFrame.new(0, 3, 0),
+			size = roblox.Vector3.new(4, 4, 4),
+			parent = holder,
+			weldTo = holder,
+		})
+		check(ok, "custom create (dark=" .. tostring(dark) .. "): " .. tostring(root))
+		if ok then
+			local okPlay, len = pcall(EasyVFX.PlayLocal, root)
+			check(okPlay and len > 0, "custom plays: " .. tostring(len))
+			waitForQuiet(400)
+			for _ = 1, 30 do
+				task.wait()
+			end
+			check(#H.warnings == 0, "custom no warnings: " .. table.concat(H.warnings, " | "))
+			if dark then
+				local unlit = false
+				for _, d in root:GetDescendants() do
+					if d:IsA("Configuration") and d:GetAttribute("Glow") == 0 and d:GetAttribute("CoreGlow") == 1 then
+						unlit = true
+					end
+				end
+				check(unlit, "dark blocks get an unlit body and a glowing core")
+			end
+			-- the effect carries its definition: forgetting it and reading back re-learns it
+			Custom.register({})
+			check(Presets.ById[def.id] == nil, "forgotten")
+			local back = Builder.readParams(root)
+			check(back ~= nil and Presets.ById[def.id] ~= nil, "re-registered from VFX_CustomDef")
+		end
+		holder:Destroy()
+	end
+	-- untrusted input
+	check(Custom.decode("garbage") == nil, "rejects garbage")
+	check(Custom.decode('{"blocks":[{"block":"nope"}]}') == nil, "rejects unknown blocks")
+	local big = Custom.decode('{"id":"custom_x\'; drop","name":"' .. string.rep("a", 500) .. '","blocks":[{"block":"ring","size":1e9,"amount":-5,"delay":99,"color":"evil"}]}')
+	check(big ~= nil, "clamps instead of failing")
+	if big then
+		local b = big.blocks[1]
+		check(b.size == 4 and b.amount == 0.2 and b.delay == 3 and b.color == "p", "numbers clamped and color whitelisted")
+		check(#big.name <= 40 and big.id:match("^custom_[%w_]+$") ~= nil, "name and id sanitised")
+	end
+	local many = { blocks = {} }
+	for _ = 1, 100 do
+		table.insert(many.blocks, { block = "lines" })
+	end
+	check(#(Custom.validate(many) :: any).blocks == Custom.MAX_BLOCKS, "block count capped")
+	local def = Custom.newDef()
+	local round = Custom.decode(Custom.shareCode(def))
+	check(round ~= nil and round.id == def.id and #round.blocks == #def.blocks, "share code round-trip")
+	Custom.register({})
+end
+
 print("== Server mode forwards to clients")
 H.setMode("server")
 do
