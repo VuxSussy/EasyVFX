@@ -4,6 +4,14 @@ All notable changes to EasyVFX are listed here. Versions follow [Semantic Versio
 
 ## [Unreleased]
 
+### Sharper slashes
+- The `Slash` shape was rebuilt as a real blade:
+  - **Shape:** the outer edge is one clean arc, and the width grows inwards to peak near the head and end in a needle tip, with a long thin tail. It used to be a symmetric "banana" band.
+  - **Color:** three tones across the blade (deep shade on the inner edge, main-color body, white-hot outer edge) instead of a flat band with a white stripe in the middle.
+  - **Timing:** a fast wipe-in, then the tail erodes towards the head, so the tips stay sharp. 12 segments cover only the visible part of the arc.
+- Wider default slash widths (Crescent Slash 2, Slash Flurry 1.6, Shadow Slash 2.6). Runtime version 7. See `docs/slash-before-after.png`.
+
+
 ### Dark fantasy
 - New **Dark Fantasy** category with 8 presets: Shadow Slash, Soul Flame, Blood Burst, Void Rift, Cursed Sigil, Necrotic Aura, Soul Release, Ash & Embers.
 - Dark bodies with bright edges: shapes accept `Glow = 0` (unlit, opaque) together with `CoreGlow` and a `core` color for the thin additive core. A new `"x"` (void) color token gives a near-black tinted by the second color.

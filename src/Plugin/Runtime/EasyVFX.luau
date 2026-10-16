@@ -28,7 +28,7 @@ local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 
 local EasyVFX = {}
-EasyVFX.Version = 6
+EasyVFX.Version = 7
 EasyVFX.Tag = "EasyVFX"
 -- 0.25 .. 1. Multiplies particle, line and rock counts. Lowered automatically on the
 -- client when the player picks a low graphics level.
@@ -460,7 +460,23 @@ Shapes.Ring = function(cfg, ctx)
 	return delay + stagger * (count - 1) + duration
 end
 
--- Anime crescent slash: a curved, tapered ribbon that sweeps and fades.
+-- Anime crescent slash: a blade-shaped crescent that wipes in fast, then erodes from
+-- the tail towards the head.
+--   * The outer edge is one clean arc; the width grows inwards, peaks near the head
+--     and ends in a needle tip, with a long thin tail (not a symmetric banana).
+--   * Three tones across the blade, like anime slashes: a deep shade along the inner
+--     edge, the main-color body (gradient tail -> head) and a thin white-hot edge on
+--     the outer rim. Beams can't fade across their width, so the glow itself is left
+--     to Bloom instead of a flat, muddy halo ribbon.
+--   * All segments cover only the visible part of the arc, so the curve and tips stay
+--     smooth while it erodes.
+local SLASH_PEAK = 0.736 ^ 1.4 * (1 - 0.736) ^ 0.5
+
+local function bladeWidth(g: number): number
+	g = math.clamp(g, 0, 1)
+	return (g ^ 1.4) * (1 - g) ^ 0.5 / SLASH_PEAK
+end
+
 Shapes.Slash = function(cfg, ctx)
 	local count = math.clamp(math.floor(num(cfg, "Count", 1)), 1, 12)
 	local stagger = num(cfg, "Stagger", 0.07)
@@ -474,62 +490,94 @@ Shapes.Slash = function(cfg, ctx)
 	local tailFade = math.clamp(num(cfg, "TailFade", 0.75), 0, 1)
 	local style = readStyle(cfg)
 	local base = ctx.origin * CFrame.new(vec(cfg, "Offset", Vector3.zero)) * rad(vec(cfg, "Tilt", Vector3.zero))
-	local N = 6
+	local N = 12
+	-- width multiplier, inward offset of the ribbon's center (x width), core look
+	local layers = {
+		{ key = "body", widthK = 1, offK = 0.5, isCore = false, on = true },
+		{ key = "inner", widthK = 0.38, offK = 0.8, isCore = false, on = style.glow > 0.05 },
+		{ key = "edge", widthK = 0.26, offK = 0.13, isCore = true, on = style.core },
+	}
 
 	for i = 0, count - 1 do
 		local roll = if randomTilt > 0 then ctx.rng:NextNumber(-randomTilt, randomTilt) else 0
 		local yaw = if randomTilt > 0 then ctx.rng:NextNumber(-randomTilt, randomTilt) * 0.4 else 0
 		local cf = base * CFrame.Angles(0, math.rad(yaw), math.rad(roll))
 		local carrier = newPart(cf)
-		local atts: { Attachment } = {}
-		local beams: { Beam } = {}
-		local cores: { Beam } = {}
-		for k = 0, N do
-			atts[k + 1] = newAttachment(carrier)
-		end
-		for k = 1, N do
-			beams[k] = newBeam(carrier, atts[k], atts[k + 1], style, false)
-			if style.core then
-				cores[k] = newBeam(carrier, atts[k], atts[k + 1], style, true)
+		local chains = {}
+		for _, layer in layers do
+			if layer.on then
+				local atts: { Attachment } = {}
+				local beams: { Beam } = {}
+				for k = 0, N do
+					atts[k + 1] = newAttachment(carrier)
+				end
+				for k = 1, N do
+					local b = newBeam(carrier, atts[k], atts[k + 1], style, layer.isCore)
+					b.Segments = 8
+					-- keep the body and the shade saturated; only the edge is white-hot
+					if layer.key == "body" then
+						b.Brightness = style.brightness * 0.65
+					elseif layer.key == "inner" then
+						b.Brightness = style.brightness * 0.8
+						b.ZOffset = style.zOffset + 0.05
+					elseif layer.key == "edge" then
+						b.Brightness = style.brightness * 2
+						b.ZOffset = style.zOffset + 0.1
+					end
+					beams[k] = b
+				end
+				table.insert(chains, { layer = layer, atts = atts, beams = beams })
 			end
 		end
+		local start = -math.pi / 2 - arc / 2
 		local function step(alpha: number)
 			local e = ease(alpha, style.ease)
-			local reveal = math.min(1, alpha / 0.3)
-			reveal = 1 - (1 - reveal) ^ 2
-			local span = arc * math.max(0.02, reveal)
-			local r = radius * (1 + 0.15 * e)
-			local start = -math.pi / 2 - arc / 2
-			local s = span / N
-			local c = r * KAPPA * math.tan(s / 4)
+			-- fast wipe in, then the tail eats towards the head
+			local head = 1 - (1 - math.min(1, alpha / 0.2)) ^ 3
+			local tail = math.clamp((alpha - 0.3) / 0.7, 0, 1) ^ 1.5
+			local spanF = math.max(0.002, head - tail)
+			local r = radius * (1 + 0.08 * e)
+			local fadeOut = math.clamp((alpha - 0.75) / 0.25, 0, 1) ^ 2
+			local baseT = lerp(style.fade0, 1, fadeOut)
+			local thin = 1 - 0.35 * tail
 			carrier.CFrame = cf * CFrame.Angles(0, lerp(-sweep / 2, sweep / 2, e), 0)
 			local eye = eyeIn(carrier)
-			for k = 0, N do
-				local th = start + s * k
-				local p = Vector3.new(math.cos(th) * r, 0, math.sin(th) * r)
-				local t = Vector3.new(-math.sin(th), 0, math.cos(th))
-				atts[k + 1].CFrame = ribbonFrame(p, t, eye)
-			end
-			local base_t = fadeAt(style, alpha)
-			for k = 1, N do
-				-- k = N is the leading edge: widest near the head, sharp at both tips
-				local f0 = (k - 1) / N
-				local f1 = k / N
-				local w0 = width * math.sin(math.pi * f0 ^ 0.8)
-				local w1 = width * math.sin(math.pi * f1 ^ 0.8)
-				local t0 = lerp(base_t, 1, (1 - f0) * tailFade)
-				local t1 = lerp(base_t, 1, (1 - f1) * tailFade)
-				local b = beams[k]
-				b.CurveSize0, b.CurveSize1 = c, c
-				b.Width0, b.Width1 = w0, w1
-				b.Transparency = NumberSequence.new(t0, t1)
-				-- One gradient across all segments; a full gradient per segment shows bands.
-				b.Color = ColorSequence.new(style.color1:Lerp(style.color0, f0), style.color1:Lerp(style.color0, f1))
-				local cb = cores[k]
-				if cb then
-					cb.CurveSize0, cb.CurveSize1 = c, c
-					cb.Width0, cb.Width1 = w0 * 0.3, w1 * 0.3
-					cb.Transparency = NumberSequence.new(t0, t1)
+			local dTheta = arc * spanF / N
+			local kappa = KAPPA * math.tan(dTheta / 4)
+			for _, chain in chains do
+				local layer = chain.layer
+				local rc = table.create(N + 1, 0)
+				local wk = table.create(N + 1, 0)
+				for k = 0, N do
+					local g = k / N
+					local w = width * bladeWidth(g) * thin
+					wk[k + 1] = w
+					rc[k + 1] = r - w * layer.offK
+					local th = start + arc * (tail + spanF * g)
+					local p = Vector3.new(math.cos(th) * rc[k + 1], 0, math.sin(th) * rc[k + 1])
+					local t = Vector3.new(-math.sin(th), 0, math.cos(th))
+					chain.atts[k + 1].CFrame = ribbonFrame(p, t, eye)
+				end
+				for k = 1, N do
+					local g0, g1 = (k - 1) / N, k / N
+					local b = chain.beams[k]
+					b.CurveSize0, b.CurveSize1 = rc[k] * kappa, rc[k + 1] * kappa
+					b.Width0, b.Width1 = wk[k] * layer.widthK, wk[k + 1] * layer.widthK
+					-- the tail end is a little see-through; everything fades together at the end
+					local t0 = lerp(baseT, 1, ((1 - g0) ^ 3) * tailFade * 0.6)
+					local t1 = lerp(baseT, 1, ((1 - g1) ^ 3) * tailFade * 0.6)
+					if layer.key == "inner" then
+						b.Transparency = NumberSequence.new(t0, t1)
+						local deep = style.color1:Lerp(Color3.new(0, 0, 0), 0.3)
+						b.Color = ColorSequence.new(deep:Lerp(style.color0, g0 * 0.35), deep:Lerp(style.color0, g1 * 0.35))
+					elseif layer.key == "edge" then
+						b.Transparency = NumberSequence.new(t0, t1)
+						b.Color = ColorSequence.new(style.coreColor:Lerp(style.color0, (1 - g0) * 0.6), style.coreColor:Lerp(style.color0, (1 - g1) * 0.6))
+					else
+						b.Transparency = NumberSequence.new(t0, t1)
+						-- one gradient across the whole blade: second color at the tail, main at the head
+						b.Color = ColorSequence.new(style.color1:Lerp(style.color0, g0), style.color1:Lerp(style.color0, g1))
+					end
 				end
 			end
 		end
