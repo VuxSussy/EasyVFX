@@ -96,7 +96,7 @@ end
 
 Custom.Blocks = {
 	{ id = "slash", vi = "Vệt chém", en = "Slash", make = function(m: Mod)
-		return shape("Slash", { Radius = 5, Arc = 160, Width = 1.6, Sweep = 50, Duration = 0.45 }, m)
+		return shape("Slash", { Radius = 5, Arc = 160, Width = 2, Sweep = 50, Duration = 0.45 }, m)
 	end },
 	{ id = "ring", vi = "Vòng sóng", en = "Shockwave ring", make = function(m: Mod)
 		return shape("Ring", { Radius0 = 0.5, Radius1 = 9, Width0 = 1.2, Width1 = 0.05, Duration = 0.45 }, m)
