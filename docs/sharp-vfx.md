@@ -31,7 +31,7 @@ What EasyVFX does instead (`ribbonFrame` in the runtime):
 
 Renderers (Blender Cycles included) write **black RGB into fully transparent pixels**. Roblox filters textures bilinearly and builds mipmaps from straight alpha, so that black bleeds into every soft edge. The result is a grey or dark rim, and a dirty, crunchy look once the effect is a bit away from the camera.
 
-The EasyVFX pack measured 0.01–0.22 RGB in its transparent areas. `tools/fix_texture_edges.py` pushes the visible color outwards (push-pull fill) without touching alpha, and `blender/make_vfx_pack.py` now writes white RGB everywhere, because every pack texture is white with the shape in alpha. As a bonus, the PNGs shrank from 3.5 MB to 1.5 MB.
+The EasyVFX pack measured 0.01–0.22 RGB in its transparent areas. `tools/fix_texture_edges.py` pushes the visible color outwards (push-pull fill) without touching alpha, and `blender/make_vfx_pack.py` now writes white RGB everywhere, because every pack texture is white with the shape in alpha. The pack was re-rendered that way: the PNGs went from 3.5 MB to 1.4 MB and the FBX from 3.7 MB to 2.0 MB.
 
 ```bash
 python tools/fix_texture_edges.py pack/textures/*.png

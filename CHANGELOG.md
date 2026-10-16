@@ -15,7 +15,7 @@ All notable changes to EasyVFX are listed here. Versions follow [Semantic Versio
 ### Sharper effects
 - Chained beams no longer use `FaceCamera`. The runtime turns their shared attachments towards the camera every frame, which removes the notch at every joint of slashes, rings, needles, lightning (now with mitered corners), spirals and trails.
 - Slash and projectile gradients run across the whole ribbon instead of restarting on every segment.
-- Pack textures are edge-padded: no more black RGB under transparent pixels bleeding into soft edges (`tools/fix_texture_edges.py`; the Blender script now writes clean textures). The PNGs also shrank from 3.5 MB to 1.5 MB. `pack/EasyVFX_Pack.fbx` still embeds the old textures until it is re-rendered with Blender; use the PNGs (Bulk Import + Paste IDs) for the clean ones.
+- Pack textures are edge-padded: no more black RGB under transparent pixels bleeding into soft edges (`tools/fix_texture_edges.py`; the Blender script now writes clean textures). The whole pack was re-rendered with Blender 5.2: the PNGs went from 3.5 MB to 1.4 MB and `EasyVFX_Pack.fbx` from 3.7 MB to 2.0 MB, with the same object names.
 
 ### Fixes
 - The template copies of `EasyVFXServer` / `EasyVFXClient` inside the plugin ran during playtests despite `Enabled = false`. They started the runtime a second time on clients and errored on the server. They now do nothing while inside the plugin.
