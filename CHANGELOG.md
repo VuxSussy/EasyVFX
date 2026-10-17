@@ -4,6 +4,17 @@ All notable changes to EasyVFX are listed here. Versions follow [Semantic Versio
 
 ## [Unreleased]
 
+### Eclipse Animator: vibe → edit → asset
+- `EasyVFX.BindAnimation(track, character)` plays effects at animation markers:
+  - `EasyVFX` markers carry an effect name (with an optional body part, offset and rotation).
+  - `EclipseVFX` markers are Eclipse Animator's own; when they point at an EasyVFX effect, the whole effect plays, including shapes, shakes and impact frames.
+  - `EasyVFX.PlayMarker` and `EasyVFX.ParseMarker` are available on their own.
+- `EclipseBridge` writes Eclipse Animator's own event-track format (`EclipseEvents`, version 8) plus the markers Eclipse exports. AI-made cues therefore open, and can be edited, in Eclipse.
+  - Checked against Eclipse's code: its `Events.load` reads the cues back, and its `Events.export` writes the same markers.
+- While Studio is in edit mode, the plugin exposes `ServerStorage.EasyVFX_Authoring` (Builder, Presets, Custom, EclipseBridge, Runtime) for AI agents and command-bar scripts. It is never saved with the place.
+- `docs/eclipse-animator.md`: the flow, the format and an agent recipe. Runtime version 8.
+
+
 ### Sharper slashes
 - The `Slash` shape was rebuilt as a real blade:
   - **Shape:** the outer edge is one clean arc, and the width grows inwards to peak near the head and end in a needle tip, with a long thin tail. It used to be a symmetric "banana" band.

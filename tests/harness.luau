@@ -214,6 +214,28 @@ env = setmetatable({
 }, { __index = _G })
 
 function Harness.install()
+	-- Animation data (Lune has the classes but not these methods)
+	roblox.implementMethod("KeyframeSequence", "GetKeyframes", function(seq)
+		local out = {}
+		for _, c in seq:GetChildren() do
+			if c:IsA("Keyframe") then
+				table.insert(out, c)
+			end
+		end
+		table.sort(out, function(a, b)
+			return a.Time < b.Time
+		end)
+		return out
+	end)
+	roblox.implementMethod("Keyframe", "GetMarkers", function(key)
+		local out = {}
+		for _, c in key:GetChildren() do
+			if c:IsA("KeyframeMarker") then
+				table.insert(out, c)
+			end
+		end
+		return out
+	end)
 	local serde = require("@lune/serde")
 	local guidCount = 0
 	roblox.implementMethod("HttpService", "JSONEncode", function(_hs, value)
