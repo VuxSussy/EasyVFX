@@ -9,6 +9,7 @@
 		EasyVFX.Play(workspace.Part.VFX_Explosion)          -- play an effect where it is
 		EasyVFX.Play("VFX_Explosion", CFrame.new(0, 5, 0))  -- play a copy somewhere else
 		EasyVFX.SetEnabled(effect, false)                    -- turn looping layers off
+		EasyVFX.BindAnimation(track, character)              -- fire effects at animation markers
 
 	How it works:
 	  * Called on the server, Play() asks every client to play the effect (one small
@@ -23,12 +24,13 @@
 ]]
 
 local CollectionService = game:GetService("CollectionService")
+local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 
 local EasyVFX = {}
-EasyVFX.Version = 8
+EasyVFX.Version = 9
 EasyVFX.Tag = "EasyVFX"
 -- 0.25 .. 1. Multiplies particle, line and rock counts. Lowered automatically on the
 -- client when the player picks a low graphics level.
@@ -1972,6 +1974,166 @@ function EasyVFX.Play(target: Instance | string, at: CFrame?): number
 		return 0
 	end
 	return EasyVFX.PlayLocal(target, at)
+end
+
+------------------------------------------------------------------------------------
+-- Animation markers: effects timed to an animation (Eclipse Animator, Moon, the
+-- Roblox Animation Editor...). Two marker names are understood:
+--
+--   "EasyVFX"    Value = an effect name ("VFX_CrescentSlash"), optionally with a body
+--                part or attachment to play it at ("VFX_CrescentSlash@RightHand"), or
+--                JSON: {"effect":"VFX_GroundSlam","at":"HumanoidRootPart",
+--                       "offset":[0,-3,-4],"rot":[0,0,0]}
+--                (offset in studs and rot in degrees, in the space of "at").
+--   "EclipseVFX" Eclipse Animator's own event-track markers. When an emit points at an
+--                EasyVFX effect inside the character, the whole effect plays, including
+--                shapes, shakes and impact frames that Eclipse's emitter alone skips.
+--
+-- Effects are looked up in ReplicatedStorage.EasyVFX_Effects first, then among all
+-- EasyVFX effects in the game. The copy is played where the marker says, so one
+-- template serves every character.
+------------------------------------------------------------------------------------
+
+type Marker = { effect: string, at: string?, offset: Vector3, rot: Vector3 }
+
+local function vector(v: any): Vector3
+	if type(v) == "table" and type(v[1]) == "number" and type(v[2]) == "number" and type(v[3]) == "number" then
+		return Vector3.new(v[1], v[2], v[3])
+	end
+	return Vector3.zero
+end
+
+-- Reads a marker value. Returns nil for anything malformed (markers are data).
+function EasyVFX.ParseMarker(value: string?): Marker?
+	if type(value) ~= "string" or value == "" or #value > 2000 then
+		return nil
+	end
+	local trimmed = value:match("^%s*(.-)%s*$") :: string
+	if trimmed:sub(1, 1) == "{" then
+		local ok, data = pcall(function()
+			return HttpService:JSONDecode(trimmed)
+		end)
+		if not ok or type(data) ~= "table" or type(data.effect) ~= "string" or data.effect == "" then
+			return nil
+		end
+		return {
+			effect = data.effect,
+			at = if type(data.at) == "string" and data.at ~= "" then data.at else nil,
+			offset = vector(data.offset),
+			rot = vector(data.rot),
+		}
+	end
+	local effect, at = trimmed:match("^([^@]+)@(.+)$")
+	return { effect = effect or trimmed, at = at, offset = Vector3.zero, rot = Vector3.zero }
+end
+
+local function findEffect(name: string): Instance?
+	local folder = game:GetService("ReplicatedStorage"):FindFirstChild("EasyVFX_Effects")
+	local inFolder = folder and folder:FindFirstChild(name, true)
+	if inFolder and inFolder:HasTag(EasyVFX.Tag) then
+		return inFolder
+	end
+	return findByName(name)
+end
+
+local function anchorOf(character: Instance, name: string?): CFrame
+	local inst: Instance? = nil
+	if name then
+		inst = if character.Name == name then character else character:FindFirstChild(name, true)
+	end
+	if not inst then
+		inst = character:FindFirstChild("HumanoidRootPart") or character
+	end
+	return originOf(inst :: Instance)
+end
+
+-- Plays the effect a marker describes, relative to `character`. Returns its length.
+function EasyVFX.PlayMarker(character: Instance, value: string?): number
+	local marker = EasyVFX.ParseMarker(value)
+	if not marker then
+		return 0
+	end
+	local effect = findEffect(marker.effect)
+	if not effect then
+		warn("[EasyVFX] Animation marker: no effect named " .. marker.effect)
+		return 0
+	end
+	local cf = anchorOf(character, marker.at) * CFrame.new(marker.offset) * rad(marker.rot)
+	return EasyVFX.Play(effect, cf)
+end
+
+-- The EasyVFX effect an Eclipse emit path points at (the path is relative to the
+-- root passed to Bind), or nil when it targets a plain emitter Eclipse handles.
+local function eclipseTarget(root: Instance, path: any): Instance?
+	if type(path) ~= "table" or #path > 128 then
+		return nil
+	end
+	local target: Instance? = root
+	for _, step in path do
+		if not target or type(step) ~= "table" or type(step.Name) ~= "string" then
+			return nil
+		end
+		local found, index = nil, 0
+		for _, child in (target :: Instance):GetChildren() do
+			if child.Name == step.Name and child.ClassName == step.Class then
+				index += 1
+				if index == step.Index then
+					found = child
+					break
+				end
+			end
+		end
+		target = found
+	end
+	local node: Instance? = target
+	while node and node ~= root.Parent do
+		if (node :: Instance):HasTag(EasyVFX.Tag) then
+			return node
+		end
+		node = node.Parent
+	end
+	return nil
+end
+
+-- Fires effects at an AnimationTrack's markers. Call it where the animation plays
+-- (usually the client for player characters). Returns a binding with Disconnect().
+function EasyVFX.BindAnimation(track: AnimationTrack, character: Instance): { Disconnect: (any) -> () }
+	-- the animation also freezes with the effects on a hit-stop
+	EasyVFX.TrackHitStop(track)
+	local connections: { RBXScriptConnection } = {}
+	table.insert(
+		connections,
+		track:GetMarkerReachedSignal("EasyVFX"):Connect(function(value)
+			EasyVFX.PlayMarker(character, value)
+		end)
+	)
+	table.insert(
+		connections,
+		track:GetMarkerReachedSignal("EclipseVFX"):Connect(function(value)
+			local ok, data = pcall(function()
+				return HttpService:JSONDecode(value)
+			end)
+			if not ok or type(data) ~= "table" or type(data.Emits) ~= "table" then
+				return
+			end
+			local played: { [Instance]: boolean } = {}
+			for _, row in data.Emits do
+				local effect = if type(row) == "table" then eclipseTarget(character, row.Path) else nil
+				if effect and not played[effect] then
+					played[effect] = true
+					EasyVFX.Play(effect)
+				end
+			end
+		end)
+	)
+	return {
+		Disconnect = function()
+			for _, c in connections do
+				c:Disconnect()
+			end
+			table.clear(connections)
+		end,
+	}
 end
 
 -- Turns the always-on layers (looping emitters, beams, lights...) on or off.
