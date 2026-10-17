@@ -30,7 +30,7 @@ local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 
 local EasyVFX = {}
-EasyVFX.Version = 8
+EasyVFX.Version = 9
 EasyVFX.Tag = "EasyVFX"
 -- 0.25 .. 1. Multiplies particle, line and rock counts. Lowered automatically on the
 -- client when the player picks a low graphics level.
@@ -1429,7 +1429,17 @@ function EasyVFX.PlayLocal(target: Instance | string, at: CFrame?): number
 	if at then
 		-- Play a temporary copy somewhere else.
 		local copy = root:Clone()
+		local delta = at * originOf(root):Inverse()
 		for _, d in copy:GetDescendants() do
+			if d:IsA("BasePart") then
+				d.Anchored = true
+				d.CanCollide = false
+				d.CanTouch = false
+				d.CanQuery = false
+				if copy:IsA("BasePart") then
+					d.CFrame = delta * d.CFrame
+				end
+			end
 			if d:IsA("JointInstance") or d:IsA("WeldConstraint") or d:IsA("BaseScript") then
 				d:Destroy()
 			end
@@ -1438,6 +1448,9 @@ function EasyVFX.PlayLocal(target: Instance | string, at: CFrame?): number
 		copy.Archivable = false
 		if copy:IsA("BasePart") then
 			copy.Anchored = true
+			copy.CanCollide = false
+			copy.CanTouch = false
+			copy.CanQuery = false
 			copy.CFrame = at
 		elseif copy:IsA("Model") then
 			copy:PivotTo(at)
