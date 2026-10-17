@@ -708,6 +708,267 @@ do
 	waitForQuiet(200)
 	check(#H.warnings == 0, "weight tools no warnings: " .. table.concat(H.warnings, " | "))
 	streak:Destroy()
+print("== Animation markers (EasyVFX + Eclipse Animator)")
+do
+	-- markers parse in both forms and reject junk
+	local m = EasyVFX.ParseMarker("VFX_CrescentSlash@RightHand")
+	check(m ~= nil and m.effect == "VFX_CrescentSlash" and m.at == "RightHand", "shorthand marker")
+	local j = EasyVFX.ParseMarker('{"effect":"VFX_GroundSlam","at":"HumanoidRootPart","offset":[0,-3,-4],"rot":[0,90,0]}')
+	check(j ~= nil and j.effect == "VFX_GroundSlam" and j.offset == roblox.Vector3.new(0, -3, -4), "JSON marker")
+	check(EasyVFX.ParseMarker("") == nil and EasyVFX.ParseMarker("{bad json") == nil and EasyVFX.ParseMarker('{"at":"x"}') == nil, "junk rejected")
+
+	-- a character with a hand, and an effect template in ReplicatedStorage.EasyVFX_Effects
+	local character = roblox.Instance.new("Model")
+	character.Name = "Hero"
+	local hrp = roblox.Instance.new("Part")
+	hrp.Name = "HumanoidRootPart"
+	hrp.Anchored = true
+	hrp.CFrame = roblox.CFrame.new(30, 3, 0)
+	hrp.Parent = character
+	local hand = roblox.Instance.new("Part")
+	hand.Name = "RightHand"
+	hand.Anchored = true
+	hand.CFrame = roblox.CFrame.new(32, 4, -1)
+	hand.Parent = character
+	character.Parent = H.workspace
+	local folder = roblox.Instance.new("Folder")
+	folder.Name = "EasyVFX_Effects"
+	folder.Parent = H.game:GetService("ReplicatedStorage")
+	local holder = roblox.Instance.new("Part")
+	holder.Parent = folder
+	local template = Builder.create(Builder.defaultParams("slash"), {
+		cframe = roblox.CFrame.new(0, -50, 0),
+		size = roblox.Vector3.new(4, 4, 4),
+		parent = holder,
+	})
+	template:SetAttribute("VFX_Trigger", "Script")
+
+	-- a fake AnimationTrack with marker signals
+	local signals = {}
+	local function signal()
+		local s = { handlers = {} }
+		function s:Connect(fn)
+			table.insert(self.handlers, fn)
+			local conn = { Connected = true }
+			function conn.Disconnect()
+				conn.Connected = false
+				local i = table.find(s.handlers, fn)
+				if i then
+					table.remove(s.handlers, i)
+				end
+			end
+			return conn
+		end
+		function s:Fire(...)
+			for _, fn in table.clone(self.handlers) do
+				fn(...)
+			end
+		end
+		return s
+	end
+	local track = {}
+	function track:GetMarkerReachedSignal(name)
+		signals[name] = signals[name] or signal()
+		return signals[name]
+	end
+
+	H.warnings = {}
+	local binding = EasyVFX.BindAnimation(track :: any, character)
+	signals.EasyVFX:Fire(template.Name .. "@RightHand")
+	task.wait()
+	task.wait()
+	local live = (H.workspace.CurrentCamera or H.workspace):FindFirstChild("EasyVFX_Live")
+	local copy = nil
+	if live then
+		for _, c in live:GetChildren() do
+			if c.Name == template.Name then
+				copy = c
+			end
+		end
+	end
+	check(copy ~= nil, "marker played a copy of the template")
+	check(copy ~= nil and (copy.CFrame.Position - hand.CFrame.Position).Magnitude < 0.01, "copy placed at the hand")
+	waitForQuiet(400)
+	for _ = 1, 40 do
+		task.wait()
+	end
+
+	-- Eclipse Animator event-track marker pointing at an effect inside the character
+	local weapon = roblox.Instance.new("Part")
+	weapon.Name = "Sword"
+	weapon.Anchored = true
+	weapon.CFrame = roblox.CFrame.new(31, 4, -2)
+	weapon.Parent = character
+	local onSword = Builder.create(Builder.defaultParams("impact"), {
+		cframe = weapon.CFrame,
+		size = roblox.Vector3.new(2, 2, 2),
+		parent = weapon,
+	})
+	onSword:SetAttribute("VFX_Trigger", "Script")
+	local emitted = false
+	H.emitted = {}
+	local payload = H.game:GetService("HttpService"):JSONEncode({
+		Version = 1,
+		Emits = { { Mode = "All", Path = { { Name = "Sword", Class = "Part", Index = 1 }, { Name = onSword.Name, Class = "Part", Index = 1 } } } },
+	})
+	signals.EclipseVFX:Fire(payload)
+	task.wait()
+	for _, n in H.emitted do
+		if n > 0 then
+			emitted = true
+		end
+	end
+	check(emitted, "EclipseVFX marker played the EasyVFX effect")
+	signals.EclipseVFX:Fire('{"Version":1,"Emits":[{"Path":"nope"}]}')
+	signals.EclipseVFX:Fire("not json")
+	signals.EasyVFX:Fire("VFX_DoesNotExist")
+	check(#H.warnings == 1 and H.warnings[1]:find("VFX_DoesNotExist") ~= nil, "unknown effect warns once: " .. table.concat(H.warnings, " | "))
+
+	binding.Disconnect()
+	check(#signals.EasyVFX.handlers == 0 and #signals.EclipseVFX.handlers == 0, "binding disconnects")
+	waitForQuiet(400)
+	for _ = 1, 40 do
+		task.wait()
+	end
+	character:Destroy()
+	folder:Destroy()
+end
+
+print("== Eclipse Animator bridge (event track format)")
+do
+	local Bridge = H.require("Shared/EclipseBridge")
+	local HttpService = H.game:GetService("HttpService")
+	local rig = roblox.Instance.new("Model")
+	rig.Name = "Rig"
+	local hrp = roblox.Instance.new("Part")
+	hrp.Name = "HumanoidRootPart"
+	hrp.Anchored = true
+	hrp.CFrame = roblox.CFrame.new(-30, 3, 0)
+	hrp.Parent = rig
+	local hand = roblox.Instance.new("Part")
+	hand.Name = "RightHand"
+	hand.CFrame = roblox.CFrame.new(-28, 4, -1)
+	hand.Parent = rig
+	rig.Parent = H.workspace
+	local saves = roblox.Instance.new("Folder")
+	saves.Name = "AnimSaves"
+	saves.Parent = rig
+	local seq = roblox.Instance.new("KeyframeSequence")
+	seq.Name = "Slash Combo"
+	seq.Parent = saves
+	for _, t in { 0, 0.25, 0.5 } do
+		local k = roblox.Instance.new("Keyframe")
+		k.Time = t
+		k.Parent = seq
+	end
+
+	-- one effect attached to the hand (Eclipse emit), one template elsewhere (marker)
+	local holder = roblox.Instance.new("Part")
+	holder.Parent = H.workspace
+	local slash = Builder.create(Builder.defaultParams("slash"), { cframe = roblox.CFrame.new(), size = roblox.Vector3.new(4, 4, 4), parent = holder })
+	Bridge.attach(rig, slash, "RightHand", roblox.CFrame.new(0, 0, -2))
+	check(slash.Parent and slash.Parent.Name == "EasyVFX" and slash.Parent.Parent == rig, "effect moved into the rig")
+	check(slash:FindFirstChild("EasyVFX_Weld") ~= nil and slash:GetAttribute("VFX_Trigger") == "Script", "welded and script-triggered")
+	local folder = roblox.Instance.new("Folder")
+	folder.Name = "EasyVFX_Effects"
+	folder.Parent = H.game:GetService("ReplicatedStorage")
+	local slamHolder = roblox.Instance.new("Part")
+	slamHolder.Parent = folder
+	local slam = Builder.create(Builder.defaultParams("ground_slam"), { cframe = roblox.CFrame.new(0, -60, 0), size = roblox.Vector3.new(4, 4, 4), parent = slamHolder })
+	slam:SetAttribute("VFX_Trigger", "Script")
+
+	local doc = Bridge.writeEvents(rig, seq, {
+		{ time = 0.25, effect = slash, name = "Swing" },
+		{ time = 0.5, effect = slam, at = "HumanoidRootPart", offset = roblox.Vector3.new(0, -3, -4) },
+		{ time = 0.5, effect = slash },
+	})
+	check(doc.Name == "EclipseEvents" and doc.Parent == seq and doc:GetAttribute("Version") == 8, "Eclipse event document")
+	check(doc:GetAttribute("FPS") == 60 and seq:GetAttribute("EclipseEventDocumentId") ~= nil and rig:GetAttribute("EclipseEventRigId") ~= nil, "document ids and FPS")
+	local events = Bridge.readEvents(seq)
+	check(#events == 2 and events[1].frame == 15 and events[2].frame == 30, "two events at frames 15 and 30")
+	local e1 = events[1]
+	check(#e1.emits == 1 and e1.emits[1].Mode == "All", "attached effect is an Eclipse emit")
+	-- the emit path resolves to the effect, the way Eclipse resolves it
+	local cursor = rig
+	for _, step in e1.emits[1].Path do
+		local count, found = 0, nil
+		for _, child in cursor:GetChildren() do
+			if child.Name == step.Name and child.ClassName == step.Class then
+				count += 1
+				if count == step.Index then
+					found = child
+					break
+				end
+			end
+		end
+		cursor = found
+		if not cursor then
+			break
+		end
+	end
+	check(cursor == slash, "emit path resolves to the effect")
+	local e2 = events[2]
+	check(#e2.emits == 1 and #e2.markers == 1 and e2.markers[1].Name == "EasyVFX", "same-frame cues share one event")
+	local payload = EasyVFX.ParseMarker(e2.markers[1].Parameter)
+	check(payload ~= nil and payload.effect == slam.Name and payload.at == "HumanoidRootPart", "marker payload")
+	for _, item in doc:GetChildren() do
+		if not item:IsA("Folder") then
+			continue
+		end
+		check(item:FindFirstChild("Markers") and item:FindFirstChild("Emits") and item:FindFirstChild("CodeBegin") and item:FindFirstChild("Sounds"), "event has Eclipse's fields")
+	end
+
+	-- KeyframeMarkers for the game, like Eclipse's export
+	local markers = {}
+	for _, key in seq:GetKeyframes() do
+		for _, m in key:GetMarkers() do
+			table.insert(markers, { name = m.Name, value = m.Value, time = key.Time })
+		end
+	end
+	local names = {}
+	for _, m in markers do
+		names[m.name .. "@" .. m.time] = true
+	end
+	check(names["EclipseVFX@0.25"] and names["EclipseVFX@0.5"] and names["EasyVFX@0.5"], "keyframe markers written")
+	-- rewriting replaces, never duplicates
+	Bridge.writeEvents(rig, seq, { { time = 0.25, effect = slash } })
+	local count = 0
+	for _, key in seq:GetKeyframes() do
+		count += #key:GetMarkers()
+	end
+	check(count == 1 and #Bridge.readEvents(seq) == 1, "rewrite replaces old markers and events")
+
+	-- and the markers play the full effects through BindAnimation
+	H.warnings = {}
+	H.emitted = {}
+	local signals = {}
+	local track = {}
+	function track:GetMarkerReachedSignal(name)
+		signals[name] = signals[name] or { handlers = {}, Connect = function(sig, fn)
+			table.insert(sig.handlers, fn)
+			return { Disconnect = function() end }
+		end }
+		return signals[name]
+	end
+	EasyVFX.BindAnimation(track :: any, rig)
+	for _, key in seq:GetKeyframes() do
+		for _, m in key:GetMarkers() do
+			for _, fn in signals[m.Name].handlers do
+				fn(m.Value)
+			end
+		end
+	end
+	task.wait()
+	local liveFolder = (H.workspace.CurrentCamera or H.workspace):FindFirstChild("EasyVFX_Live")
+	check((liveFolder and #liveFolder:GetChildren() > 0) or next(H.emitted) ~= nil, "Eclipse emit played the attached EasyVFX effect")
+	waitForQuiet(400)
+	for _ = 1, 40 do
+		task.wait()
+	end
+	check(#H.warnings == 0, "bridge no warnings: " .. table.concat(H.warnings, " | "))
+	rig:Destroy()
+	folder:Destroy()
+	holder:Destroy()
 end
 
 print("== Server mode forwards to clients")

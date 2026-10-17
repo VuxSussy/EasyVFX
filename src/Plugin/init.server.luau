@@ -45,6 +45,29 @@ local function setSetting(key: string, value: any)
 	end)
 end
 
+-- Authoring API for AI agents and command-bar scripts (Builder, Presets, Custom,
+-- EclipseBridge, Runtime) at ServerStorage.EasyVFX_Authoring while Studio is in
+-- edit mode. Archivable = false, so it is never saved with the place.
+if RunService:IsEdit() then
+	pcall(function()
+		local ServerStorage = game:GetService("ServerStorage")
+		local old = ServerStorage:FindFirstChild("EasyVFX_Authoring")
+		if old then
+			old:Destroy()
+		end
+		local folder = script.Shared:Clone()
+		folder.Name = "EasyVFX_Authoring"
+		folder.Archivable = false
+		local runtime = script.Runtime.EasyVFX:Clone()
+		runtime.Name = "Runtime"
+		runtime.Parent = folder
+		for _, d in folder:GetDescendants() do
+			d.Archivable = false
+		end
+		folder.Parent = ServerStorage
+	end)
+end
+
 -- Effects people made themselves ("My Effects") join the library on start.
 Custom.register(Custom.load(setting(Custom.SETTING)))
 

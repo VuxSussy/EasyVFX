@@ -36,6 +36,15 @@ All notable changes to EasyVFX are listed here. Versions follow [Semantic Versio
 - Turning HD off is remembered (`"off"`), and a new **Turn on HD (built-in pack)** button brings it back. Scan pack and Paste IDs still work for your own uploads.
 - In HD, soft smoke and blast puffs become the pack's 4x4 flipbooks (`flip_smoke`, `flip_impact`), so Smoke, Fog, Fire, Explosion and the dark fantasy smoke are HD too.
 - Existing effects in a place keep the quality they were built with; **Apply to all effects** in the HD card upgrades them.
+### Eclipse Animator: vibe → edit → asset
+- `EasyVFX.BindAnimation(track, character)` plays effects at animation markers:
+  - `EasyVFX` markers carry an effect name (with an optional body part, offset and rotation).
+  - `EclipseVFX` markers are Eclipse Animator's own; when they point at an EasyVFX effect, the whole effect plays, including shapes, shakes and impact frames.
+  - `EasyVFX.PlayMarker` and `EasyVFX.ParseMarker` are available on their own.
+- `EclipseBridge` writes Eclipse Animator's own event-track format (`EclipseEvents`, version 8) plus the markers Eclipse exports. AI-made cues therefore open, and can be edited, in Eclipse.
+  - Checked against Eclipse's code: its `Events.load` reads the cues back, and its `Events.export` writes the same markers.
+- While Studio is in edit mode, the plugin exposes `ServerStorage.EasyVFX_Authoring` (Builder, Presets, Custom, EclipseBridge, Runtime) for AI agents and command-bar scripts. It is never saved with the place.
+- `docs/eclipse-animator.md`: the flow, the format and an agent recipe. Runtime version 8.
 
 
 ### Sharper slashes
