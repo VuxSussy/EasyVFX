@@ -1,0 +1,46 @@
+{
+  "creator": "UIT_25522090",
+  "creatorUserId": 11732948357,
+  "textures": {
+    "arc_electric": "rbxassetid://115248336686988",
+    "flip_hitspark": "rbxassetid://79450510348314",
+    "hit_star": "rbxassetid://84110628902184",
+    "ring_hard": "rbxassetid://124127377570823",
+    "speed_lines": "rbxassetid://98900630467561",
+    "stroke_wind": "rbxassetid://107199801545990"
+  },
+  "files": {
+    "hit_star": {
+      "path": "pack/textures/hit_star.png",
+      "sha256": "8866b834595d7f3906d02396ddd7cf5110764408932abffc00201ef06a98d367"
+    },
+    "flip_hitspark": {
+      "path": "pack/textures/flip_hitspark.png",
+      "sha256": "dc3ce5a8bdd4efbd4a0db9ba07f4827bc5bca68bea403f29319bb1eee820e425"
+    },
+    "ring_hard": {
+      "path": "pack/textures/ring_hard.png",
+      "sha256": "d40e3f3b1502f26ce863f09d2d482c6ece6d3482057d485fddc8ccbaa303a0ae"
+    },
+    "speed_lines": {
+      "path": "pack/textures/speed_lines.png",
+      "sha256": "22bde0dc143ba982ec1f217b11a192cec33fb17b8fe66fcad5e2b1820a5d2a26"
+    },
+    "stroke_wind": {
+      "path": "pack/textures/stroke_wind.png",
+      "sha256": "2b451805dcd4a4332fe6ff4675dac0b19035b1625e1e57a350d4409a73ee9994"
+    },
+    "arc_electric": {
+      "path": "pack/textures/arc_electric.png",
+      "sha256": "eb020afdeabfd39c26e6e4c76534a329043cbb5d1e7d531634810569a15d5663"
+    }
+  },
+  "studioPreload": {
+    "rbxassetid://98900630467561": "Success",
+    "rbxassetid://115248336686988": "Success",
+    "rbxassetid://124127377570823": "Success",
+    "rbxassetid://79450510348314": "Success",
+    "rbxassetid://107199801545990": "Success",
+    "rbxassetid://84110628902184": "Success"
+  }
+}

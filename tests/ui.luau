@@ -199,6 +199,9 @@ api = {
 	disableHD = function()
 		packAssets = nil
 	end,
+	enableHD = function()
+		packAssets = table.clone(H.require("Shared/DefaultAssets"))
+	end,
 	applyAll = function()
 		local n = 0
 		for _, root in inserted do
@@ -269,17 +272,42 @@ run("categories", function()
 		fire(chip, "Activated")
 	end
 	fire(buttonWithText(app.libraryPage, "All"), "Activated")
+	-- "All" shows one titled section per category, in order
+	local titles = {}
+	for _, d in app.grid:GetDescendants() do
+		if d:IsA("TextLabel") and d.Text:find(" · %d+$") then
+			table.insert(titles, d.Text)
+		end
+	end
+	check(#titles >= 7, "section titles in All view (" .. #titles .. ")")
+	-- a single category shows its cards without a title
+	fire(buttonWithText(app.libraryPage, "Slashes"), "Activated")
+	local slashCards = findAll(app.grid, function(d)
+		return d:IsA("TextButton")
+	end)
+	check(#slashCards == 5, "5 slash cards (got " .. #slashCards .. ")")
+	fire(buttonWithText(app.libraryPage, "All"), "Activated")
+	-- the style filter narrows every category to the dark fantasy look
+	fire(buttonWithText(app.libraryPage, "Dark Fantasy"), "Activated")
+	local darkCards = findAll(app.grid, function(d)
+		return d:IsA("TextButton")
+	end)
+	check(#darkCards == 8, "8 dark fantasy cards (got " .. #darkCards .. ")")
+	fire(buttonWithText(app.libraryPage, "All styles"), "Activated")
+	check(#findAll(app.grid, function(d)
+		return d:IsA("TextButton")
+	end) == #Presets.List, "all styles shows everything again")
 end)
 run("search", function()
 	local box = findAll(app.libraryPage, function(d)
 		return d:IsA("TextBox")
 	end)[1]
-	box.Text = "lightning"
+	box.Text = "strike"
 	fire(box, "Changed:Text")
 	local shown = findAll(app.grid, function(d)
 		return d:IsA("TextButton")
 	end)
-	check(#shown == 1, "search 'lightning' finds lightning only (got " .. #shown .. ")")
+	check(#shown == 1, "search 'strike' finds Lightning Strike only (got " .. #shown .. ")")
 	box.Text = "zzzz"
 	fire(box, "Changed:Text")
 	check(app.emptyNote.Visible, "empty search note shown")
@@ -291,7 +319,7 @@ print("== Insert + customize every preset")
 for _, preset in Presets.List do
 	run("preset " .. preset.id, function()
 		local card
-		for _, d in app.grid:GetChildren() do
+		for _, d in app.grid:GetDescendants() do
 			if d:IsA("TextButton") and d.LayoutOrder == table.find(Presets.List, preset) then
 				card = d
 			end
@@ -439,6 +467,11 @@ run("hd scan", function()
 	fire(buttonWithText(app.libraryPage, app:L("hdApplyAll")), "Activated")
 	fire(buttonWithText(app.libraryPage, app:L("hdDisable")), "Activated")
 	check(api.getAssets() == nil, "HD off after disable")
+	local enable = buttonWithText(app.libraryPage, app:L("hdEnable"))
+	check(enable ~= nil, "built-in HD button when HD is off")
+	fire(enable, "Activated")
+	check(api.getAssets() ~= nil and api.getAssets().slash_arc ~= nil, "built-in pack turns HD back on")
+	check(buttonWithText(app.libraryPage, app:L("hdDisable")) ~= nil, "card shows the on state")
 end)
 
 print("== Favorites row, help, language, theme re-render")

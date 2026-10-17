@@ -315,22 +315,28 @@ end
 local T = Presets.Textures
 
 -- In HD mode the soft built-in textures are swapped for the sharp Blender ones.
-local function hdTexture(ctx: any, layer: { [string]: any }): string?
+-- Smoke and blast puffs become the pack's 4x4 flipbooks (the second return value),
+-- so every preset with smoke (Smoke, Fog, Fire, the dark fantasy ones...) is HD too.
+local function hdTexture(ctx: any, layer: { [string]: any }): (string?, boolean)
 	local assets = ctx.assets
 	if layer.pack then
-		return assets[layer.pack]
+		return assets[layer.pack], false
 	end
-	if not ctx.hd then
-		return layer.texture
+	if not ctx.hd or layer.flipbook then
+		return layer.texture, false
 	end
 	if layer.texture == T.Star then
-		return assets.spark_star or layer.texture
+		return assets.spark_star or layer.texture, false
 	elseif layer.texture == T.Glow and not layer.keepTexture then
-		return assets.glow_soft or layer.texture
+		return assets.glow_soft or layer.texture, false
 	elseif layer.texture == T.Square and layer.orientation == "VelocityParallel" then
-		return assets.spark_streak or layer.texture
+		return assets.spark_streak or layer.texture, false
+	elseif layer.texture == T.Smoke and assets.flip_smoke then
+		return assets.flip_smoke, true
+	elseif layer.texture == T.Blast and assets.flip_impact then
+		return assets.flip_impact, true
 	end
-	return layer.texture
+	return layer.texture, false
 end
 
 ------------------------------------------------------------------------------------
@@ -344,12 +350,15 @@ LayerBuilders.particles = function(ctx, key, layer)
 	local parent = layerParent(ctx, key, layer)
 	local e = getOrCreate(ctx.existing, ctx.wanted, key, "ParticleEmitter", parent) :: ParticleEmitter
 	e.Name = layer.name or (if layer.burst then "Burst" else "Stream")
-	local texture = hdTexture(ctx, layer)
+	local texture, packFlipbook = hdTexture(ctx, layer)
 	if params.texture ~= "" and not layer.pack then
 		texture = params.texture
+		packFlipbook = false
 	end
 	e.Texture = texture or Presets.Textures.Glow
-	e.FlipbookLayout = enumItem(Enum.ParticleFlipbookLayout, layer.flipbook, Enum.ParticleFlipbookLayout.None) :: any
+	e.FlipbookLayout = if packFlipbook
+		then Enum.ParticleFlipbookLayout.Grid4x4
+		else enumItem(Enum.ParticleFlipbookLayout, layer.flipbook, Enum.ParticleFlipbookLayout.None) :: any
 	e.FlipbookMode = enumItem(Enum.ParticleFlipbookMode, layer.flipMode, Enum.ParticleFlipbookMode.OneShot) :: any
 	e.FlipbookStartRandom = layer.flipRandom == true
 	e.Color = colorSequence(layer.color, params)
@@ -436,6 +445,16 @@ LayerBuilders.shape = function(ctx, key, layer)
 	attrs.Color1 = resolveColor(layer.color1 or layer.color0 or "s", params)
 	if params.texture ~= "" then
 		attrs.Texture = params.texture
+	elseif layer.beamPack and ctx.hd and ctx.assets[layer.beamPack] then
+		-- HD: a Blender stroke/arc texture over the whole ribbon
+		attrs.Texture = ctx.assets[layer.beamPack]
+	end
+	if layer.packAttrs and ctx.hd then
+		for attr, key in layer.packAttrs do
+			if ctx.assets[key] then
+				attrs[attr] = ctx.assets[key]
+			end
+		end
 	end
 	attrs.Kind = layer.kind
 	for name, value in attrs do

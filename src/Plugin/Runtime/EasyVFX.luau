@@ -28,7 +28,7 @@ local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 
 local EasyVFX = {}
-EasyVFX.Version = 7
+EasyVFX.Version = 8
 EasyVFX.Tag = "EasyVFX"
 -- 0.25 .. 1. Multiplies particle, line and rock counts. Lowered automatically on the
 -- client when the player picks a low graphics level.
@@ -81,6 +81,9 @@ local function ease(alpha: number, style: string): number
 	elseif style == "Back" then
 		local c1, c3 = 1.70158, 2.70158
 		return 1 + c3 * (alpha - 1) ^ 3 + c1 * (alpha - 1) ^ 2
+	elseif style == "Circ" then
+		-- circular out: the fastest start, a long glide (slashes, shockwaves)
+		return math.sqrt(1 - (alpha - 1) ^ 2)
 	end
 	return 1 - (1 - alpha) ^ 3 -- "Out"
 end
@@ -116,6 +119,8 @@ type Anim = {
 
 local active: { Anim } = {}
 local driverRunning = false
+-- Hit-stop: while os.clock() < frozenUntil every running effect holds its frame.
+local frozenUntil = 0
 
 local function finishAnim(a: Anim)
 	if a.finish then
@@ -134,6 +139,9 @@ local function runDriver()
 	task.spawn(function()
 		while #active > 0 do
 			local dt = task.wait()
+			if os.clock() < frozenUntil then
+				dt = 0
+			end
 			local i = 1
 			while i <= #active do
 				local a = active[i]
@@ -667,6 +675,302 @@ Shapes.Lines = function(cfg, ctx)
 	return longest
 end
 
+-- A chain of camera-facing beams through `count + 1` attachments on `carrier`
+-- (the building block of Whirl, Streak and Crackle).
+local function beamChain(carrier: BasePart, count: number, style: Style, isCore: boolean): ({ Attachment }, { Beam })
+	local atts: { Attachment } = {}
+	local beams: { Beam } = {}
+	for k = 0, count do
+		atts[k + 1] = newAttachment(carrier)
+	end
+	for k = 1, count do
+		beams[k] = newBeam(carrier, atts[k], atts[k + 1], style, isCore)
+	end
+	return atts, beams
+end
+
+-- With a Texture, a chain shows one beam from its first to its last attachment, so
+-- the texture (a brush stroke, an electric arc) spans the whole stroke once instead
+-- of repeating on every segment. The segment beams stay as the untextured fallback.
+local function texturedSpan(carrier: BasePart, atts: { Attachment }, beams: { Beam }, cores: { Beam }?, style: Style): Beam?
+	if style.texture == "" then
+		return nil
+	end
+	for _, b in beams do
+		b.Enabled = false
+	end
+	if cores then
+		for _, b in cores do
+			b.Enabled = false
+		end
+	end
+	local b = newBeam(carrier, atts[1], atts[#atts], style, false)
+	b.Segments = 24
+	return b
+end
+
+-- Whirl: a tilted disc of brush-stroke arcs spinning around the center (wind
+-- vortex, cyclone kick, spinning slash). Every stroke is tapered at both ends and
+-- has its own radius, length and speed, so it reads as a swirl, not a ring.
+Shapes.Whirl = function(cfg, ctx)
+	local strokes = math.clamp(math.floor(num(cfg, "Count", 6)), 1, 16)
+	local delay = num(cfg, "Delay", 0)
+	local duration = num(cfg, "Duration", 0.9)
+	local r0, r1 = num(cfg, "Radius0", 2), num(cfg, "Radius1", 6)
+	local width = num(cfg, "Width", 0.7)
+	local arcMin, arcMax = math.rad(num(cfg, "ArcMin", 70)), math.rad(num(cfg, "ArcMax", 200))
+	local spin = math.rad(num(cfg, "Spin", 540))
+	local grow = num(cfg, "Grow", 0.35)
+	local style = readStyle(cfg)
+	local base = ctx.origin * CFrame.new(vec(cfg, "Offset", Vector3.zero))
+	if bool(cfg, "Ground", false) then
+		base = snapToGround(base, ctx.ignore)
+	end
+	base *= rad(vec(cfg, "Tilt", Vector3.zero))
+	local N = 10
+	local carrier = newPart(base)
+	local list = {}
+	for i = 1, strokes do
+		local atts, beams = beamChain(carrier, N, style, false)
+		local cores = if style.core then select(2, beamChain(carrier, N, style, true)) else nil
+		table.insert(list, {
+			atts = atts,
+			beams = beams,
+			cores = cores,
+			span = texturedSpan(carrier, atts, beams, cores, style),
+			radius = lerp(r0, r1, (i - 0.5) / strokes) * ctx.rng:NextNumber(0.9, 1.1),
+			-- one Bezier beam can only follow ~170 degrees of arc
+			arc = math.min(ctx.rng:NextNumber(arcMin, arcMax), if style.texture ~= "" then math.rad(170) else math.huge),
+			phase = ctx.rng:NextNumber(0, math.pi * 2),
+			speed = ctx.rng:NextNumber(0.75, 1.25),
+			lift = ctx.rng:NextNumber(-0.15, 0.15) * r1,
+			width = width * ctx.rng:NextNumber(0.6, 1.2),
+		})
+	end
+	local function step(alpha: number)
+		local e = ease(alpha, style.ease)
+		-- in fast, hold, then thin out and fade
+		local env = math.min(1, alpha / 0.15) * (1 - math.clamp((alpha - 0.65) / 0.35, 0, 1) ^ 1.5)
+		local tr = lerp(1, style.fade0, env)
+		local eye = eyeIn(carrier)
+		for _, sd in list do
+			local r = sd.radius * (1 + grow * e)
+			local start = sd.phase + spin * e * sd.speed
+			local dTheta = sd.arc / N
+			local c = r * KAPPA * math.tan(dTheta / 4)
+			for k = 0, N do
+				local th = start + dTheta * k
+				local p = Vector3.new(math.cos(th) * r, sd.lift * math.sin(th * 0.5), math.sin(th) * r)
+				local t = Vector3.new(-math.sin(th), 0, math.cos(th))
+				sd.atts[k + 1].CFrame = ribbonFrame(p, t, eye)
+			end
+			for k = 1, N do
+				local g0, g1 = (k - 1) / N, k / N
+				local w0 = sd.width * math.sin(math.pi * g0) ^ 0.7 * env
+				local w1 = sd.width * math.sin(math.pi * g1) ^ 0.7 * env
+				local b = sd.beams[k]
+				b.CurveSize0, b.CurveSize1 = c, c
+				b.Width0, b.Width1 = w0, w1
+				b.Transparency = NumberSequence.new(lerp(tr, 1, (1 - g0) * 0.6), lerp(tr, 1, (1 - g1) * 0.6))
+				b.Color = ColorSequence.new(style.color1:Lerp(style.color0, g0), style.color1:Lerp(style.color0, g1))
+				local cb = sd.cores and sd.cores[k]
+				if cb then
+					cb.CurveSize0, cb.CurveSize1 = c, c
+					cb.Width0, cb.Width1 = w0 * 0.3, w1 * 0.3
+					cb.Transparency = b.Transparency
+				end
+			end
+			local span = sd.span
+			if span then
+				local whole = r * KAPPA * math.tan(sd.arc / 4)
+				span.CurveSize0, span.CurveSize1 = whole, whole
+				span.Width0, span.Width1 = sd.width * 2 * env, sd.width * 2 * env
+				span.Transparency = NumberSequence.new(tr)
+				span.Color = ColorSequence.new(style.color1, style.color0)
+			end
+		end
+	end
+	step(0)
+	addAnim(delay, duration, function()
+		carrier.Parent = liveFolder()
+	end, step, function()
+		carrier:Destroy()
+	end)
+	return delay + duration
+end
+
+-- Streak: a straight dash line from Offset to To that wipes in almost instantly,
+-- then erodes from the tail (flash step, lunge, piercing thrust). With Smear > 0 a
+-- wider unlit dark ribbon lingers behind it (the afterimage of a fast dash).
+Shapes.Streak = function(cfg, ctx)
+	local delay = num(cfg, "Delay", 0)
+	local duration = num(cfg, "Duration", 0.35)
+	local from = vec(cfg, "Offset", Vector3.zero)
+	local to = vec(cfg, "To", Vector3.new(0, 0, -20))
+	local width = num(cfg, "Width", 0.6)
+	local smear = num(cfg, "Smear", 0)
+	local style = readStyle(cfg)
+	local cf = ctx.origin * rad(vec(cfg, "Tilt", Vector3.zero))
+	local N = 8
+	local carrier = newPart(cf)
+	local dir = to - from
+	local smearAtts, smearBeams
+	if smear > 0 then
+		local dark = table.clone(style)
+		dark.glow, dark.coreGlow = 0, 0
+		dark.color0, dark.color1 = Color3.fromRGB(10, 8, 14), Color3.fromRGB(10, 8, 14)
+		smearAtts, smearBeams = beamChain(carrier, N, dark, false)
+	end
+	local atts, beams = beamChain(carrier, N, style, false)
+	local cores = if style.core then select(2, beamChain(carrier, N, style, true)) else nil
+	local span = texturedSpan(carrier, atts, beams, cores, style)
+	local function place(chain: { Attachment }, a: number, b: number, eye: Vector3)
+		for k = 0, N do
+			local f = lerp(a, b, k / N)
+			chain[k + 1].CFrame = ribbonFrame(from + dir * f, dir, eye)
+		end
+	end
+	local function step(alpha: number)
+		local head = 1 - (1 - math.min(1, alpha / 0.12)) ^ 3
+		local tail = math.clamp((alpha - 0.2) / 0.8, 0, 1) ^ 1.3
+		local eye = eyeIn(carrier)
+		place(atts, tail, head, eye)
+		for k = 1, N do
+			local g0, g1 = (k - 1) / N, k / N
+			-- needle tip at the head, thin at the tail
+			local w0 = width * math.sin(math.pi * math.min(1, g0 * 1.15)) ^ 0.6
+			local w1 = width * math.sin(math.pi * math.min(1, g1 * 1.15)) ^ 0.6
+			local b = beams[k]
+			b.Width0, b.Width1 = w0, w1
+			b.Transparency = NumberSequence.new(lerp(style.fade0, 1, (1 - g0) * 0.7), lerp(style.fade0, 1, (1 - g1) * 0.7))
+			b.Color = ColorSequence.new(style.color1:Lerp(style.color0, g0), style.color1:Lerp(style.color0, g1))
+			local cb = cores and cores[k]
+			if cb then
+				cb.Width0, cb.Width1 = w0 * 0.35, w1 * 0.35
+				cb.Transparency = b.Transparency
+			end
+		end
+		if span then
+			span.Width0, span.Width1 = width * 1.8, width * 1.8
+			span.Transparency = NumberSequence.new(lerp(style.fade0, 1, 0.35), style.fade0)
+			span.Color = ColorSequence.new(style.color1, style.color0)
+		end
+		if smearAtts and smearBeams then
+			-- the smear starts where the dash started and lingers longer
+			local sTail = math.clamp((alpha - 0.35) / 0.65, 0, 1)
+			place(smearAtts, sTail, head * 0.97, eye)
+			local fade = math.clamp((alpha - 0.5) / 0.5, 0, 1)
+			for k = 1, N do
+				local g0, g1 = (k - 1) / N, k / N
+				local b = smearBeams[k]
+				b.Width0 = width * smear * math.sin(math.pi * g0) ^ 0.5
+				b.Width1 = width * smear * math.sin(math.pi * g1) ^ 0.5
+				b.Transparency = NumberSequence.new(lerp(0.25, 1, fade), lerp(0.25, 1, fade))
+			end
+		end
+	end
+	step(0)
+	addAnim(delay, duration, function()
+		carrier.Parent = liveFolder()
+	end, step, function()
+		carrier:Destroy()
+	end)
+	return delay + duration
+end
+
+-- Crackle: short electric arcs that jump along a crescent (the electricity running
+-- over a lightning slash) or around a center. Each arc is a small zig-zag that
+-- re-shapes and flickers every few frames.
+Shapes.Crackle = function(cfg, ctx)
+	local count = scaledCount(cfg, "Count", 8, ctx.quality)
+	local delay = num(cfg, "Delay", 0)
+	local duration = num(cfg, "Duration", 0.45)
+	local radius = num(cfg, "Radius", 5)
+	local arc = math.rad(math.clamp(num(cfg, "Arc", 160), 10, 360))
+	local length = num(cfg, "Length", 1.6)
+	local jitter = num(cfg, "Jitter", 0.5)
+	local width = num(cfg, "Width", 0.12)
+	local flicker = math.max(0.02, num(cfg, "Flicker", 0.05))
+	local style = readStyle(cfg)
+	local cf = ctx.origin * CFrame.new(vec(cfg, "Offset", Vector3.zero)) * rad(vec(cfg, "Tilt", Vector3.zero))
+	local SEG = 4
+	local carrier = newPart(cf)
+	local arcs = {}
+	for _ = 1, count do
+		local atts, beams = beamChain(carrier, SEG, style, false)
+		local cores = if style.core then select(2, beamChain(carrier, SEG, style, true)) else nil
+		for _, b in beams do
+			b.Segments = 1
+		end
+		if cores then
+			for _, b in cores do
+				b.Segments = 1
+			end
+		end
+		local span = texturedSpan(carrier, atts, beams, cores, style)
+		if span then
+			span.Segments = 1
+		end
+		table.insert(arcs, { atts = atts, beams = beams, cores = cores, span = span, pts = {}, timer = math.huge, on = true })
+	end
+	local start = -math.pi / 2 - arc / 2
+	local function reshape(a)
+		local th = start + arc * ctx.rng:NextNumber()
+		local r = radius * ctx.rng:NextNumber(0.85, 1.05)
+		local center = Vector3.new(math.cos(th) * r, 0, math.sin(th) * r)
+		local tangent = Vector3.new(-math.sin(th), 0, math.cos(th))
+		local side = Vector3.new(math.cos(th), 0, math.sin(th))
+		for k = 0, SEG do
+			local f = k / SEG - 0.5
+			local off = (side * ctx.rng:NextNumber(-1, 1) + Vector3.yAxis * ctx.rng:NextNumber(-1, 1)) * jitter * math.sin(math.pi * (f + 0.5))
+			a.pts[k + 1] = center + tangent * f * length + off
+		end
+		a.on = ctx.rng:NextNumber() > 0.2
+	end
+	local function step(alpha: number, dt: number)
+		local eye = eyeIn(carrier)
+		local tr = fadeAt(style, alpha)
+		for _, a in arcs do
+			a.timer += dt
+			if a.timer >= flicker then
+				a.timer = 0
+				reshape(a)
+			end
+			for k = 1, SEG + 1 do
+				local prev = a.pts[math.max(1, k - 1)]
+				local nxt = a.pts[math.min(SEG + 1, k + 1)]
+				a.atts[k].CFrame = ribbonFrame(a.pts[k], nxt - prev, eye)
+			end
+			local t = if a.on then tr else 1
+			local seq = NumberSequence.new(t)
+			for k = 1, SEG do
+				local b = a.beams[k]
+				b.Width0, b.Width1 = width, width
+				b.Transparency = seq
+				b.Color = ColorSequence.new(style.color0)
+				local cb = a.cores and a.cores[k]
+				if cb then
+					cb.Width0, cb.Width1 = width * 0.4, width * 0.4
+					cb.Transparency = seq
+				end
+			end
+			if a.span then
+				-- the texture carries the zig-zag; the strip is about 8:1
+				a.span.Width0, a.span.Width1 = length * 0.3, length * 0.3
+				a.span.Transparency = seq
+				a.span.Color = ColorSequence.new(style.color0)
+			end
+		end
+	end
+	step(0, math.huge)
+	addAnim(delay, duration, function()
+		carrier.Parent = liveFolder()
+	end, step, function()
+		carrier:Destroy()
+	end)
+	return delay + duration
+end
+
 -- Zig-zag lightning that re-shapes itself every few frames.
 Shapes.Bolt = function(cfg, ctx)
 	local count = math.clamp(math.floor(num(cfg, "Count", 1)), 1, 8)
@@ -1087,8 +1391,12 @@ end
 -- Camera shake. Every running shake adds smooth noise to the camera right after
 -- the camera scripts move it, and fades with distance from the effect.
 type Shake = { t: number, delay: number, duration: number, magnitude: number, roughness: number,
-	fadeIn: number, fadeOut: number, position: Vector3, range: number, seed: number, rotation: number }
+	fadeIn: number, fadeOut: number, position: Vector3, range: number, seed: number, rotation: number,
+	kick: boolean }
 local shakes: { Shake } = {}
+-- FOV punches: { t, delay, duration, amount } (degrees; negative zooms in)
+local punches: { { t: number, delay: number, duration: number, amount: number } } = {}
+local appliedFov = 0
 local shakeBound = false
 
 local function shakeOffset(dt: number): CFrame
@@ -1109,6 +1417,10 @@ local function shakeOffset(dt: number): CFrame
 			if life >= 0 then
 				local env = math.min(1, life / math.max(1e-3, s.fadeIn))
 				env = math.min(env, math.clamp((s.duration - life) / math.max(1e-3, s.fadeOut), 0, 1))
+				if s.kick then
+					-- a hit: full strength on the first frame, gone fast
+					env = (1 - life / s.duration) ^ 2.5
+				end
 				local dist = (camera.CFrame.Position - s.position).Magnitude
 				local fall = math.clamp(1 - dist / s.range, 0, 1)
 				local amount = s.magnitude * env * fall * fall
@@ -1134,13 +1446,37 @@ local function ensureShakeLoop()
 	shakeBound = true
 	RunService:BindToRenderStep("EasyVFX_Shake", Enum.RenderPriority.Camera.Value + 1, function(dt)
 		local camera = Workspace.CurrentCamera
-		if #shakes == 0 then
+		if #shakes == 0 and #punches == 0 then
+			if camera and appliedFov ~= 0 then
+				camera.FieldOfView -= appliedFov
+				appliedFov = 0
+			end
 			RunService:UnbindFromRenderStep("EasyVFX_Shake")
 			shakeBound = false
 			return
 		end
 		if camera then
 			camera.CFrame *= shakeOffset(dt)
+			-- FOV punch: snap to the offset, ease back (applied as a delta so other
+			-- scripts can still change the FOV)
+			local fov = 0
+			local i = 1
+			while i <= #punches do
+				local pch = punches[i]
+				pch.t += dt
+				local life = pch.t - pch.delay
+				if life >= pch.duration then
+					punches[i] = punches[#punches]
+					punches[#punches] = nil
+				else
+					if life >= 0 then
+						fov += pch.amount * (1 - life / pch.duration) ^ 3
+					end
+					i += 1
+				end
+			end
+			camera.FieldOfView += fov - appliedFov
+			appliedFov = fov
 		end
 	end)
 end
@@ -1162,9 +1498,56 @@ Shapes.Shake = function(cfg, ctx)
 			range = num(cfg, "Range", 80),
 			seed = ctx.rng:NextNumber(0, 1000),
 			rotation = num(cfg, "Rotation", 1),
+			kick = bool(cfg, "Kick", false),
 		})
 		ensureShakeLoop()
 	end
+	return delay + duration
+end
+
+-- FOV punch: the camera zooms in (negative Amount) or out by a few degrees on the
+-- hit and eases back. Client only, like Shake.
+Shapes.Punch = function(cfg, ctx)
+	local delay = num(cfg, "Delay", 0)
+	local duration = num(cfg, "Duration", 0.25)
+	if RunService:IsRunning() and RunService:IsClient() then
+		table.insert(punches, { t = 0, delay = delay, duration = duration, amount = math.clamp(num(cfg, "Amount", -6), -30, 30) })
+		ensureShakeLoop()
+	end
+	return delay + duration
+end
+
+-- Hit-stop: every running effect holds its frame for a few hundredths of a second
+-- on a heavy hit (50-100 ms reads as weight; longer reads as lag), and animation
+-- tracks registered with EasyVFX.TrackHitStop slow down with them.
+local hitStopTracks: { [AnimationTrack]: boolean } = setmetatable({}, { __mode = "k" }) :: any
+
+function EasyVFX.TrackHitStop(track: AnimationTrack)
+	hitStopTracks[track] = true
+end
+
+function EasyVFX.HitStop(seconds: number)
+	local length = math.clamp(seconds, 0, 0.3)
+	frozenUntil = math.max(frozenUntil, os.clock() + length)
+	for track in hitStopTracks do
+		if track.IsPlaying then
+			local speed = track.Speed
+			track:AdjustSpeed(speed * 0.05)
+			task.delay(length, function()
+				if track.IsPlaying then
+					track:AdjustSpeed(speed)
+				end
+			end)
+		end
+	end
+end
+
+Shapes.HitStop = function(cfg, _ctx)
+	local delay = num(cfg, "Delay", 0)
+	local duration = num(cfg, "Duration", 0.07)
+	addAnim(delay, 0.016, function()
+		EasyVFX.HitStop(duration)
+	end, function() end)
 	return delay + duration
 end
 
@@ -1189,6 +1572,8 @@ Shapes.Impact = function(cfg, ctx)
 		tint = Color3.new(1, 1, 1)
 	end
 	local cc: ColorCorrectionEffect? = nil
+	local overlay: ImageLabel? = nil
+	local speedLines = str(cfg, "SpeedLines", "")
 	local myToken = 0
 	local function current(): ColorCorrectionEffect?
 		return if impactToken == myToken then cc else nil
@@ -1208,12 +1593,43 @@ Shapes.Impact = function(cfg, ctx)
 		effect.Archivable = false
 		effect.Parent = camera
 		cc = effect
+		-- manga speed lines over the whole screen (needs the HD pack's speed_lines)
+		local player = Players.LocalPlayer
+		if speedLines ~= "" and player and RunService:IsRunning() then
+			local gui = player:FindFirstChildOfClass("PlayerGui")
+			if gui then
+				local old = gui:FindFirstChild("EasyVFX_SpeedLines")
+				if old then
+					old:Destroy()
+				end
+				local screen = Instance.new("ScreenGui")
+				screen.Name = "EasyVFX_SpeedLines"
+				screen.IgnoreGuiInset = true
+				screen.ResetOnSpawn = false
+				screen.DisplayOrder = 50
+				local image = Instance.new("ImageLabel")
+				image.BackgroundTransparency = 1
+				image.Image = speedLines
+				image.ImageColor3 = if styleName == "Invert" then Color3.new(0, 0, 0) else Color3.new(1, 1, 1)
+				image.AnchorPoint = Vector2.new(0.5, 0.5)
+				image.Position = UDim2.fromScale(0.5, 0.5)
+				image.Size = UDim2.fromScale(1.4, 1.4)
+				image.SizeConstraint = Enum.SizeConstraint.RelativeXX
+				image.Parent = screen
+				screen.Parent = gui
+				overlay = image
+			end
+		end
 		impactToken += 1
 		myToken = impactToken
 	end, function(alpha)
 		local effect = current()
 		if not effect then
 			return -- not shown (out of range) or replaced by a newer impact
+		end
+		if overlay then
+			overlay.ImageTransparency = math.clamp(alpha / 0.9, 0.15, 1) ^ 0.7
+			overlay.Size = UDim2.fromScale(1.4 + 0.25 * alpha, 1.4 + 0.25 * alpha)
 		end
 		-- Hold for the first 60%, then snap back quickly.
 		local k = strength * (if alpha < 0.6 then 1 else (1 - (alpha - 0.6) / 0.4) ^ 2)
@@ -1225,6 +1641,9 @@ Shapes.Impact = function(cfg, ctx)
 		local effect = current()
 		if effect then
 			effect:Destroy()
+		end
+		if overlay and overlay.Parent then
+			(overlay.Parent :: Instance):Destroy()
 		end
 	end)
 	return delay + duration

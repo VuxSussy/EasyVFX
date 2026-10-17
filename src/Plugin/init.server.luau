@@ -23,6 +23,7 @@ end
 local Presets = require(script.Shared.Presets)
 local Builder = require(script.Shared.Builder)
 local Custom = require(script.Shared.Custom)
+local DefaultAssets = require(script.Shared.DefaultAssets)
 local Strings = require(script.Shared.Strings)
 local Runtime = require(script.Runtime.EasyVFX)
 local App = require(script.UI.App)
@@ -323,9 +324,15 @@ end
 local PACK_PREFIX = "EVFX_Tex_"
 local SCAN_ROOTS = { Workspace, ReplicatedStorage, game:GetService("ServerStorage") }
 
+-- HD is on by default with the uploaded pack (DefaultAssets). "off" means the user
+-- turned it off; a table means they brought their own image IDs.
 local function loadAssets(): Builder.Assets?
 	local raw = setting("EasyVFX_Assets")
-	if type(raw) ~= "table" then
+	if raw == "off" then
+		return nil
+	elseif raw == nil then
+		return table.clone(DefaultAssets)
+	elseif type(raw) ~= "table" then
 		return nil
 	end
 	local out: Builder.Assets = {}
@@ -567,7 +574,10 @@ local api: App.Api = {
 	scanAssets = scanAssets,
 	assetsFromText = assetsFromText,
 	disableHD = function()
-		setSetting("EasyVFX_Assets", nil)
+		setSetting("EasyVFX_Assets", "off")
+	end,
+	enableHD = function()
+		setSetting("EasyVFX_Assets", nil) -- back to the built-in pack
 	end,
 	applyAll = function()
 		local assets = loadAssets()

@@ -46,6 +46,7 @@ export type Api = {
 	scanAssets: () -> number,
 	assetsFromText: (text: string) -> number,
 	disableHD: () -> (),
+	enableHD: () -> (),
 	applyAll: () -> number,
 }
 
@@ -55,6 +56,7 @@ App.__index = App
 export type State = {
 	tab: string,
 	category: string,
+	style: string,
 	search: string,
 	lang: string,
 	autoPreview: boolean,
@@ -74,6 +76,7 @@ function App.new(api: Api)
 	self.state = {
 		tab = "library",
 		category = "all",
+		style = "all",
 		search = "",
 		lang = if lang == "vi" then "vi" else "en",
 		autoPreview = api.getSetting("EasyVFX_AutoPreview") ~= false,
@@ -723,6 +726,21 @@ function App:renderLibrary()
 			self:renderLibrary()
 		end, i).Parent = chips
 	end
+	-- the look is a separate filter, so categories stay about what an effect is for
+	local styles = C.new("Frame", {
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		LayoutOrder = 2,
+		Parent = content,
+	})
+	C.list(Enum.FillDirection.Horizontal, 6, true).Parent = styles
+	for i, style in Presets.Styles do
+		C.chip(t, (style :: any)[self.state.lang], self.state.style == style.id, function()
+			self.state.style = style.id
+			self:renderLibrary()
+		end, i).Parent = styles
+	end
 
 	self:hdCard(content, 0)
 
@@ -791,27 +809,9 @@ function App:renderLibrary()
 		favWrap.Parent = content
 	end
 
-	-- Cards
-	local grid = C.new("Frame", {
-		BackgroundTransparency = 1,
-		Size = UDim2.new(1, 0, 0, 0),
-		AutomaticSize = Enum.AutomaticSize.Y,
-		LayoutOrder = 4,
-		Parent = content,
-	})
-	local layout = C.new("UIGridLayout", {
-		CellPadding = UDim2.new(0, 8, 0, 8),
-		CellSize = UDim2.new(0.5, -4, 0, 118),
-		SortOrder = Enum.SortOrder.LayoutOrder,
-		Parent = grid,
-	})
-	local function fit()
-		local _, size = C.abs(grid)
-		local oneColumn = size.X > 0 and size.X < 280
-		layout.CellSize = if oneColumn then UDim2.new(1, 0, 0, 110) else UDim2.new(0.5, -4, 0, 118)
-	end
-	grid:GetPropertyChangedSignal("AbsoluteSize"):Connect(fit)
-	fit()
+	-- Cards, in one section per category
+	local grid = C.stack({ LayoutOrder = 4 }, 14)
+	grid.Parent = content
 	self.grid = grid
 	self.emptyNote = C.text(t, { text = self:L("noResults"), size = Theme.Text.label, color = t.mutedFg, order = 5 })
 	self.emptyNote.Visible = false
@@ -860,7 +860,7 @@ function App:hdCard(parent: Instance, order: number)
 		order = 2,
 	}).Parent = card
 
-	local row = C.new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 30), LayoutOrder = 3, Parent = card })
+	local row = C.new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 30), LayoutOrder = 4, Parent = card })
 	C.new("UIListLayout", {
 		FillDirection = Enum.FillDirection.Horizontal,
 		Padding = UDim.new(0, 6),
@@ -887,9 +887,22 @@ function App:hdCard(parent: Instance, order: number)
 			end,
 		}).Parent = row
 	else
+		local enableRow = C.new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 30), LayoutOrder = 3, Parent = card })
+		C.button(t, {
+			text = self:L("hdEnable"),
+			variant = "primary",
+			width = UDim.new(1, 0),
+			height = 30,
+			order = 1,
+			onClick = function()
+				api.enableHD()
+				local n = api.applyAll()
+				self:toastMessage(self:L("hdApplied"):format(n), "success")
+				self:renderLibrary()
+			end,
+		}).Parent = enableRow
 		C.button(t, {
 			text = self:L("hdScan"),
-			variant = "primary",
 			width = UDim.new(0.5, -3),
 			height = 30,
 			order = 1,
@@ -1066,20 +1079,72 @@ function App:card(preset: Presets.Preset, order: number): TextButton
 	return b
 end
 
+-- A grid of cards: two columns, one when the panel is narrow.
+local function cardGrid(order: number): Frame
+	local grid = C.new("Frame", {
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		LayoutOrder = order,
+	})
+	local layout = C.new("UIGridLayout", {
+		CellPadding = UDim2.new(0, 8, 0, 8),
+		CellSize = UDim2.new(0.5, -4, 0, 118),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Parent = grid,
+	})
+	local function fit()
+		local _, size = C.abs(grid)
+		local oneColumn = size.X > 0 and size.X < 280
+		layout.CellSize = if oneColumn then UDim2.new(1, 0, 0, 110) else UDim2.new(0.5, -4, 0, 118)
+	end
+	grid:GetPropertyChangedSignal("AbsoluteSize"):Connect(fit)
+	fit()
+	return grid
+end
+
 function App:renderCards()
-	local grid: Frame = self.grid
-	for _, child in grid:GetChildren() do
+	local t = self.t
+	local container: Frame = self.grid
+	for _, child in container:GetChildren() do
 		if child:IsA("GuiObject") then
 			child:Destroy()
 		end
 	end
 	local shown = 0
-	for i, preset in Presets.List do
-		local p = preset :: any
-		if (self.state.category == "all" or p.category == self.state.category) and matches(p, self.state.search) then
-			self:card(p, i).Parent = grid
-			shown += 1
+	for c, cat in Presets.Categories do
+		if cat.id == "all" or (self.state.category ~= "all" and self.state.category ~= cat.id) then
+			continue
 		end
+		local list = {}
+		for i, preset in Presets.List do
+			local p = preset :: any
+			local styleOk = self.state.style == "all" or p.style == self.state.style
+			if p.category == cat.id and styleOk and matches(p, self.state.search) then
+				table.insert(list, { preset = p, order = i })
+			end
+		end
+		if #list == 0 then
+			continue
+		end
+		local section = C.stack({ LayoutOrder = c }, 6)
+		-- titled sections only when several categories are shown together
+		if self.state.category == "all" then
+			C.text(t, {
+				text = string.format("%s · %d", ((cat :: any)[self.state.lang] :: string):upper(), #list),
+				size = Theme.Text.caption,
+				font = Theme.Font.bold,
+				color = t.mutedFg,
+				order = 1,
+			}).Parent = section
+		end
+		local grid = cardGrid(2)
+		for _, item in list do
+			self:card(item.preset, item.order).Parent = grid
+		end
+		grid.Parent = section
+		section.Parent = container
+		shown += #list
 	end
 	self.emptyNote.Visible = shown == 0
 end

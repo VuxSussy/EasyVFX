@@ -28,6 +28,7 @@ end
 local Presets = require(script.Shared.Presets)
 local Builder = require(script.Shared.Builder)
 local Custom = require(script.Shared.Custom)
+local DefaultAssets = require(script.Shared.DefaultAssets)
 local Strings = require(script.Shared.Strings)
 local Runtime = require(script.Runtime.EasyVFX)
 local App = require(script.UI.App)
@@ -328,9 +329,15 @@ end
 local PACK_PREFIX = "EVFX_Tex_"
 local SCAN_ROOTS = { Workspace, ReplicatedStorage, game:GetService("ServerStorage") }
 
+-- HD is on by default with the uploaded pack (DefaultAssets). "off" means the user
+-- turned it off; a table means they brought their own image IDs.
 local function loadAssets(): Builder.Assets?
 	local raw = setting("EasyVFX_Assets")
-	if type(raw) ~= "table" then
+	if raw == "off" then
+		return nil
+	elseif raw == nil then
+		return table.clone(DefaultAssets)
+	elseif type(raw) ~= "table" then
 		return nil
 	end
 	local out: Builder.Assets = {}
@@ -572,7 +579,10 @@ local api: App.Api = {
 	scanAssets = scanAssets,
 	assetsFromText = assetsFromText,
 	disableHD = function()
-		setSetting("EasyVFX_Assets", nil)
+		setSetting("EasyVFX_Assets", "off")
+	end,
+	enableHD = function()
+		setSetting("EasyVFX_Assets", nil) -- back to the built-in pack
 	end,
 	applyAll = function()
 		local assets = loadAssets()
@@ -676,7 +686,7 @@ local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 
 local EasyVFX = {}
-EasyVFX.Version = 7
+EasyVFX.Version = 8
 EasyVFX.Tag = "EasyVFX"
 -- 0.25 .. 1. Multiplies particle, line and rock counts. Lowered automatically on the
 -- client when the player picks a low graphics level.
@@ -729,6 +739,9 @@ local function ease(alpha: number, style: string): number
 	elseif style == "Back" then
 		local c1, c3 = 1.70158, 2.70158
 		return 1 + c3 * (alpha - 1) ^ 3 + c1 * (alpha - 1) ^ 2
+	elseif style == "Circ" then
+		-- circular out: the fastest start, a long glide (slashes, shockwaves)
+		return math.sqrt(1 - (alpha - 1) ^ 2)
 	end
 	return 1 - (1 - alpha) ^ 3 -- "Out"
 end
@@ -764,6 +777,8 @@ type Anim = {
 
 local active: { Anim } = {}
 local driverRunning = false
+-- Hit-stop: while os.clock() < frozenUntil every running effect holds its frame.
+local frozenUntil = 0
 
 local function finishAnim(a: Anim)
 	if a.finish then
@@ -782,6 +797,9 @@ local function runDriver()
 	task.spawn(function()
 		while #active > 0 do
 			local dt = task.wait()
+			if os.clock() < frozenUntil then
+				dt = 0
+			end
 			local i = 1
 			while i <= #active do
 				local a = active[i]
@@ -1315,6 +1333,302 @@ Shapes.Lines = function(cfg, ctx)
 	return longest
 end
 
+-- A chain of camera-facing beams through `count + 1` attachments on `carrier`
+-- (the building block of Whirl, Streak and Crackle).
+local function beamChain(carrier: BasePart, count: number, style: Style, isCore: boolean): ({ Attachment }, { Beam })
+	local atts: { Attachment } = {}
+	local beams: { Beam } = {}
+	for k = 0, count do
+		atts[k + 1] = newAttachment(carrier)
+	end
+	for k = 1, count do
+		beams[k] = newBeam(carrier, atts[k], atts[k + 1], style, isCore)
+	end
+	return atts, beams
+end
+
+-- With a Texture, a chain shows one beam from its first to its last attachment, so
+-- the texture (a brush stroke, an electric arc) spans the whole stroke once instead
+-- of repeating on every segment. The segment beams stay as the untextured fallback.
+local function texturedSpan(carrier: BasePart, atts: { Attachment }, beams: { Beam }, cores: { Beam }?, style: Style): Beam?
+	if style.texture == "" then
+		return nil
+	end
+	for _, b in beams do
+		b.Enabled = false
+	end
+	if cores then
+		for _, b in cores do
+			b.Enabled = false
+		end
+	end
+	local b = newBeam(carrier, atts[1], atts[#atts], style, false)
+	b.Segments = 24
+	return b
+end
+
+-- Whirl: a tilted disc of brush-stroke arcs spinning around the center (wind
+-- vortex, cyclone kick, spinning slash). Every stroke is tapered at both ends and
+-- has its own radius, length and speed, so it reads as a swirl, not a ring.
+Shapes.Whirl = function(cfg, ctx)
+	local strokes = math.clamp(math.floor(num(cfg, "Count", 6)), 1, 16)
+	local delay = num(cfg, "Delay", 0)
+	local duration = num(cfg, "Duration", 0.9)
+	local r0, r1 = num(cfg, "Radius0", 2), num(cfg, "Radius1", 6)
+	local width = num(cfg, "Width", 0.7)
+	local arcMin, arcMax = math.rad(num(cfg, "ArcMin", 70)), math.rad(num(cfg, "ArcMax", 200))
+	local spin = math.rad(num(cfg, "Spin", 540))
+	local grow = num(cfg, "Grow", 0.35)
+	local style = readStyle(cfg)
+	local base = ctx.origin * CFrame.new(vec(cfg, "Offset", Vector3.zero))
+	if bool(cfg, "Ground", false) then
+		base = snapToGround(base, ctx.ignore)
+	end
+	base *= rad(vec(cfg, "Tilt", Vector3.zero))
+	local N = 10
+	local carrier = newPart(base)
+	local list = {}
+	for i = 1, strokes do
+		local atts, beams = beamChain(carrier, N, style, false)
+		local cores = if style.core then select(2, beamChain(carrier, N, style, true)) else nil
+		table.insert(list, {
+			atts = atts,
+			beams = beams,
+			cores = cores,
+			span = texturedSpan(carrier, atts, beams, cores, style),
+			radius = lerp(r0, r1, (i - 0.5) / strokes) * ctx.rng:NextNumber(0.9, 1.1),
+			-- one Bezier beam can only follow ~170 degrees of arc
+			arc = math.min(ctx.rng:NextNumber(arcMin, arcMax), if style.texture ~= "" then math.rad(170) else math.huge),
+			phase = ctx.rng:NextNumber(0, math.pi * 2),
+			speed = ctx.rng:NextNumber(0.75, 1.25),
+			lift = ctx.rng:NextNumber(-0.15, 0.15) * r1,
+			width = width * ctx.rng:NextNumber(0.6, 1.2),
+		})
+	end
+	local function step(alpha: number)
+		local e = ease(alpha, style.ease)
+		-- in fast, hold, then thin out and fade
+		local env = math.min(1, alpha / 0.15) * (1 - math.clamp((alpha - 0.65) / 0.35, 0, 1) ^ 1.5)
+		local tr = lerp(1, style.fade0, env)
+		local eye = eyeIn(carrier)
+		for _, sd in list do
+			local r = sd.radius * (1 + grow * e)
+			local start = sd.phase + spin * e * sd.speed
+			local dTheta = sd.arc / N
+			local c = r * KAPPA * math.tan(dTheta / 4)
+			for k = 0, N do
+				local th = start + dTheta * k
+				local p = Vector3.new(math.cos(th) * r, sd.lift * math.sin(th * 0.5), math.sin(th) * r)
+				local t = Vector3.new(-math.sin(th), 0, math.cos(th))
+				sd.atts[k + 1].CFrame = ribbonFrame(p, t, eye)
+			end
+			for k = 1, N do
+				local g0, g1 = (k - 1) / N, k / N
+				local w0 = sd.width * math.sin(math.pi * g0) ^ 0.7 * env
+				local w1 = sd.width * math.sin(math.pi * g1) ^ 0.7 * env
+				local b = sd.beams[k]
+				b.CurveSize0, b.CurveSize1 = c, c
+				b.Width0, b.Width1 = w0, w1
+				b.Transparency = NumberSequence.new(lerp(tr, 1, (1 - g0) * 0.6), lerp(tr, 1, (1 - g1) * 0.6))
+				b.Color = ColorSequence.new(style.color1:Lerp(style.color0, g0), style.color1:Lerp(style.color0, g1))
+				local cb = sd.cores and sd.cores[k]
+				if cb then
+					cb.CurveSize0, cb.CurveSize1 = c, c
+					cb.Width0, cb.Width1 = w0 * 0.3, w1 * 0.3
+					cb.Transparency = b.Transparency
+				end
+			end
+			local span = sd.span
+			if span then
+				local whole = r * KAPPA * math.tan(sd.arc / 4)
+				span.CurveSize0, span.CurveSize1 = whole, whole
+				span.Width0, span.Width1 = sd.width * 2 * env, sd.width * 2 * env
+				span.Transparency = NumberSequence.new(tr)
+				span.Color = ColorSequence.new(style.color1, style.color0)
+			end
+		end
+	end
+	step(0)
+	addAnim(delay, duration, function()
+		carrier.Parent = liveFolder()
+	end, step, function()
+		carrier:Destroy()
+	end)
+	return delay + duration
+end
+
+-- Streak: a straight dash line from Offset to To that wipes in almost instantly,
+-- then erodes from the tail (flash step, lunge, piercing thrust). With Smear > 0 a
+-- wider unlit dark ribbon lingers behind it (the afterimage of a fast dash).
+Shapes.Streak = function(cfg, ctx)
+	local delay = num(cfg, "Delay", 0)
+	local duration = num(cfg, "Duration", 0.35)
+	local from = vec(cfg, "Offset", Vector3.zero)
+	local to = vec(cfg, "To", Vector3.new(0, 0, -20))
+	local width = num(cfg, "Width", 0.6)
+	local smear = num(cfg, "Smear", 0)
+	local style = readStyle(cfg)
+	local cf = ctx.origin * rad(vec(cfg, "Tilt", Vector3.zero))
+	local N = 8
+	local carrier = newPart(cf)
+	local dir = to - from
+	local smearAtts, smearBeams
+	if smear > 0 then
+		local dark = table.clone(style)
+		dark.glow, dark.coreGlow = 0, 0
+		dark.color0, dark.color1 = Color3.fromRGB(10, 8, 14), Color3.fromRGB(10, 8, 14)
+		smearAtts, smearBeams = beamChain(carrier, N, dark, false)
+	end
+	local atts, beams = beamChain(carrier, N, style, false)
+	local cores = if style.core then select(2, beamChain(carrier, N, style, true)) else nil
+	local span = texturedSpan(carrier, atts, beams, cores, style)
+	local function place(chain: { Attachment }, a: number, b: number, eye: Vector3)
+		for k = 0, N do
+			local f = lerp(a, b, k / N)
+			chain[k + 1].CFrame = ribbonFrame(from + dir * f, dir, eye)
+		end
+	end
+	local function step(alpha: number)
+		local head = 1 - (1 - math.min(1, alpha / 0.12)) ^ 3
+		local tail = math.clamp((alpha - 0.2) / 0.8, 0, 1) ^ 1.3
+		local eye = eyeIn(carrier)
+		place(atts, tail, head, eye)
+		for k = 1, N do
+			local g0, g1 = (k - 1) / N, k / N
+			-- needle tip at the head, thin at the tail
+			local w0 = width * math.sin(math.pi * math.min(1, g0 * 1.15)) ^ 0.6
+			local w1 = width * math.sin(math.pi * math.min(1, g1 * 1.15)) ^ 0.6
+			local b = beams[k]
+			b.Width0, b.Width1 = w0, w1
+			b.Transparency = NumberSequence.new(lerp(style.fade0, 1, (1 - g0) * 0.7), lerp(style.fade0, 1, (1 - g1) * 0.7))
+			b.Color = ColorSequence.new(style.color1:Lerp(style.color0, g0), style.color1:Lerp(style.color0, g1))
+			local cb = cores and cores[k]
+			if cb then
+				cb.Width0, cb.Width1 = w0 * 0.35, w1 * 0.35
+				cb.Transparency = b.Transparency
+			end
+		end
+		if span then
+			span.Width0, span.Width1 = width * 1.8, width * 1.8
+			span.Transparency = NumberSequence.new(lerp(style.fade0, 1, 0.35), style.fade0)
+			span.Color = ColorSequence.new(style.color1, style.color0)
+		end
+		if smearAtts and smearBeams then
+			-- the smear starts where the dash started and lingers longer
+			local sTail = math.clamp((alpha - 0.35) / 0.65, 0, 1)
+			place(smearAtts, sTail, head * 0.97, eye)
+			local fade = math.clamp((alpha - 0.5) / 0.5, 0, 1)
+			for k = 1, N do
+				local g0, g1 = (k - 1) / N, k / N
+				local b = smearBeams[k]
+				b.Width0 = width * smear * math.sin(math.pi * g0) ^ 0.5
+				b.Width1 = width * smear * math.sin(math.pi * g1) ^ 0.5
+				b.Transparency = NumberSequence.new(lerp(0.25, 1, fade), lerp(0.25, 1, fade))
+			end
+		end
+	end
+	step(0)
+	addAnim(delay, duration, function()
+		carrier.Parent = liveFolder()
+	end, step, function()
+		carrier:Destroy()
+	end)
+	return delay + duration
+end
+
+-- Crackle: short electric arcs that jump along a crescent (the electricity running
+-- over a lightning slash) or around a center. Each arc is a small zig-zag that
+-- re-shapes and flickers every few frames.
+Shapes.Crackle = function(cfg, ctx)
+	local count = scaledCount(cfg, "Count", 8, ctx.quality)
+	local delay = num(cfg, "Delay", 0)
+	local duration = num(cfg, "Duration", 0.45)
+	local radius = num(cfg, "Radius", 5)
+	local arc = math.rad(math.clamp(num(cfg, "Arc", 160), 10, 360))
+	local length = num(cfg, "Length", 1.6)
+	local jitter = num(cfg, "Jitter", 0.5)
+	local width = num(cfg, "Width", 0.12)
+	local flicker = math.max(0.02, num(cfg, "Flicker", 0.05))
+	local style = readStyle(cfg)
+	local cf = ctx.origin * CFrame.new(vec(cfg, "Offset", Vector3.zero)) * rad(vec(cfg, "Tilt", Vector3.zero))
+	local SEG = 4
+	local carrier = newPart(cf)
+	local arcs = {}
+	for _ = 1, count do
+		local atts, beams = beamChain(carrier, SEG, style, false)
+		local cores = if style.core then select(2, beamChain(carrier, SEG, style, true)) else nil
+		for _, b in beams do
+			b.Segments = 1
+		end
+		if cores then
+			for _, b in cores do
+				b.Segments = 1
+			end
+		end
+		local span = texturedSpan(carrier, atts, beams, cores, style)
+		if span then
+			span.Segments = 1
+		end
+		table.insert(arcs, { atts = atts, beams = beams, cores = cores, span = span, pts = {}, timer = math.huge, on = true })
+	end
+	local start = -math.pi / 2 - arc / 2
+	local function reshape(a)
+		local th = start + arc * ctx.rng:NextNumber()
+		local r = radius * ctx.rng:NextNumber(0.85, 1.05)
+		local center = Vector3.new(math.cos(th) * r, 0, math.sin(th) * r)
+		local tangent = Vector3.new(-math.sin(th), 0, math.cos(th))
+		local side = Vector3.new(math.cos(th), 0, math.sin(th))
+		for k = 0, SEG do
+			local f = k / SEG - 0.5
+			local off = (side * ctx.rng:NextNumber(-1, 1) + Vector3.yAxis * ctx.rng:NextNumber(-1, 1)) * jitter * math.sin(math.pi * (f + 0.5))
+			a.pts[k + 1] = center + tangent * f * length + off
+		end
+		a.on = ctx.rng:NextNumber() > 0.2
+	end
+	local function step(alpha: number, dt: number)
+		local eye = eyeIn(carrier)
+		local tr = fadeAt(style, alpha)
+		for _, a in arcs do
+			a.timer += dt
+			if a.timer >= flicker then
+				a.timer = 0
+				reshape(a)
+			end
+			for k = 1, SEG + 1 do
+				local prev = a.pts[math.max(1, k - 1)]
+				local nxt = a.pts[math.min(SEG + 1, k + 1)]
+				a.atts[k].CFrame = ribbonFrame(a.pts[k], nxt - prev, eye)
+			end
+			local t = if a.on then tr else 1
+			local seq = NumberSequence.new(t)
+			for k = 1, SEG do
+				local b = a.beams[k]
+				b.Width0, b.Width1 = width, width
+				b.Transparency = seq
+				b.Color = ColorSequence.new(style.color0)
+				local cb = a.cores and a.cores[k]
+				if cb then
+					cb.Width0, cb.Width1 = width * 0.4, width * 0.4
+					cb.Transparency = seq
+				end
+			end
+			if a.span then
+				-- the texture carries the zig-zag; the strip is about 8:1
+				a.span.Width0, a.span.Width1 = length * 0.3, length * 0.3
+				a.span.Transparency = seq
+				a.span.Color = ColorSequence.new(style.color0)
+			end
+		end
+	end
+	step(0, math.huge)
+	addAnim(delay, duration, function()
+		carrier.Parent = liveFolder()
+	end, step, function()
+		carrier:Destroy()
+	end)
+	return delay + duration
+end
+
 -- Zig-zag lightning that re-shapes itself every few frames.
 Shapes.Bolt = function(cfg, ctx)
 	local count = math.clamp(math.floor(num(cfg, "Count", 1)), 1, 8)
@@ -1735,8 +2049,12 @@ end
 -- Camera shake. Every running shake adds smooth noise to the camera right after
 -- the camera scripts move it, and fades with distance from the effect.
 type Shake = { t: number, delay: number, duration: number, magnitude: number, roughness: number,
-	fadeIn: number, fadeOut: number, position: Vector3, range: number, seed: number, rotation: number }
+	fadeIn: number, fadeOut: number, position: Vector3, range: number, seed: number, rotation: number,
+	kick: boolean }
 local shakes: { Shake } = {}
+-- FOV punches: { t, delay, duration, amount } (degrees; negative zooms in)
+local punches: { { t: number, delay: number, duration: number, amount: number } } = {}
+local appliedFov = 0
 local shakeBound = false
 
 local function shakeOffset(dt: number): CFrame
@@ -1757,6 +2075,10 @@ local function shakeOffset(dt: number): CFrame
 			if life >= 0 then
 				local env = math.min(1, life / math.max(1e-3, s.fadeIn))
 				env = math.min(env, math.clamp((s.duration - life) / math.max(1e-3, s.fadeOut), 0, 1))
+				if s.kick then
+					-- a hit: full strength on the first frame, gone fast
+					env = (1 - life / s.duration) ^ 2.5
+				end
 				local dist = (camera.CFrame.Position - s.position).Magnitude
 				local fall = math.clamp(1 - dist / s.range, 0, 1)
 				local amount = s.magnitude * env * fall * fall
@@ -1782,13 +2104,37 @@ local function ensureShakeLoop()
 	shakeBound = true
 	RunService:BindToRenderStep("EasyVFX_Shake", Enum.RenderPriority.Camera.Value + 1, function(dt)
 		local camera = Workspace.CurrentCamera
-		if #shakes == 0 then
+		if #shakes == 0 and #punches == 0 then
+			if camera and appliedFov ~= 0 then
+				camera.FieldOfView -= appliedFov
+				appliedFov = 0
+			end
 			RunService:UnbindFromRenderStep("EasyVFX_Shake")
 			shakeBound = false
 			return
 		end
 		if camera then
 			camera.CFrame *= shakeOffset(dt)
+			-- FOV punch: snap to the offset, ease back (applied as a delta so other
+			-- scripts can still change the FOV)
+			local fov = 0
+			local i = 1
+			while i <= #punches do
+				local pch = punches[i]
+				pch.t += dt
+				local life = pch.t - pch.delay
+				if life >= pch.duration then
+					punches[i] = punches[#punches]
+					punches[#punches] = nil
+				else
+					if life >= 0 then
+						fov += pch.amount * (1 - life / pch.duration) ^ 3
+					end
+					i += 1
+				end
+			end
+			camera.FieldOfView += fov - appliedFov
+			appliedFov = fov
 		end
 	end)
 end
@@ -1810,9 +2156,56 @@ Shapes.Shake = function(cfg, ctx)
 			range = num(cfg, "Range", 80),
 			seed = ctx.rng:NextNumber(0, 1000),
 			rotation = num(cfg, "Rotation", 1),
+			kick = bool(cfg, "Kick", false),
 		})
 		ensureShakeLoop()
 	end
+	return delay + duration
+end
+
+-- FOV punch: the camera zooms in (negative Amount) or out by a few degrees on the
+-- hit and eases back. Client only, like Shake.
+Shapes.Punch = function(cfg, ctx)
+	local delay = num(cfg, "Delay", 0)
+	local duration = num(cfg, "Duration", 0.25)
+	if RunService:IsRunning() and RunService:IsClient() then
+		table.insert(punches, { t = 0, delay = delay, duration = duration, amount = math.clamp(num(cfg, "Amount", -6), -30, 30) })
+		ensureShakeLoop()
+	end
+	return delay + duration
+end
+
+-- Hit-stop: every running effect holds its frame for a few hundredths of a second
+-- on a heavy hit (50-100 ms reads as weight; longer reads as lag), and animation
+-- tracks registered with EasyVFX.TrackHitStop slow down with them.
+local hitStopTracks: { [AnimationTrack]: boolean } = setmetatable({}, { __mode = "k" }) :: any
+
+function EasyVFX.TrackHitStop(track: AnimationTrack)
+	hitStopTracks[track] = true
+end
+
+function EasyVFX.HitStop(seconds: number)
+	local length = math.clamp(seconds, 0, 0.3)
+	frozenUntil = math.max(frozenUntil, os.clock() + length)
+	for track in hitStopTracks do
+		if track.IsPlaying then
+			local speed = track.Speed
+			track:AdjustSpeed(speed * 0.05)
+			task.delay(length, function()
+				if track.IsPlaying then
+					track:AdjustSpeed(speed)
+				end
+			end)
+		end
+	end
+end
+
+Shapes.HitStop = function(cfg, _ctx)
+	local delay = num(cfg, "Delay", 0)
+	local duration = num(cfg, "Duration", 0.07)
+	addAnim(delay, 0.016, function()
+		EasyVFX.HitStop(duration)
+	end, function() end)
 	return delay + duration
 end
 
@@ -1837,6 +2230,8 @@ Shapes.Impact = function(cfg, ctx)
 		tint = Color3.new(1, 1, 1)
 	end
 	local cc: ColorCorrectionEffect? = nil
+	local overlay: ImageLabel? = nil
+	local speedLines = str(cfg, "SpeedLines", "")
 	local myToken = 0
 	local function current(): ColorCorrectionEffect?
 		return if impactToken == myToken then cc else nil
@@ -1856,12 +2251,43 @@ Shapes.Impact = function(cfg, ctx)
 		effect.Archivable = false
 		effect.Parent = camera
 		cc = effect
+		-- manga speed lines over the whole screen (needs the HD pack's speed_lines)
+		local player = Players.LocalPlayer
+		if speedLines ~= "" and player and RunService:IsRunning() then
+			local gui = player:FindFirstChildOfClass("PlayerGui")
+			if gui then
+				local old = gui:FindFirstChild("EasyVFX_SpeedLines")
+				if old then
+					old:Destroy()
+				end
+				local screen = Instance.new("ScreenGui")
+				screen.Name = "EasyVFX_SpeedLines"
+				screen.IgnoreGuiInset = true
+				screen.ResetOnSpawn = false
+				screen.DisplayOrder = 50
+				local image = Instance.new("ImageLabel")
+				image.BackgroundTransparency = 1
+				image.Image = speedLines
+				image.ImageColor3 = if styleName == "Invert" then Color3.new(0, 0, 0) else Color3.new(1, 1, 1)
+				image.AnchorPoint = Vector2.new(0.5, 0.5)
+				image.Position = UDim2.fromScale(0.5, 0.5)
+				image.Size = UDim2.fromScale(1.4, 1.4)
+				image.SizeConstraint = Enum.SizeConstraint.RelativeXX
+				image.Parent = screen
+				screen.Parent = gui
+				overlay = image
+			end
+		end
 		impactToken += 1
 		myToken = impactToken
 	end, function(alpha)
 		local effect = current()
 		if not effect then
 			return -- not shown (out of range) or replaced by a newer impact
+		end
+		if overlay then
+			overlay.ImageTransparency = math.clamp(alpha / 0.9, 0.15, 1) ^ 0.7
+			overlay.Size = UDim2.fromScale(1.4 + 0.25 * alpha, 1.4 + 0.25 * alpha)
 		end
 		-- Hold for the first 60%, then snap back quickly.
 		local k = strength * (if alpha < 0.6 then 1 else (1 - (alpha - 0.6) / 0.4) ^ 2)
@@ -1873,6 +2299,9 @@ Shapes.Impact = function(cfg, ctx)
 		local effect = current()
 		if effect then
 			effect:Destroy()
+		end
+		if overlay and overlay.Parent then
+			(overlay.Parent :: Instance):Destroy()
 		end
 	end)
 	return delay + duration
@@ -2761,22 +3190,28 @@ end
 local T = Presets.Textures
 
 -- In HD mode the soft built-in textures are swapped for the sharp Blender ones.
-local function hdTexture(ctx: any, layer: { [string]: any }): string?
+-- Smoke and blast puffs become the pack's 4x4 flipbooks (the second return value),
+-- so every preset with smoke (Smoke, Fog, Fire, the dark fantasy ones...) is HD too.
+local function hdTexture(ctx: any, layer: { [string]: any }): (string?, boolean)
 	local assets = ctx.assets
 	if layer.pack then
-		return assets[layer.pack]
+		return assets[layer.pack], false
 	end
-	if not ctx.hd then
-		return layer.texture
+	if not ctx.hd or layer.flipbook then
+		return layer.texture, false
 	end
 	if layer.texture == T.Star then
-		return assets.spark_star or layer.texture
+		return assets.spark_star or layer.texture, false
 	elseif layer.texture == T.Glow and not layer.keepTexture then
-		return assets.glow_soft or layer.texture
+		return assets.glow_soft or layer.texture, false
 	elseif layer.texture == T.Square and layer.orientation == "VelocityParallel" then
-		return assets.spark_streak or layer.texture
+		return assets.spark_streak or layer.texture, false
+	elseif layer.texture == T.Smoke and assets.flip_smoke then
+		return assets.flip_smoke, true
+	elseif layer.texture == T.Blast and assets.flip_impact then
+		return assets.flip_impact, true
 	end
-	return layer.texture
+	return layer.texture, false
 end
 
 ------------------------------------------------------------------------------------
@@ -2790,12 +3225,15 @@ LayerBuilders.particles = function(ctx, key, layer)
 	local parent = layerParent(ctx, key, layer)
 	local e = getOrCreate(ctx.existing, ctx.wanted, key, "ParticleEmitter", parent) :: ParticleEmitter
 	e.Name = layer.name or (if layer.burst then "Burst" else "Stream")
-	local texture = hdTexture(ctx, layer)
+	local texture, packFlipbook = hdTexture(ctx, layer)
 	if params.texture ~= "" and not layer.pack then
 		texture = params.texture
+		packFlipbook = false
 	end
 	e.Texture = texture or Presets.Textures.Glow
-	e.FlipbookLayout = enumItem(Enum.ParticleFlipbookLayout, layer.flipbook, Enum.ParticleFlipbookLayout.None) :: any
+	e.FlipbookLayout = if packFlipbook
+		then Enum.ParticleFlipbookLayout.Grid4x4
+		else enumItem(Enum.ParticleFlipbookLayout, layer.flipbook, Enum.ParticleFlipbookLayout.None) :: any
 	e.FlipbookMode = enumItem(Enum.ParticleFlipbookMode, layer.flipMode, Enum.ParticleFlipbookMode.OneShot) :: any
 	e.FlipbookStartRandom = layer.flipRandom == true
 	e.Color = colorSequence(layer.color, params)
@@ -2882,6 +3320,16 @@ LayerBuilders.shape = function(ctx, key, layer)
 	attrs.Color1 = resolveColor(layer.color1 or layer.color0 or "s", params)
 	if params.texture ~= "" then
 		attrs.Texture = params.texture
+	elseif layer.beamPack and ctx.hd and ctx.assets[layer.beamPack] then
+		-- HD: a Blender stroke/arc texture over the whole ribbon
+		attrs.Texture = ctx.assets[layer.beamPack]
+	end
+	if layer.packAttrs and ctx.hd then
+		for attr, key in layer.packAttrs do
+			if ctx.assets[key] then
+				attrs[attr] = ctx.assets[key]
+			end
+		end
 	end
 	attrs.Kind = layer.kind
 	for name, value in attrs do
@@ -3302,10 +3750,34 @@ Custom.Blocks = {
 		return { { type = "light", brightness = 5 * m.amount, range = 18 * m.size, color = if m.color == "x" then "p" else m.color, flash = 0.4 } }
 	end },
 	{ id = "shake", vi = "Rung camera", en = "Camera shake", make = function(m: Mod)
-		return { { type = "shape", kind = "Shake", attrs = { Delay = m.delay, Magnitude = 1 * m.amount, Duration = 0.4 * m.size } } }
+		return { { type = "shape", kind = "Shake", attrs = { Delay = m.delay, Kick = true, Magnitude = 1.5 * m.amount, Duration = 0.35 * m.size, Roughness = 26 } } }
+	end },
+	{ id = "hitspark", vi = "Tia va chạm", en = "Hit spark", make = function(m: Mod)
+		local size = 9 * m.size
+		local color = if m.color == "x" then "p" else m.color
+		local layers: { any } = {
+			-- HD: a 2-3 frame white star, then the spiky flipbook (v3 pack)
+			{ type = "particles", name = "HitStarHD", hd = true, pack = "hit_star", at = "center", delay = m.delay, burst = 1,
+				size = { { 0, size * 0.8 }, { 0.3, size }, { 1, size * 1.1 } }, transparency = { { 0, 0 }, { 0.5, 0 }, { 1, 1 } },
+				lifetime = { 0.09, 0.09 }, rotation = { 0, 360 }, color = { "w" }, lightEmission = 1, brightness = 4, zOffset = 3 },
+			{ type = "particles", name = "HitSparkHD", hd = true, pack = "flip_hitspark", at = "center", delay = m.delay + 0.03,
+				flipbook = "Grid4x4", flipMode = "OneShot", burst = 1, size = { { 0, size * 1.1 }, { 1, size * 1.6 } },
+				lifetime = { 0.32, 0.32 }, rotation = { 0, 360 }, color = { "w", color }, lightEmission = 1, brightness = 3, zOffset = 2.5 },
+			-- without HD: sharp needles
+			{ type = "shape", kind = "Lines", basic = true, attrs = { Delay = m.delay, Count = math.max(4, math.floor(14 * m.amount)),
+				Distance0 = 0.3, Distance1 = 6 * m.size, Length = 3 * m.size, Width = 0.3 * m.size, Duration = 0.25, Brightness = 3 },
+				color0 = "w", color1 = color },
+		}
+		return layers
+	end },
+	{ id = "hitstop", vi = "Khựng (hit-stop)", en = "Hit-stop", make = function(m: Mod)
+		return { { type = "shape", kind = "HitStop", attrs = { Delay = m.delay, Duration = 0.06 * m.amount } } }
+	end },
+	{ id = "punch", vi = "Zoom giật", en = "Camera punch", make = function(m: Mod)
+		return { { type = "shape", kind = "Punch", attrs = { Delay = m.delay, Amount = -6 * m.amount, Duration = 0.25 * m.size } } }
 	end },
 	{ id = "impact", vi = "Khung va chạm", en = "Impact frame", make = function(m: Mod)
-		return { { type = "shape", kind = "Impact", attrs = { Delay = m.delay, Duration = 0.1, Style = if m.dark then "Invert" else "Flash", Strength = math.clamp(m.amount, 0, 2) } } }
+		return { { type = "shape", kind = "Impact", packAttrs = { SpeedLines = "speed_lines" }, attrs = { Delay = m.delay, Duration = 0.1, Style = if m.dark then "Invert" else "Flash", Strength = math.clamp(m.amount, 0, 2) } } }
 	end },
 }
 
@@ -3513,6 +3985,39 @@ return Custom
       </Item>
       <Item class="ModuleScript" referent="8">
         <Properties>
+          <string name="Name">DefaultAssets</string>
+          <string name="Source"><![CDATA[--!strict
+-- The EasyVFX HD pack (pack/textures, rendered by blender/make_vfx_pack.py), already
+-- uploaded to Roblox as public images. The plugin uses these unless the user turned
+-- HD off or brought their own copies (Scan pack / Paste IDs), so effects are HD (v2)
+-- out of the box instead of the basic geometry-only look (v1).
+return table.freeze({
+	flip_electric = "rbxassetid://82138296413867",
+	flip_impact = "rbxassetid://122141985380704",
+	flip_slash = "rbxassetid://72699294041828",
+	flip_smoke = "rbxassetid://114357819196708",
+	glow_soft = "rbxassetid://80430270502491",
+	ring_wave = "rbxassetid://122408012069014",
+	slash_arc = "rbxassetid://77362621856344",
+	slash_clean = "rbxassetid://85536294255615",
+	slash_core = "rbxassetid://117341298283613",
+	slash_fiber = "rbxassetid://86334360833977",
+	slash_glow = "rbxassetid://110558506665611",
+	spark_star = "rbxassetid://74475827199936",
+	spark_streak = "rbxassetid://90179582471630",
+	-- v3: impact & sharpness (docs/impact.md)
+	arc_electric = "rbxassetid://115248336686988",
+	flip_hitspark = "rbxassetid://79450510348314",
+	hit_star = "rbxassetid://84110628902184",
+	ring_hard = "rbxassetid://124127377570823",
+	speed_lines = "rbxassetid://98900630467561",
+	stroke_wind = "rbxassetid://107199801545990",
+})
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="9">
+        <Properties>
           <string name="Name">Presets</string>
           <string name="Source"><![CDATA[--!nonstrict
 --[[
@@ -3558,22 +4063,32 @@ export type Preset = {
 	name: { vi: string, en: string },
 	desc: { vi: string, en: string },
 	kind: string, -- "loop" | "burst"
+	style: string?, -- "dark" for the dark fantasy look, nil otherwise
 	placement: string?, -- "ground" | "sky" | "air"
 	area: Vector3?,
 	defaults: { [string]: any },
 	layers: { Layer },
 }
 
+-- Grouped by what the effect is for, so the library stays easy to scan. The look
+-- (dark fantasy...) is a separate filter: Presets.Styles.
 Presets.Categories = {
 	{ id = "all", vi = "Tất cả", en = "All" },
-	{ id = "combat", vi = "Chiến đấu", en = "Combat" },
-	{ id = "magic", vi = "Phép thuật", en = "Magic" },
+	{ id = "slash", vi = "Chém", en = "Slashes" },
+	{ id = "impact", vi = "Va chạm & nổ", en = "Impacts & Explosions" },
+	{ id = "projectile", vi = "Đạn, tia & lướt", en = "Projectiles, Beams & Dashes" },
+	{ id = "aura", vi = "Hào quang & buff", en = "Auras & Buffs" },
+	{ id = "circle", vi = "Vòng phép & cổng", en = "Circles & Portals" },
 	{ id = "elements", vi = "Nguyên tố", en = "Elements" },
-	{ id = "world", vi = "Môi trường", en = "World" },
-	{ id = "light", vi = "Ánh sáng", en = "Light" },
-	{ id = "dark", vi = "Hắc ám", en = "Dark Fantasy" },
+	{ id = "world", vi = "Môi trường", en = "Environment" },
 	{ id = "custom", vi = "Của tôi", en = "My Effects" },
 }
+
+Presets.Styles = {
+	{ id = "all", vi = "Mọi phong cách", en = "All styles" },
+	{ id = "dark", vi = "Hắc ám", en = "Dark Fantasy" },
+}
+
 
 local function rgb(r: number, g: number, b: number): Color3
 	return Color3.fromRGB(r, g, b)
@@ -3828,11 +4343,92 @@ local function embers(rate: number, at: any?, color: { any }?): Layer
 	}
 end
 
+
+-- Impact kit -------------------------------------------------------------------
+-- What makes a hit feel heavy (see docs/impact.md): a hard white hit spark held for
+-- a couple of frames, a crisp ring that is gone before the main effect, a short
+-- hit-stop, a camera kick and a small FOV punch. The HD layers use the v3 Blender
+-- textures and simply drop out when they are not available.
+
+local function hitSpark(at: any, size: number, delay: number?): { Layer }
+	return {
+		{
+			type = "particles",
+			name = "HitStarHD",
+			hd = true,
+			pack = "hit_star",
+			at = at,
+			delay = delay,
+			burst = 1,
+			size = { { 0, size * 0.8 }, { 0.3, size }, { 1, size * 1.1 } },
+			transparency = { { 0, 0 }, { 0.5, 0 }, { 1, 1 } },
+			lifetime = { 0.09, 0.09 }, -- a 2-3 frame hold
+			rotation = { 0, 360 },
+			color = { "w" },
+			lightEmission = 1,
+			brightness = 4,
+			zOffset = 3,
+		},
+		{
+			type = "particles",
+			name = "HitSparkHD",
+			hd = true,
+			pack = "flip_hitspark",
+			at = at,
+			delay = (delay or 0) + 0.03,
+			flipbook = "Grid4x4",
+			flipMode = "OneShot",
+			burst = 1,
+			size = { { 0, size * 1.1 }, { 1, size * 1.6 } },
+			lifetime = { 0.32, 0.32 },
+			rotation = { 0, 360 },
+			color = { "w", "p", "s" },
+			lightEmission = 1,
+			brightness = 3,
+			zOffset = 2.5,
+		},
+	}
+end
+
+local function hardRing(at: any, size: number, life: number, tilt: Vector3?, delay: number?): Layer
+	return {
+		type = "particles",
+		name = "RingHardHD",
+		hd = true,
+		pack = "ring_hard",
+		at = at,
+		tilt = tilt,
+		delay = delay,
+		burst = 1,
+		orientation = "VelocityPerpendicular",
+		direction = "Top",
+		speed = { 0.01, 0.01 },
+		size = { { 0, size * 0.15 }, { 0.35, size * 0.85 }, { 1, size } },
+		transparency = { { 0, 0 }, { 0.4, 0.1 }, { 1, 1 } },
+		lifetime = { life, life },
+		color = { "w", "p" },
+		lightEmission = 1,
+		brightness = 3,
+	}
+end
+
+-- hit-stop + FOV punch + camera kick, scaled by how heavy the hit is (0..1)
+local function weight(heavy: number, at: Vector3?, delay: number?): { Layer }
+	return {
+		{ type = "shape", kind = "HitStop", attrs = { Delay = delay or 0, Duration = 0.04 + 0.05 * heavy } },
+		{ type = "shape", kind = "Punch", attrs = { Offset = at, Delay = delay or 0, Amount = -(2 + 6 * heavy), Duration = 0.18 + 0.15 * heavy } },
+		{ type = "shape", kind = "Shake", attrs = { Offset = at, Delay = delay or 0, Kick = true, Magnitude = 1 + 2 * heavy, Duration = 0.2 + 0.25 * heavy, Roughness = 26 } },
+	}
+end
+
+-- extra layers per preset (appended after the list below)
+local IMPACT_KIT: { [string]: { Layer } } = {}
+
 Presets.List = ({
 	------------------------------------------------------------------ Combat
 	{
 		id = "fireball",
-		category = "combat",
+		category = "projectile",
 		name = { vi = "Cầu lửa", en = "Fireball" },
 		desc = { vi = "Quả cầu bay theo đường cong rồi nổ", en = "Arcing shot that bursts on impact" },
 		kind = "burst",
@@ -3873,7 +4469,7 @@ Presets.List = ({
 	},
 	{
 		id = "impact_frame",
-		category = "combat",
+		category = "impact",
 		name = { vi = "Khung hình va chạm", en = "Impact Frame" },
 		desc = { vi = "Chớp màn hình kiểu anime + rung camera", en = "Anime screen flash + camera shake" },
 		kind = "burst",
@@ -3908,7 +4504,7 @@ Presets.List = ({
 	},
 	{
 		id = "slash",
-		category = "combat",
+		category = "slash",
 		name = { vi = "Chém lưỡi liềm", en = "Crescent Slash" },
 		desc = { vi = "Vệt chém sắc nét kiểu anime", en = "Crisp anime sword slash" },
 		kind = "burst",
@@ -3937,7 +4533,7 @@ Presets.List = ({
 	},
 	{
 		id = "multi_slash",
-		category = "combat",
+		category = "slash",
 		name = { vi = "Liên hoàn trảm", en = "Slash Flurry" },
 		desc = { vi = "Nhiều nhát chém xoay ngẫu nhiên", en = "Many slashes at random angles" },
 		kind = "burst",
@@ -3972,7 +4568,7 @@ Presets.List = ({
 	},
 	{
 		id = "impact",
-		category = "combat",
+		category = "impact",
 		name = { vi = "Va chạm", en = "Hit Impact" },
 		desc = { vi = "Chớp sáng + tia + sóng khi đánh trúng", en = "Flash, needles and ring on hit" },
 		kind = "burst",
@@ -4009,7 +4605,7 @@ Presets.List = ({
 	},
 	{
 		id = "ground_slam",
-		category = "combat",
+		category = "impact",
 		name = { vi = "Đập đất", en = "Ground Slam" },
 		desc = { vi = "Hố nứt, đá văng, sóng xung kích", en = "Crater, flying rocks, shockwave" },
 		kind = "burst",
@@ -4042,7 +4638,7 @@ Presets.List = ({
 	},
 	{
 		id = "energy_blast",
-		category = "combat",
+		category = "projectile",
 		name = { vi = "Pháo năng lượng", en = "Energy Blast" },
 		desc = { vi = "Đường hầm vòng sáng bắn về phía trước", en = "Tunnel of rings firing forward" },
 		kind = "burst",
@@ -4088,7 +4684,7 @@ Presets.List = ({
 	},
 	{
 		id = "explosion",
-		category = "combat",
+		category = "impact",
 		name = { vi = "Vụ nổ", en = "Explosion" },
 		desc = { vi = "Cầu lửa, khói, tia lửa, đá vụn", en = "Fireball, smoke, sparks, rubble" },
 		kind = "burst",
@@ -4167,7 +4763,7 @@ Presets.List = ({
 	},
 	{
 		id = "lightning",
-		category = "combat",
+		category = "projectile",
 		name = { vi = "Sét đánh", en = "Lightning Strike" },
 		desc = { vi = "Tia sét zig-zag từ trời xuống", en = "Zig-zag bolt from the sky" },
 		kind = "burst",
@@ -4204,7 +4800,7 @@ Presets.List = ({
 	},
 	{
 		id = "shockwave",
-		category = "combat",
+		category = "impact",
 		name = { vi = "Sóng xung kích", en = "Shockwave" },
 		desc = { vi = "Nhiều vòng sóng lan trên mặt đất", en = "Rings racing across the ground" },
 		kind = "burst",
@@ -4226,7 +4822,7 @@ Presets.List = ({
 	},
 	{
 		id = "sword_trail",
-		category = "combat",
+		category = "slash",
 		name = { vi = "Vệt vũ khí", en = "Weapon Trail" },
 		desc = { vi = "Gắn vào kiếm: để lại vệt khi vung", en = "Put on a sword: streak when swung" },
 		kind = "loop",
@@ -4249,7 +4845,7 @@ Presets.List = ({
 	------------------------------------------------------------------ Magic
 	{
 		id = "magic_circle",
-		category = "magic",
+		category = "circle",
 		name = { vi = "Vòng phép", en = "Magic Circle" },
 		desc = { vi = "Vòng sáng xoay + hạt bay lên", en = "Spinning rings with rising motes" },
 		kind = "loop",
@@ -4287,7 +4883,7 @@ Presets.List = ({
 	},
 	{
 		id = "heal",
-		category = "magic",
+		category = "aura",
 		name = { vi = "Hồi máu", en = "Heal" },
 		desc = { vi = "Vòng xanh + tia sáng bay lên", en = "Green ring and rising light" },
 		kind = "burst",
@@ -4327,7 +4923,7 @@ Presets.List = ({
 	},
 	{
 		id = "level_up",
-		category = "magic",
+		category = "aura",
 		name = { vi = "Lên cấp", en = "Level Up" },
 		desc = { vi = "Cột sáng + vòng bay lên + sao", en = "Light pillar, rising rings, stars" },
 		kind = "burst",
@@ -4367,7 +4963,7 @@ Presets.List = ({
 	},
 	{
 		id = "power_aura",
-		category = "magic",
+		category = "aura",
 		name = { vi = "Hào quang sức mạnh", en = "Power Aura" },
 		desc = { vi = "Tia năng lượng liên tục bốc lên", en = "Energy streaks rising nonstop" },
 		kind = "loop",
@@ -4399,7 +4995,7 @@ Presets.List = ({
 	},
 	{
 		id = "portal",
-		category = "magic",
+		category = "circle",
 		name = { vi = "Cổng dịch chuyển", en = "Portal" },
 		desc = { vi = "Hạt xoáy hút vào tâm", en = "Particles swirling inward" },
 		kind = "loop",
@@ -4447,7 +5043,7 @@ Presets.List = ({
 	},
 	{
 		id = "shield",
-		category = "magic",
+		category = "aura",
 		name = { vi = "Khiên năng lượng", en = "Energy Shield" },
 		desc = { vi = "Bong bóng bảo vệ lung linh", en = "Shimmering protective bubble" },
 		kind = "loop",
@@ -4474,7 +5070,7 @@ Presets.List = ({
 	},
 	{
 		id = "energy_orb",
-		category = "magic",
+		category = "aura",
 		name = { vi = "Quả cầu năng lượng", en = "Energy Orb" },
 		desc = { vi = "Lõi neon phát sáng + tia điện", en = "Neon core with crackling sparks" },
 		kind = "loop",
@@ -4508,7 +5104,7 @@ Presets.List = ({
 	},
 	{
 		id = "sparkles",
-		category = "magic",
+		category = "aura",
 		name = { vi = "Lấp lánh", en = "Sparkles" },
 		desc = { vi = "Sao lấp lánh quanh vật thể", en = "Twinkling stars around an object" },
 		kind = "loop",
@@ -4876,7 +5472,7 @@ Presets.List = ({
 	------------------------------------------------------------------ Light
 	{
 		id = "laser",
-		category = "light",
+		category = "projectile",
 		name = { vi = "Tia laser", en = "Laser Beam" },
 		desc = { vi = "Tia sáng bắn thẳng phía trước", en = "Straight beam shooting forward" },
 		kind = "loop",
@@ -4906,7 +5502,7 @@ Presets.List = ({
 	},
 	{
 		id = "glow",
-		category = "light",
+		category = "aura",
 		name = { vi = "Quầng sáng", en = "Soft Glow" },
 		desc = { vi = "Vầng sáng dịu + đèn", en = "Soft halo with a light" },
 		kind = "loop",
@@ -4930,7 +5526,7 @@ Presets.List = ({
 	},
 	{
 		id = "outline",
-		category = "light",
+		category = "aura",
 		name = { vi = "Viền phát sáng", en = "Glowing Outline" },
 		desc = { vi = "Tô viền vật thể (Highlight)", en = "Outline the object (Highlight)" },
 		kind = "loop",
@@ -4967,7 +5563,7 @@ Presets.List = ({
 	},
 	{
 		id = "charge_up",
-		category = "magic",
+		category = "aura",
 		name = { vi = "Tụ lực", en = "Charge Up" },
 		desc = { vi = "Năng lượng xoáy và hút vào tâm", en = "Energy spiraling and pulling inward" },
 		kind = "burst",
@@ -5000,7 +5596,8 @@ Presets.List = ({
 	------------------------------------------------------------------ Dark fantasy
 	{
 		id = "shadow_slash",
-		category = "dark",
+		category = "slash",
+		style = "dark",
 		name = { vi = "Chém bóng tối", en = "Shadow Slash" },
 		desc = { vi = "Vệt chém đen, viền tím, khói tan", en = "Black slash, violet edge, fading smoke" },
 		kind = "burst",
@@ -5034,7 +5631,8 @@ Presets.List = ({
 	},
 	{
 		id = "soul_flame",
-		category = "dark",
+		category = "elements",
+		style = "dark",
 		name = { vi = "Lửa linh hồn", en = "Soul Flame" },
 		desc = { vi = "Lửa ma xanh lục, khói đen, tàn bay", en = "Ghostly green fire, black smoke, embers" },
 		kind = "loop",
@@ -5077,7 +5675,8 @@ Presets.List = ({
 	},
 	{
 		id = "blood_burst",
-		category = "dark",
+		category = "impact",
+		style = "dark",
 		name = { vi = "Huyết bạo", en = "Blood Burst" },
 		desc = { vi = "Vụ nổ máu đỏ thẫm, giọt văng, vòng đỏ", en = "Crimson burst, flying drops, red ring" },
 		kind = "burst",
@@ -5130,7 +5729,8 @@ Presets.List = ({
 	},
 	{
 		id = "void_rift",
-		category = "dark",
+		category = "circle",
+		style = "dark",
 		name = { vi = "Khe nứt hư vô", en = "Void Rift" },
 		desc = { vi = "Lỗ đen viền tím hút mọi thứ vào trong", en = "Black hole with a violet rim that pulls everything in" },
 		kind = "burst",
@@ -5186,7 +5786,8 @@ Presets.List = ({
 	},
 	{
 		id = "cursed_sigil",
-		category = "dark",
+		category = "circle",
+		style = "dark",
 		name = { vi = "Ấn chú nguyền", en = "Cursed Sigil" },
 		desc = { vi = "Vòng ấn đỏ xoay, khói đen bốc lên", en = "Spinning red sigil, black smoke rising" },
 		kind = "burst",
@@ -5222,7 +5823,8 @@ Presets.List = ({
 	},
 	{
 		id = "necrotic_aura",
-		category = "dark",
+		category = "aura",
+		style = "dark",
 		name = { vi = "Hào quang tử khí", en = "Necrotic Aura" },
 		desc = { vi = "Khí đen xanh bao quanh nhân vật", en = "Green-black miasma around a character" },
 		kind = "loop",
@@ -5264,7 +5866,8 @@ Presets.List = ({
 	},
 	{
 		id = "soul_release",
-		category = "dark",
+		category = "impact",
+		style = "dark",
 		name = { vi = "Giải phóng linh hồn", en = "Soul Release" },
 		desc = { vi = "Nổ đen co lại rồi bung linh hồn sáng", en = "Black implosion, then bright souls burst out" },
 		kind = "burst",
@@ -5308,7 +5911,8 @@ Presets.List = ({
 	},
 	{
 		id = "ash_embers",
-		category = "dark",
+		category = "world",
+		style = "dark",
 		name = { vi = "Tro và tàn lửa", en = "Ash & Embers" },
 		desc = { vi = "Tro xám rơi, tàn lửa bay lơ lửng", en = "Falling grey ash and drifting embers" },
 		kind = "loop",
@@ -5352,6 +5956,133 @@ Presets.List = ({
 			},
 		},
 	},
+	------------------------------------------------------------------ From the reference clips
+	{
+		id = "lightning_slash",
+		category = "slash",
+		name = { vi = "Chém sét", en = "Lightning Slash" },
+		desc = { vi = "Vệt chém xanh điện, tia điện chạy dọc lưỡi", en = "Electric blue slash with arcs running along it" },
+		kind = "burst",
+		defaults = { color1 = rgb(110, 180, 255), color2 = rgb(40, 50, 255), trigger = "Loop", interval = 1.4 },
+		layers = {
+			{
+				type = "shape",
+				kind = "Slash",
+				attrs = { Radius = 5.5, Arc = 170, Width = 2.2, Sweep = 70, Duration = 0.4, Brightness = 3, TailFade = 0.85 },
+				color0 = "p",
+				color1 = "s",
+			},
+			{
+				type = "shape",
+				kind = "Crackle",
+				attrs = { Delay = 0.03, Count = 9, Radius = 5.6, Arc = 160, Length = 1.8, Jitter = 0.45, Width = 0.14, Duration = 0.45, Brightness = 3 },
+				color0 = "w",
+				color1 = "p",
+			},
+			{
+				type = "shape",
+				kind = "Lines",
+				attrs = { Delay = 0.05, Count = 10, Mode = "Ring", Distance0 = 4, Distance1 = 10, Length = 2.5, Width = 0.18, Duration = 0.3, Brightness = 2 },
+				color0 = "w",
+				color1 = "p",
+			},
+			sparks(26, 45),
+			{ type = "shape", kind = "Impact", attrs = { Delay = 0.04, Duration = 0.06, Style = "Flash", Strength = 0.45 } },
+			{ type = "shape", kind = "Shake", attrs = { Delay = 0.04, Magnitude = 0.6, Duration = 0.3, Roughness = 24 } },
+			{ type = "light", brightness = 6, range = 20, color = "p", flash = 0.35 },
+		},
+	},
+	{
+		id = "flash_step",
+		category = "projectile",
+		name = { vi = "Bước chớp", en = "Flash Step" },
+		desc = { vi = "Lướt nhanh: vệt trắng, bóng mờ đen, tia ở điểm dừng", en = "Instant dash: white streak, dark afterimage, burst at the end" },
+		kind = "burst",
+		defaults = { color1 = rgb(230, 245, 255), color2 = rgb(90, 140, 255), trigger = "Loop", interval = 1.6 },
+		layers = {
+			{
+				type = "shape",
+				kind = "Streak",
+				attrs = { To = Vector3.new(0, 0, -24), Width = 0.7, Smear = 3, Duration = 0.45, Brightness = 3 },
+				color0 = "w",
+				color1 = "s",
+			},
+			{
+				type = "shape",
+				kind = "Lines",
+				attrs = { Offset = Vector3.new(0, 0, -24), Delay = 0.06, Count = 12, Distance0 = 0.5, Distance1 = 7, Length = 3, Width = 0.2, Duration = 0.3, Brightness = 2 },
+				color0 = "w",
+				color1 = "s",
+			},
+			{
+				type = "shape",
+				kind = "Crackle",
+				attrs = { Offset = Vector3.new(0, 0, -24), Delay = 0.05, Count = 5, Radius = 1.5, Arc = 360, Length = 1.4, Jitter = 0.5, Width = 0.1, Duration = 0.3, Brightness = 3 },
+				color0 = "s",
+				color1 = "w",
+			},
+			sparks(16, 30, Vector3.new(0, 0, -24)),
+			{ type = "shape", kind = "Shake", attrs = { Delay = 0.05, Magnitude = 0.5, Duration = 0.25, Roughness = 22 } },
+		},
+	},
+	{
+		id = "wind_vortex",
+		category = "circle",
+		name = { vi = "Lốc gió", en = "Wind Vortex" },
+		desc = { vi = "Đĩa gió xoáy, mảnh vụn bay, sao lấp lánh", en = "Spinning wind disc, flying debris, sparkles" },
+		kind = "burst",
+		area = Vector3.new(8, 4, 8),
+		defaults = { color1 = rgb(235, 255, 245), color2 = rgb(70, 255, 130), trigger = "Loop", interval = 0.75 },
+		layers = {
+			{
+				type = "shape",
+				kind = "Whirl",
+				attrs = { Count = 7, Radius0 = 2.5, Radius1 = 6.5, Width = 0.8, ArcMin = 80, ArcMax = 220, Spin = 420, Duration = 1.1, Tilt = Vector3.new(12, 0, -8), Transparency = 0.05, Brightness = 2 },
+				color0 = "p",
+				color1 = "s",
+			},
+			{
+				type = "shape",
+				kind = "Orb",
+				attrs = { Size0 = 1.6, Size1 = 1.9, Duration = 1.1, Material = "Glass", Transparency = 0.15, FadeStart = 0.8, Ease = "Linear" },
+				color0 = "p",
+				color1 = "w",
+			},
+			{
+				type = "particles",
+				at = "part",
+				texture = T.Square,
+				burst = 18,
+				color = { "k" },
+				size = { { 0, 0.25 }, { 1, 0.15 } },
+				lifetime = { 0.8, 1.3 },
+				speed = { 6, 12 },
+				spread = { 180, 30 },
+				direction = "Top",
+				drag = 2,
+				accel = Vector3.new(0, -6, 0),
+				rotation = { 0, 360 },
+				rotSpeed = { -360, 360 },
+				lightEmission = 0,
+				lightInfluence = 1,
+			},
+			{
+				type = "particles",
+				at = "part",
+				texture = T.Star,
+				burst = 14,
+				color = { "w", "s" },
+				size = { { 0, 0 }, { 0.2, 0.9 }, { 1, 0 } },
+				lifetime = { 0.5, 1 },
+				speed = { 3, 8 },
+				spread = { 180, 180 },
+				drag = 3,
+				rotation = { 0, 360 },
+				lightEmission = 1,
+				brightness = 2,
+			},
+		},
+	},
 } :: any) :: { Preset }
 
 -- Helpers like hdSlash() return several layers; flatten them into the list.
@@ -5369,6 +6100,50 @@ for _, preset in Presets.List do
 	preset.layers = flat
 end
 
+
+-- Weight and sharpness on the hits (layers appended per preset; HD parts need the pack)
+local function kit(id: string, ...: { Layer })
+	local all = {}
+	for _, group in { ... } do
+		for _, layer in group do
+			table.insert(all, layer)
+		end
+	end
+	IMPACT_KIT[id] = all
+end
+local FRONT = Vector3.new(0, 0, -28)
+kit("impact", hitSpark("center", 9), { hardRing("center", 14, 0.22, Vector3.new(90, 0, 0)) }, weight(0.6))
+kit("ground_slam", hitSpark(Vector3.new(0, -1.5, 0), 12), { hardRing(Vector3.new(0, -1.8, 0), 34, 0.3) }, weight(1))
+kit("explosion", hitSpark("center", 14), { hardRing(Vector3.new(0, -1.8, 0), 40, 0.32) }, weight(0.9))
+kit("lightning_slash", hitSpark("center", 8, 0.04), weight(0.5, nil, 0.04))
+kit("flash_step", hitSpark(FRONT + Vector3.new(0, 0, 4), 7, 0.06), weight(0.4, Vector3.new(0, 0, -24), 0.06))
+kit("fireball", hitSpark(FRONT, 10, 0.55), { hardRing(FRONT, 18, 0.25, Vector3.new(90, 0, 0), 0.55) }, weight(0.6, FRONT, 0.55))
+kit("impact_frame", hitSpark("center", 12), weight(1))
+kit("blood_burst", hitSpark("center", 9), weight(0.7))
+kit("soul_release", hitSpark("center", 10, 0.35), weight(0.8, nil, 0.35))
+kit("shockwave", { hardRing(Vector3.new(0, -1.8, 0), 30, 0.28) })
+kit("energy_blast", hitSpark("center", 8))
+
+-- HD strokes for the reference-clip effects
+local BEAM_PACK = { Whirl = "stroke_wind", Streak = "stroke_wind", Crackle = "arc_electric" }
+
+for _, preset in Presets.List do
+	for _, layer in preset.layers do
+		if layer.type == "shape" and BEAM_PACK[layer.kind] and layer.beamPack == nil then
+			layer.beamPack = BEAM_PACK[layer.kind]
+		end
+		if layer.type == "shape" and layer.kind == "Impact" then
+			layer.packAttrs = { SpeedLines = "speed_lines" }
+		end
+	end
+	local extra = IMPACT_KIT[preset.id]
+	if extra then
+		for _, layer in extra do
+			table.insert(preset.layers, layer)
+		end
+	end
+end
+
 Presets.ById = {} :: { [string]: Preset }
 for _, preset in Presets.List do
 	Presets.ById[preset.id] = preset :: any
@@ -5378,7 +6153,7 @@ return Presets
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="9">
+      <Item class="ModuleScript" referent="10">
         <Properties>
           <string name="Name">Strings</string>
           <string name="Source"><![CDATA[--!strict
@@ -5525,7 +6300,8 @@ Strings.vi = {
 	replayGuide = "Xem lại hướng dẫn",
 
 	hdTitle = "Chất lượng HD (gói Blender)",
-	hdBodyOff = "Hiện đang dùng bản cơ bản. Bật HD để lưỡi chém có vân sợi, đuôi tan dần, flipbook va chạm/khói/điện:\n1. Studio → File → Import 3D → chọn EasyVFX_Pack.fbx → Import.\n2. Bấm \"Quét gói\" bên dưới. Xong!",
+	hdBodyOff = "HD đang tắt, hiệu ứng dùng bản cơ bản. Bấm \"Bật HD\" để dùng gói texture có sẵn (lưỡi chém vân sợi, đuôi tan dần, flipbook va chạm/khói/điện). Hoặc dùng bản upload của riêng bạn: Quét gói / Dán ID.",
+	hdEnable = "Bật HD (gói có sẵn)",
 	hdBodyOn = "HD đang bật: %d texture. Hiệu ứng mới tự dùng HD.",
 	hdScan = "Quét gói",
 	hdPaste = "Dán ID",
@@ -5682,7 +6458,8 @@ Strings.en = {
 	replayGuide = "Replay the guide",
 
 	hdTitle = "HD quality (Blender pack)",
-	hdBodyOff = "Using basic quality. Turn on HD for fibrous slashes with dissolving tails and impact/smoke/electric flipbooks:\n1. Studio → File → Import 3D → pick EasyVFX_Pack.fbx → Import.\n2. Click \"Scan pack\" below. Done!",
+	hdBodyOff = "HD is off, so effects use basic quality. Click \"Turn on HD\" to use the built-in texture pack (fibrous slashes, dissolving tails, impact/smoke/electric flipbooks), or bring your own uploads with Scan pack / Paste IDs.",
+	hdEnable = "Turn on HD (built-in pack)",
 	hdBodyOn = "HD is on: %d textures. New effects use HD automatically.",
 	hdScan = "Scan pack",
 	hdPaste = "Paste IDs",
@@ -5705,11 +6482,11 @@ return Strings
         </Properties>
       </Item>
     </Item>
-    <Item class="Folder" referent="10">
+    <Item class="Folder" referent="11">
       <Properties>
         <string name="Name">UI</string>
       </Properties>
-      <Item class="ModuleScript" referent="11">
+      <Item class="ModuleScript" referent="12">
         <Properties>
           <string name="Name">App</string>
           <string name="Source"><![CDATA[--!nonstrict
@@ -5760,6 +6537,7 @@ export type Api = {
 	scanAssets: () -> number,
 	assetsFromText: (text: string) -> number,
 	disableHD: () -> (),
+	enableHD: () -> (),
 	applyAll: () -> number,
 }
 
@@ -5769,6 +6547,7 @@ App.__index = App
 export type State = {
 	tab: string,
 	category: string,
+	style: string,
 	search: string,
 	lang: string,
 	autoPreview: boolean,
@@ -5788,6 +6567,7 @@ function App.new(api: Api)
 	self.state = {
 		tab = "library",
 		category = "all",
+		style = "all",
 		search = "",
 		lang = if lang == "vi" then "vi" else "en",
 		autoPreview = api.getSetting("EasyVFX_AutoPreview") ~= false,
@@ -6437,6 +7217,21 @@ function App:renderLibrary()
 			self:renderLibrary()
 		end, i).Parent = chips
 	end
+	-- the look is a separate filter, so categories stay about what an effect is for
+	local styles = C.new("Frame", {
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		LayoutOrder = 2,
+		Parent = content,
+	})
+	C.list(Enum.FillDirection.Horizontal, 6, true).Parent = styles
+	for i, style in Presets.Styles do
+		C.chip(t, (style :: any)[self.state.lang], self.state.style == style.id, function()
+			self.state.style = style.id
+			self:renderLibrary()
+		end, i).Parent = styles
+	end
 
 	self:hdCard(content, 0)
 
@@ -6505,27 +7300,9 @@ function App:renderLibrary()
 		favWrap.Parent = content
 	end
 
-	-- Cards
-	local grid = C.new("Frame", {
-		BackgroundTransparency = 1,
-		Size = UDim2.new(1, 0, 0, 0),
-		AutomaticSize = Enum.AutomaticSize.Y,
-		LayoutOrder = 4,
-		Parent = content,
-	})
-	local layout = C.new("UIGridLayout", {
-		CellPadding = UDim2.new(0, 8, 0, 8),
-		CellSize = UDim2.new(0.5, -4, 0, 118),
-		SortOrder = Enum.SortOrder.LayoutOrder,
-		Parent = grid,
-	})
-	local function fit()
-		local _, size = C.abs(grid)
-		local oneColumn = size.X > 0 and size.X < 280
-		layout.CellSize = if oneColumn then UDim2.new(1, 0, 0, 110) else UDim2.new(0.5, -4, 0, 118)
-	end
-	grid:GetPropertyChangedSignal("AbsoluteSize"):Connect(fit)
-	fit()
+	-- Cards, in one section per category
+	local grid = C.stack({ LayoutOrder = 4 }, 14)
+	grid.Parent = content
 	self.grid = grid
 	self.emptyNote = C.text(t, { text = self:L("noResults"), size = Theme.Text.label, color = t.mutedFg, order = 5 })
 	self.emptyNote.Visible = false
@@ -6574,7 +7351,7 @@ function App:hdCard(parent: Instance, order: number)
 		order = 2,
 	}).Parent = card
 
-	local row = C.new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 30), LayoutOrder = 3, Parent = card })
+	local row = C.new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 30), LayoutOrder = 4, Parent = card })
 	C.new("UIListLayout", {
 		FillDirection = Enum.FillDirection.Horizontal,
 		Padding = UDim.new(0, 6),
@@ -6601,9 +7378,22 @@ function App:hdCard(parent: Instance, order: number)
 			end,
 		}).Parent = row
 	else
+		local enableRow = C.new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 30), LayoutOrder = 3, Parent = card })
+		C.button(t, {
+			text = self:L("hdEnable"),
+			variant = "primary",
+			width = UDim.new(1, 0),
+			height = 30,
+			order = 1,
+			onClick = function()
+				api.enableHD()
+				local n = api.applyAll()
+				self:toastMessage(self:L("hdApplied"):format(n), "success")
+				self:renderLibrary()
+			end,
+		}).Parent = enableRow
 		C.button(t, {
 			text = self:L("hdScan"),
-			variant = "primary",
 			width = UDim.new(0.5, -3),
 			height = 30,
 			order = 1,
@@ -6780,20 +7570,72 @@ function App:card(preset: Presets.Preset, order: number): TextButton
 	return b
 end
 
+-- A grid of cards: two columns, one when the panel is narrow.
+local function cardGrid(order: number): Frame
+	local grid = C.new("Frame", {
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		LayoutOrder = order,
+	})
+	local layout = C.new("UIGridLayout", {
+		CellPadding = UDim2.new(0, 8, 0, 8),
+		CellSize = UDim2.new(0.5, -4, 0, 118),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Parent = grid,
+	})
+	local function fit()
+		local _, size = C.abs(grid)
+		local oneColumn = size.X > 0 and size.X < 280
+		layout.CellSize = if oneColumn then UDim2.new(1, 0, 0, 110) else UDim2.new(0.5, -4, 0, 118)
+	end
+	grid:GetPropertyChangedSignal("AbsoluteSize"):Connect(fit)
+	fit()
+	return grid
+end
+
 function App:renderCards()
-	local grid: Frame = self.grid
-	for _, child in grid:GetChildren() do
+	local t = self.t
+	local container: Frame = self.grid
+	for _, child in container:GetChildren() do
 		if child:IsA("GuiObject") then
 			child:Destroy()
 		end
 	end
 	local shown = 0
-	for i, preset in Presets.List do
-		local p = preset :: any
-		if (self.state.category == "all" or p.category == self.state.category) and matches(p, self.state.search) then
-			self:card(p, i).Parent = grid
-			shown += 1
+	for c, cat in Presets.Categories do
+		if cat.id == "all" or (self.state.category ~= "all" and self.state.category ~= cat.id) then
+			continue
 		end
+		local list = {}
+		for i, preset in Presets.List do
+			local p = preset :: any
+			local styleOk = self.state.style == "all" or p.style == self.state.style
+			if p.category == cat.id and styleOk and matches(p, self.state.search) then
+				table.insert(list, { preset = p, order = i })
+			end
+		end
+		if #list == 0 then
+			continue
+		end
+		local section = C.stack({ LayoutOrder = c }, 6)
+		-- titled sections only when several categories are shown together
+		if self.state.category == "all" then
+			C.text(t, {
+				text = string.format("%s · %d", ((cat :: any)[self.state.lang] :: string):upper(), #list),
+				size = Theme.Text.caption,
+				font = Theme.Font.bold,
+				color = t.mutedFg,
+				order = 1,
+			}).Parent = section
+		end
+		local grid = cardGrid(2)
+		for _, item in list do
+			self:card(item.preset, item.order).Parent = grid
+		end
+		grid.Parent = section
+		section.Parent = container
+		shown += #list
 	end
 	self.emptyNote.Visible = shown == 0
 end
@@ -7404,7 +8246,7 @@ return App
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="12">
+      <Item class="ModuleScript" referent="13">
         <Properties>
           <string name="Name">Components</string>
           <string name="Source"><![CDATA[--!strict
@@ -8102,7 +8944,7 @@ return C
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="13">
+      <Item class="ModuleScript" referent="14">
         <Properties>
           <string name="Name">Theme</string>
           <string name="Source"><![CDATA[--!strict

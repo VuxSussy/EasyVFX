@@ -142,7 +142,8 @@ Strings.vi = {
 	replayGuide = "Xem lại hướng dẫn",
 
 	hdTitle = "Chất lượng HD (gói Blender)",
-	hdBodyOff = "Hiện đang dùng bản cơ bản. Bật HD để lưỡi chém có vân sợi, đuôi tan dần, flipbook va chạm/khói/điện:\n1. Studio → File → Import 3D → chọn EasyVFX_Pack.fbx → Import.\n2. Bấm \"Quét gói\" bên dưới. Xong!",
+	hdBodyOff = "HD đang tắt, hiệu ứng dùng bản cơ bản. Bấm \"Bật HD\" để dùng gói texture có sẵn (lưỡi chém vân sợi, đuôi tan dần, flipbook va chạm/khói/điện). Hoặc dùng bản upload của riêng bạn: Quét gói / Dán ID.",
+	hdEnable = "Bật HD (gói có sẵn)",
 	hdBodyOn = "HD đang bật: %d texture. Hiệu ứng mới tự dùng HD.",
 	hdScan = "Quét gói",
 	hdPaste = "Dán ID",
@@ -299,7 +300,8 @@ Strings.en = {
 	replayGuide = "Replay the guide",
 
 	hdTitle = "HD quality (Blender pack)",
-	hdBodyOff = "Using basic quality. Turn on HD for fibrous slashes with dissolving tails and impact/smoke/electric flipbooks:\n1. Studio → File → Import 3D → pick EasyVFX_Pack.fbx → Import.\n2. Click \"Scan pack\" below. Done!",
+	hdBodyOff = "HD is off, so effects use basic quality. Click \"Turn on HD\" to use the built-in texture pack (fibrous slashes, dissolving tails, impact/smoke/electric flipbooks), or bring your own uploads with Scan pack / Paste IDs.",
+	hdEnable = "Turn on HD (built-in pack)",
 	hdBodyOn = "HD is on: %d textures. New effects use HD automatically.",
 	hdScan = "Scan pack",
 	hdPaste = "Paste IDs",

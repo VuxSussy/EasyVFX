@@ -47,14 +47,22 @@ Each effect is **one invisible Part** named `VFX_…` — move, rotate, duplicat
 
 The panel is in English by default; the **VI** button switches it to Vietnamese.
 
-### 42 built-in effects
+### 45 built-in effects, grouped by purpose
 
-- **Combat:** Fireball, Impact Frame, Crescent Slash, Slash Flurry, Hit Impact, Ground Slam (crater + flying rocks), Energy Blast, Explosion, Lightning Strike, Shockwave, Weapon Trail.
-- **Magic:** Magic Circle, Heal, Level Up, Power Aura, Portal, Energy Shield, Energy Orb, Sparkles, Charge Up.
-- **Elements:** Fire, Smoke, Frost, Fountain, Tornado.
-- **World:** Rain, Snow, Fireflies, Ground Fog, Confetti, Bubbles.
-- **Light:** Laser Beam, Soft Glow, Glowing Outline (Highlight).
-- **Dark Fantasy:** Shadow Slash, Soul Flame, Blood Burst, Void Rift, Cursed Sigil, Necrotic Aura, Soul Release, Ash & Embers. Unlit black bodies with bright edges; see [docs/dark-fantasy-vfx.md](docs/dark-fantasy-vfx.md) for the research behind them and where to find more VFX material legally.
+The library groups effects by what they are for. With **All** selected, each group gets its own titled section. A second row of chips filters by look, for example **Dark Fantasy**.
+
+| Category | Effects |
+|---|---|
+| **Slashes** | Crescent Slash, Slash Flurry, Weapon Trail, Lightning Slash, Shadow Slash† |
+| **Impacts & Explosions** | Hit Impact, Ground Slam, Explosion, Shockwave, Impact Frame, Blood Burst†, Soul Release† |
+| **Projectiles, Beams & Dashes** | Fireball, Energy Blast, Laser Beam, Lightning Strike, Flash Step |
+| **Auras & Buffs** | Power Aura, Charge Up, Energy Shield, Energy Orb, Heal, Level Up, Sparkles, Soft Glow, Glowing Outline, Necrotic Aura† |
+| **Circles & Portals** | Magic Circle, Portal, Wind Vortex, Void Rift†, Cursed Sigil† |
+| **Elements** | Fire, Smoke, Frost, Fountain, Tornado, Soul Flame† |
+| **Environment** | Rain, Snow, Fireflies, Ground Fog, Confetti, Bubbles, Ash & Embers† |
+| **My Effects** | Effects you build in the Create tab |
+
+† Dark Fantasy style. See [docs/dark-fantasy-vfx.md](docs/dark-fantasy-vfx.md) for the research behind them and where to find more VFX material legally.
 
 Effects you use often can be saved with **Advanced → Save to Favorites** and re-added with one click from the top of the Library tab.
 
@@ -87,6 +95,9 @@ Roblox's built-in textures are soft, so EasyVFX builds its crisp parts from **ge
 | **Projectile** | Neon/ForceField head flying along a Bezier arc with a tapered trail; hit layers fire at the end | fireball |
 | **Shake** | Smooth-noise camera shake with distance falloff (client only, never the editor camera) | fireball, ground slam, explosion, lightning, impact frame |
 | **Impact** | Anime impact frame: a few frames of Flash / Mono / Invert color correction, never stacked | fireball, impact frame |
+| **Whirl** | A tilted disc of tapered brush-stroke arcs spinning at different speeds | wind vortex |
+| **Streak** | A straight dash line that wipes in, then erodes from the tail, with an optional dark afterimage (Smear) | flash step |
+| **Crackle** | Short electric zig-zags jumping along a crescent or around a point, re-shaping and flickering | lightning slash, flash step |
 
 Chained beams don't use `FaceCamera` (each beam would turn on its own and leave a notch at every joint). Instead the runtime turns the shared attachments towards the camera every frame, so a slash, ring, spiral or trail is one seamless ribbon. On top of that, sparks use a square texture stretched along their velocity (`VelocityParallel` + `Squash`) with `LightEmission = 1` for additive glow.
 
@@ -111,7 +122,20 @@ v1 is sharp but **rough**. Compared with reference art (yellow/red/purple slash 
 
 *These images are Blender Cycles renders of the **real data the EasyVFX runtime produces** (`tests/snapshot.luau` → `tools/blender_preview.py`). The script re-simulates particles from their Roblox properties (speed, drag, size/transparency over life, flipbooks, quad orientation). They are approximations, **not Roblox screenshots**.*
 
-### Turn on HD (once, works in every place)
+### Weight: hit-stop, camera kick, FOV punch
+
+Heavy hits freeze for a few hundredths of a second, kick the camera and punch the FOV, with a hard white hit spark held for 2–3 frames. The research and the tools are in **[docs/impact.md](docs/impact.md)**.
+
+![v3 textures](docs/hd-pack-v3.png)
+
+### HD is on by default
+
+The plugin ships with the HD pack already uploaded to Roblox (13 public image IDs in `src/Plugin/Shared/DefaultAssets.luau`), so new effects are HD right away. Effects made before can be upgraded with **Library → HD quality → Apply to all effects**. Turning HD off is remembered, and **Turn on HD (built-in pack)** brings it back.
+
+![v1 vs HD](docs/hd-default-compare.png)
+*Real Roblox Studio: basic (left) and HD (right) Crescent Slash (slowed 6x) and Smoke.*
+
+### Use your own copy of the textures (optional)
 
 1. Studio → **File → Import 3D** → pick `pack/EasyVFX_Pack.fbx` (also attached to the release) → **Import**. Studio uploads the textures embedded in the file.
 2. Plugin → **Library** tab → **HD quality** card → **Scan pack**. The plugin finds the `EVFX_Tex_*` parts, reads their image IDs and updates every effect.
@@ -212,7 +236,7 @@ Designed with the **UI UX Pro Max** skill (design system *Minimalism & Swiss Sty
 ```
 src/Plugin/
   init.server.luau        plugin: toolbar, dock panel, inserting effects, undo, runtime install
-  Shared/Presets.luau     42 presets (plain data)
+  Shared/Presets.luau     45 presets (plain data), categories and styles
   Shared/Custom.luau      "My Effects": blocks, validation, share codes, registration
   Shared/Builder.luau     preset + settings -> instances (updated in place, no flicker)
   Shared/Strings.luau     English / Vietnamese text

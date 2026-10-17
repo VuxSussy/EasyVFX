@@ -385,9 +385,11 @@ do
 	local bound: ((number) -> ())? = nil
 	roblox.implementMethod("RunService", "BindToRenderStep", function(_rs, _name, _priority, f)
 		bound = f
+		H.boundStep = f
 	end)
 	roblox.implementMethod("RunService", "UnbindFromRenderStep", function()
 		bound = nil
+		H.boundStep = nil
 	end)
 	local shake = shapeRoot("Shake", { Magnitude = 2, Duration = 0.3 })
 	check(EasyVFX.PlayLocal(shake) > 0 and bound == nil, "no camera shake in edit mode")
@@ -529,6 +531,183 @@ do
 	local round = Custom.decode(Custom.shareCode(def))
 	check(round ~= nil and round.id == def.id and #round.blocks == #def.blocks, "share code round-trip")
 	Custom.register({})
+end
+
+print("== Built-in HD pack")
+do
+	local Defaults = H.require("Shared/DefaultAssets")
+	check(Builder.isHD(Defaults), "built-in pack turns HD on")
+	local n = 0
+	for key, id in Defaults do
+		n += 1
+		check(type(id) == "string" and id:match("^rbxassetid://%d+$") ~= nil, "built-in id " .. key)
+	end
+	check(n == 19, "19 built-in textures")
+	-- smoke becomes the HD smoke flipbook
+	local holder = roblox.Instance.new("Part")
+	holder.Parent = H.workspace
+	local root = Builder.create(Builder.defaultParams("smoke"), { cframe = roblox.CFrame.new(), size = roblox.Vector3.new(4, 4, 4), parent = holder }, Defaults)
+	local smokeHD = false
+	for _, d in root:GetDescendants() do
+		if d:IsA("ParticleEmitter") and tostring(d.Texture) == Defaults.flip_smoke and d.FlipbookLayout == roblox.Enum.ParticleFlipbookLayout.Grid4x4 then
+			smokeHD = true
+		end
+	end
+	check(smokeHD, "smoke uses the HD smoke flipbook")
+	Builder.apply(root, Builder.readParams(root), nil)
+	for _, d in root:GetDescendants() do
+		if d:IsA("ParticleEmitter") then
+			check(d.FlipbookLayout == roblox.Enum.ParticleFlipbookLayout.None, "flipbook off again in basic")
+		end
+	end
+	holder:Destroy()
+	-- every texture the HD layers ask for exists in pack/textures; ones without a
+	-- built-in ID yet (not uploaded) are skipped cleanly
+	local fs = require("@lune/fs")
+	local pending = {}
+	for _, preset in Presets.List do
+		for _, layer in preset.layers do
+			local key = layer.pack or layer.beamPack
+			if key then
+				check(fs.isFile("pack/textures/" .. key .. ".png"), preset.id .. " texture file " .. key)
+				if not Defaults[key] then
+					pending[key] = true
+				end
+			end
+		end
+	end
+	local holderP = roblox.Instance.new("Part")
+	holderP.Parent = H.workspace
+	H.warnings = {}
+	local okHit, hitRoot = pcall(Builder.create, Builder.defaultParams("impact"), { cframe = roblox.CFrame.new(), size = roblox.Vector3.new(4, 4, 4), parent = holderP }, Defaults)
+	check(okHit, "HD impact builds without the v3 textures: " .. tostring(hitRoot))
+	local function hasSpark(r)
+		for _, d in r:GetDescendants() do
+			if d:IsA("ParticleEmitter") and d.Name == "HitSparkHD" then
+				return true
+			end
+		end
+		return false
+	end
+	check(okHit and hasSpark(hitRoot), "built-in pack gives the HD hit spark")
+	-- without the v3 IDs (an older custom pack) those layers drop out, no empty emitters
+	local older = table.clone(Defaults)
+	for _, key in { "hit_star", "flip_hitspark", "ring_hard", "speed_lines", "stroke_wind", "arc_electric" } do
+		older[key] = nil
+	end
+	local okOld, oldRoot = pcall(Builder.create, Builder.defaultParams("impact"), { cframe = roblox.CFrame.new(), size = roblox.Vector3.new(4, 4, 4), parent = holderP }, older)
+	check(okOld and not hasSpark(oldRoot), "packs without v3 skip the v3 layers")
+	holderP:Destroy()
+	local list = {}
+	for k in pending do
+		table.insert(list, k)
+	end
+	table.sort(list)
+	print("  awaiting upload: " .. (if #list > 0 then table.concat(list, ", ") else "none"))
+end
+
+print("== Weight: hit-stop, FOV punch, camera kick, textured strokes")
+do
+	local function root(kind, attrs)
+		local part = roblox.Instance.new("Part")
+		part.Anchored = true
+		part.CFrame = roblox.CFrame.new(0, 3, 0)
+		part.Parent = H.workspace
+		local cfg = roblox.Instance.new("Configuration")
+		cfg:SetAttribute("Kind", kind)
+		for k, v in attrs do
+			cfg:SetAttribute(k, v)
+		end
+		cfg.Parent = part
+		return part
+	end
+	local camera = H.workspace.CurrentCamera
+	-- hit-stop holds running effects
+	H.warnings = {}
+	local orb = root("Orb", { Size0 = 1, Size1 = 9, Duration = 0.5, Ease = "Linear" })
+	EasyVFX.PlayLocal(orb)
+	task.wait()
+	task.wait()
+	EasyVFX.HitStop(0.25)
+	local live = camera:FindFirstChild("EasyVFX_Live")
+	local piece = live and live:FindFirstChildWhichIsA("Part")
+	local before = piece and piece.Size.X
+	for _ = 1, 3 do
+		task.wait()
+	end
+	check(piece ~= nil and math.abs(piece.Size.X - before) < 1e-6, "hit-stop freezes running effects")
+	local start = os.clock()
+	while os.clock() - start < 0.3 do
+		task.wait()
+	end
+	for _ = 1, 3 do
+		task.wait()
+	end
+	local alive, sizeNow = pcall(function()
+		return piece.Size.X
+	end)
+	check(piece ~= nil and (not alive or sizeNow > before), "effects resume after the hit-stop")
+	waitForQuiet(200)
+	orb:Destroy()
+	-- tracks registered for hit-stop slow down, then come back
+	local adjusted = {}
+	local track = { IsPlaying = true, Speed = 1 }
+	function track:AdjustSpeed(v)
+		table.insert(adjusted, v)
+		self.Speed = v
+	end
+	EasyVFX.TrackHitStop(track :: any)
+	EasyVFX.HitStop(0.05)
+	check(adjusted[1] ~= nil and adjusted[1] < 0.1, "tracked animation slowed")
+	local t0 = os.clock()
+	while os.clock() - t0 < 0.1 do
+		task.wait()
+	end
+	check(adjusted[2] == 1, "tracked animation speed restored")
+
+	-- FOV punch + kick shake on a running client
+	H.setMode("client")
+	camera.FieldOfView = 70
+	local hit = root("Punch", { Amount = -8, Duration = 0.2 })
+	local kick = root("Shake", { Kick = true, Magnitude = 3, Duration = 0.2 })
+	EasyVFX.PlayLocal(hit)
+	EasyVFX.PlayLocal(kick)
+	check(H.boundStep ~= nil, "punch/kick bind the camera step")
+	if H.boundStep then
+		H.boundStep(1 / 60)
+		check(camera.FieldOfView < 66, "FOV punched in: " .. camera.FieldOfView)
+		for _ = 1, 30 do
+			if H.boundStep then
+				H.boundStep(1 / 30)
+			end
+		end
+	end
+	check(math.abs(camera.FieldOfView - 70) < 1e-3, "FOV restored: " .. camera.FieldOfView)
+	check(H.boundStep == nil, "camera step unbound after the punch")
+	H.setMode("edit")
+	hit:Destroy()
+	kick:Destroy()
+
+	-- with a Texture, a stroke is one beam carrying the whole texture
+	H.warnings = {}
+	local streak = root("Streak", { To = roblox.Vector3.new(0, 0, -20), Texture = "rbxassetid://1", Duration = 0.3 })
+	EasyVFX.PlayLocal(streak)
+	task.wait()
+	task.wait()
+	task.wait()
+	local enabled, textured = 0, 0
+	for _, d in camera.EasyVFX_Live:GetDescendants() do
+		if d:IsA("Beam") and d.Enabled then
+			enabled += 1
+			if tostring(d.Texture) == "rbxassetid://1" then
+				textured += 1
+			end
+		end
+	end
+	check(enabled == 1 and textured == 1, "textured streak = one beam (" .. enabled .. "/" .. textured .. ")")
+	waitForQuiet(200)
+	check(#H.warnings == 0, "weight tools no warnings: " .. table.concat(H.warnings, " | "))
+	streak:Destroy()
 end
 
 print("== Server mode forwards to clients")
