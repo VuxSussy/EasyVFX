@@ -15,7 +15,7 @@ All notable changes to EasyVFX are listed here. Versions follow [Semantic Versio
 - v3 Blender textures: `hit_star`, `flip_hitspark`, `ring_hard`, `speed_lines`, `stroke_wind`, `arc_electric`.
   - With a texture, `Whirl`, `Streak` and `Crackle` draw each stroke as one textured beam.
   - All six are uploaded and built in (`DefaultAssets.luau`), so they are on with HD.
-- `docs/impact.md` covers the research and the tools. Runtime version 9 (after the Eclipse markers, version 8).
+- `docs/impact.md` covers the research and the tools. Runtime version 10 (includes the relocation fix below).
 
 
 ### Library organized by purpose
@@ -36,6 +36,9 @@ All notable changes to EasyVFX are listed here. Versions follow [Semantic Versio
 - Turning HD off is remembered (`"off"`), and a new **Turn on HD (built-in pack)** button brings it back. Scan pack and Paste IDs still work for your own uploads.
 - In HD, soft smoke and blast puffs become the pack's 4x4 flipbooks (`flip_smoke`, `flip_impact`), so Smoke, Fog, Fire, Explosion and the dark fantasy smoke are HD too.
 - Existing effects in a place keep the quality they were built with; **Apply to all effects** in the HD card upgrades them.
+### Fixed
+- Playing an effect at a new CFrame now moves and rotates child mesh templates with the root. Temporary copied parts are anchored and do not collide, touch or block raycasts. Source effects stay unchanged.
+
 ### Eclipse Animator: vibe → edit → asset
 - `EasyVFX.BindAnimation(track, character)` plays effects at animation markers:
   - `EasyVFX` markers carry an effect name (with an optional body part, offset and rotation).
