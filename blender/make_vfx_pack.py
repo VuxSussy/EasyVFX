@@ -395,6 +395,125 @@ def tex_ring(scene):
     render_to(scene, os.path.join(TEX_DIR, "ring_wave.png"))
 
 
+# --------------------------------------------------------------------------- v3: impact & sharpness
+# Hard-edged shapes read as "sharp" and carry the weight of a hit: a spiky anime hit
+# star, a crisp shockwave ring, screen speed lines, a dry-brush wind stroke and a
+# jagged electric arc. Edges use a smoothstep only ~2 px wide, so they stay crisp
+# while still being anti-aliased.
+
+
+def tri_wave(g, x):
+    """Triangle wave 0..1..0 with period 1."""
+    f = g.math("FRACT", x)
+    return g.sub(1.0, g.mul(g.math("ABSOLUTE", g.sub(f, 0.5)), 2.0))
+
+
+def star_shape(g, x, y, spikes, inner, outer, sharp, seed, grow=1.0, hollow=0.0):
+    dx = g.sub(x, 0.5)
+    dy = g.sub(y, 0.5)
+    r = g.math("SQRT", g.add(g.mul(dx, dx), g.mul(dy, dy)))
+    ang = g.math("ARCTAN2", dy, dx)
+    a01 = g.div(g.add(ang, math.pi), 2 * math.pi)
+    tri = g.pow(tri_wave(g, g.mul(a01, spikes)), sharp)
+    # uneven spike lengths, the anime "hit spark" look
+    var = g.noise(g.vec(g.math("FLOOR", g.mul(a01, spikes)), 0.0), scale=1.7, detail=0.0, w=seed)
+    length = g.mul(g.add(0.55, g.mul(var, 0.9)), outer * grow)
+    edge = g.add(inner * grow, g.mul(tri, length))
+    body = g.smooth(r, g.add(edge, 0.004), g.sub(edge, 0.004))
+    if hollow > 0.0:
+        body = g.mul(body, g.smooth(r, hollow - 0.004, hollow + 0.004))
+    return body, r
+
+
+def tex_hit_star(scene):
+    def build(g):
+        x, y = g.uv()
+        body, r = star_shape(g, x, y, spikes=11, inner=0.07, outer=0.38, sharp=3.5, seed=2.0)
+        core = g.smooth(r, 0.075, 0.06)
+        g.output_alpha(g.math("MAXIMUM", g.mul(body, 0.85), core))
+
+    make_canvas(scene, 512, 512, build)
+    render_to(scene, os.path.join(TEX_DIR, "hit_star.png"))
+
+
+def flip_hitspark(g, t, i):
+    x, y = g.uv()
+    grow = 1 - (1 - min(1.0, t / 0.25)) ** 3
+    # spikes shoot out, then the center hollows and everything thins away
+    hollow = max(0.0, (t - 0.2) / 0.8) * 0.3
+    sharp = 3.0 + 6.0 * t
+    body, r = star_shape(g, x, y, spikes=9, inner=0.06, outer=0.42, sharp=sharp, seed=5.0, grow=0.35 + 0.65 * grow, hollow=hollow)
+    core = g.mul(g.smooth(r, 0.11 * (1 - t), 0.09 * (1 - t)), 1.0 if t < 0.3 else max(0.0, 1 - (t - 0.3) * 3))
+    g.output_alpha(g.math("MAXIMUM", g.mul(body, 1.0 - 0.5 * t), core))
+
+
+def tex_ring_hard(scene):
+    def build(g):
+        x, y = g.uv()
+        dx = g.sub(x, 0.5)
+        dy = g.sub(y, 0.5)
+        r = g.math("SQRT", g.add(g.mul(dx, dx), g.mul(dy, dy)))
+        outer = g.smooth(r, 0.478, 0.47)  # crisp outer rim
+        inner = g.pow(g.smooth(r, 0.3, 0.47), 2.2)  # soft fade inward
+        rim = g.smooth(r, 0.445, 0.455)  # a bright line just inside the rim
+        g.output_alpha(g.mul(outer, g.math("MAXIMUM", g.mul(inner, 0.75), rim)))
+
+    make_canvas(scene, 512, 512, build)
+    render_to(scene, os.path.join(TEX_DIR, "ring_hard.png"))
+
+
+def tex_speed_lines(scene):
+    def build(g):
+        x, y = g.uv()
+        dx = g.sub(x, 0.5)
+        dy = g.sub(y, 0.5)
+        r = g.math("SQRT", g.add(g.mul(dx, dx), g.mul(dy, dy)))
+        ang = g.math("ARCTAN2", dy, dx)
+        a01 = g.div(g.add(ang, math.pi), 2 * math.pi)
+        # many thin wedges of random width and start radius
+        n = g.noise(g.vec(g.mul(a01, 320.0), 0.0), scale=1.0, detail=1.0, w=9.0)
+        line = g.smooth(n, 0.5, 0.54)
+        start = g.add(0.18, g.mul(g.noise(g.vec(g.mul(a01, 60.0), 1.0), scale=1.0, detail=1.0, w=3.0), 0.3))
+        reach = g.smooth(r, start, g.add(start, 0.12))
+        g.output_alpha(g.mul(g.mul(line, reach), g.smooth(r, 0.75, 0.6)))
+
+    make_canvas(scene, 1024, 1024, build)
+    render_to(scene, os.path.join(TEX_DIR, "speed_lines.png"))
+
+
+def tex_stroke_wind(scene):
+    def build(g):
+        u, v = g.uv()
+        # head at u = 1 (needle tip), tail at u = 0 (dry brush breaking up)
+        thick = g.mul(g.pow(g.math("SINE", g.mul(u, math.pi)), 0.6), 0.42)
+        dv = g.math("ABSOLUTE", g.sub(v, 0.5))
+        body = g.smooth(dv, g.add(thick, 0.008), g.sub(thick, 0.008))
+        bristle = g.noise(g.vec(g.mul(u, 2.0), g.mul(v, 60.0)), scale=1.0, detail=3.0, roughness=0.5, w=1.5)
+        dry = g.smooth(bristle, g.mul(g.sub(1.0, u), 0.75), g.add(g.mul(g.sub(1.0, u), 0.75), 0.06))
+        streak = g.add(0.6, g.mul(g.smooth(bristle, 0.45, 0.6), 0.4))
+        g.output_alpha(g.mul(g.mul(body, dry), streak))
+
+    make_canvas(scene, 1024, 128, build)
+    render_to(scene, os.path.join(TEX_DIR, "stroke_wind.png"))
+
+
+def tex_arc_electric(scene):
+    def build(g):
+        u, v = g.uv()
+        # jagged centerline: coarse + fine noise, pinned to the middle at both ends
+        pin = g.math("SINE", g.mul(u, math.pi))
+        coarse = g.sub(g.noise(g.vec(g.mul(u, 6.0), 0.0), scale=1.0, detail=0.0, w=4.0), 0.5)
+        fine = g.sub(g.noise(g.vec(g.mul(u, 40.0), 0.0), scale=1.0, detail=0.0, w=8.0), 0.5)
+        center = g.add(0.5, g.mul(pin, g.add(g.mul(coarse, 1.4), g.mul(fine, 0.35))))
+        d = g.math("ABSOLUTE", g.sub(v, center))
+        core = g.smooth(d, 0.03, 0.012)
+        glow = g.mul(g.pow(g.clamp01(g.sub(1.0, g.mul(d, 5.0))), 3.0), 0.45)
+        g.output_alpha(g.math("MAXIMUM", core, glow))
+
+    make_canvas(scene, 1024, 128, build)
+    render_to(scene, os.path.join(TEX_DIR, "arc_electric.png"))
+
+
 # --------------------------------------------------------------------------- flipbooks
 
 
@@ -601,6 +720,12 @@ def main():
         ("flip_impact", lambda: flipbook(scene, "flip_impact", 256, 4, flip_impact)),
         ("flip_smoke", lambda: flipbook(scene, "flip_smoke", 256, 4, flip_smoke)),
         ("flip_electric", lambda: flipbook(scene, "flip_electric", 256, 4, flip_electric)),
+        ("hit_star", lambda: tex_hit_star(scene)),
+        ("flip_hitspark", lambda: flipbook(scene, "flip_hitspark", 256, 4, flip_hitspark)),
+        ("ring_hard", lambda: tex_ring_hard(scene)),
+        ("speed_lines", lambda: tex_speed_lines(scene)),
+        ("stroke_wind", lambda: tex_stroke_wind(scene)),
+        ("arc_electric", lambda: tex_arc_electric(scene)),
     ]
     for name, job in jobs:
         if ONLY and name not in ONLY:

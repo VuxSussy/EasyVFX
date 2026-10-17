@@ -161,10 +161,34 @@ Custom.Blocks = {
 		return { { type = "light", brightness = 5 * m.amount, range = 18 * m.size, color = if m.color == "x" then "p" else m.color, flash = 0.4 } }
 	end },
 	{ id = "shake", vi = "Rung camera", en = "Camera shake", make = function(m: Mod)
-		return { { type = "shape", kind = "Shake", attrs = { Delay = m.delay, Magnitude = 1 * m.amount, Duration = 0.4 * m.size } } }
+		return { { type = "shape", kind = "Shake", attrs = { Delay = m.delay, Kick = true, Magnitude = 1.5 * m.amount, Duration = 0.35 * m.size, Roughness = 26 } } }
+	end },
+	{ id = "hitspark", vi = "Tia va chạm", en = "Hit spark", make = function(m: Mod)
+		local size = 9 * m.size
+		local color = if m.color == "x" then "p" else m.color
+		local layers: { any } = {
+			-- HD: a 2-3 frame white star, then the spiky flipbook (v3 pack)
+			{ type = "particles", name = "HitStarHD", hd = true, pack = "hit_star", at = "center", delay = m.delay, burst = 1,
+				size = { { 0, size * 0.8 }, { 0.3, size }, { 1, size * 1.1 } }, transparency = { { 0, 0 }, { 0.5, 0 }, { 1, 1 } },
+				lifetime = { 0.09, 0.09 }, rotation = { 0, 360 }, color = { "w" }, lightEmission = 1, brightness = 4, zOffset = 3 },
+			{ type = "particles", name = "HitSparkHD", hd = true, pack = "flip_hitspark", at = "center", delay = m.delay + 0.03,
+				flipbook = "Grid4x4", flipMode = "OneShot", burst = 1, size = { { 0, size * 1.1 }, { 1, size * 1.6 } },
+				lifetime = { 0.32, 0.32 }, rotation = { 0, 360 }, color = { "w", color }, lightEmission = 1, brightness = 3, zOffset = 2.5 },
+			-- without HD: sharp needles
+			{ type = "shape", kind = "Lines", basic = true, attrs = { Delay = m.delay, Count = math.max(4, math.floor(14 * m.amount)),
+				Distance0 = 0.3, Distance1 = 6 * m.size, Length = 3 * m.size, Width = 0.3 * m.size, Duration = 0.25, Brightness = 3 },
+				color0 = "w", color1 = color },
+		}
+		return layers
+	end },
+	{ id = "hitstop", vi = "Khựng (hit-stop)", en = "Hit-stop", make = function(m: Mod)
+		return { { type = "shape", kind = "HitStop", attrs = { Delay = m.delay, Duration = 0.06 * m.amount } } }
+	end },
+	{ id = "punch", vi = "Zoom giật", en = "Camera punch", make = function(m: Mod)
+		return { { type = "shape", kind = "Punch", attrs = { Delay = m.delay, Amount = -6 * m.amount, Duration = 0.25 * m.size } } }
 	end },
 	{ id = "impact", vi = "Khung va chạm", en = "Impact frame", make = function(m: Mod)
-		return { { type = "shape", kind = "Impact", attrs = { Delay = m.delay, Duration = 0.1, Style = if m.dark then "Invert" else "Flash", Strength = math.clamp(m.amount, 0, 2) } } }
+		return { { type = "shape", kind = "Impact", packAttrs = { SpeedLines = "speed_lines" }, attrs = { Delay = m.delay, Duration = 0.1, Style = if m.dark then "Invert" else "Flash", Strength = math.clamp(m.amount, 0, 2) } } }
 	end },
 }
 

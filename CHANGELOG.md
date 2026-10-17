@@ -4,8 +4,52 @@ All notable changes to EasyVFX are listed here. Versions follow [Semantic Versio
 
 ## [Unreleased]
 
+### Rough and missing-HD effects fixed
+- Slashes keep their sharp `Slash` blade (hot edge, eroding tail) in HD as well. Before, HD replaced it with soft particle crescents. HD now adds v3 on top:
+  - star twinkles thrown off the blade;
+  - a hit spark (`hit_star` + `flip_hitspark`);
+  - weight (hit-stop, FOV punch, kick).
+  - This applies to Crescent Slash, Slash Flurry, Shadow Slash and Lightning Slash. Lightning Slash also gets the electric flipbook.
+- `Whirl` no longer stretches one textured beam over a long arc, which twisted and showed blunt white blocks. Each stroke is a smooth, comet-tapered chain, and the new `Strands` attribute (1-4) turns it into a bundle of thin lines.
+- Wind Vortex was rebuilt with two strand layers, flung grit, a soft core glow, a ground ring and a dust ring. The glass ball and black squares are gone.
+- Laser has an HD body with energy pulses running down it, a muzzle flare and a burning hit point.
+- Weapon Trail has an HD fibrous slash streak, a white-hot tip trail and glints along the blade.
+- Beams and trails accept a pack texture (`packTexture`, `textureMode`, `textureLength`, `textureSpeed`). Runtime version 11.
+
+### Weight and sharper hits
+- New runtime tools:
+  - `HitStop` shape and `EasyVFX.HitStop(seconds)`: effects hold their frame; tracks registered with `EasyVFX.TrackHitStop` slow down.
+  - `Punch` shape: FOV punch.
+  - `Shake` with `Kick = true`: full strength on the first frame, fast decay.
+  - `Ease = "Circ"`.
+- An impact kit (hit spark, hard ring, hit-stop, punch, kick) on 11 hit presets.
+- New Create blocks: Hit spark, Hit-stop, Camera punch. Camera shake is now a kick, and Impact frame has speed lines.
+- v3 Blender textures: `hit_star`, `flip_hitspark`, `ring_hard`, `speed_lines`, `stroke_wind`, `arc_electric`.
+  - With a texture, `Streak` and `Crackle` draw each stroke as one textured beam.
+  - All six are uploaded and built in (`DefaultAssets.luau`), so they are on with HD.
+- `docs/impact.md` covers the research and the tools. Runtime version 10 (includes the relocation fix below).
+
+
+### Library organized by purpose
+- Categories are now about what an effect is for: Slashes, Impacts & Explosions, Projectiles/Beams/Dashes, Auras & Buffs, Circles & Portals, Elements, Environment, My Effects.
+- **All** shows one titled section per category, with its count.
+- The look is a separate filter: All styles or Dark Fantasy. Dark fantasy presets carry `style = "dark"`.
+
+### Effects inspired by reference clips
+- New shapes:
+  - `Whirl`: a spinning disc of tapered brush strokes.
+  - `Streak`: a dash line that wipes in and erodes, with an optional dark afterimage.
+  - `Crackle`: flickering electric zig-zags along an arc.
+- New presets: Lightning Slash, Flash Step, Wind Vortex.
+
+
+### HD (v2) by default
+- The plugin now uses the uploaded HD pack (13 public image IDs, `Shared/DefaultAssets.luau`) out of the box. Before, every effect stayed in basic quality (v1) until you imported the pack or pasted IDs.
+- Turning HD off is remembered (`"off"`), and a new **Turn on HD (built-in pack)** button brings it back. Scan pack and Paste IDs still work for your own uploads.
+- In HD, soft smoke and blast puffs become the pack's 4x4 flipbooks (`flip_smoke`, `flip_impact`), so Smoke, Fog, Fire, Explosion and the dark fantasy smoke are HD too.
+- Existing effects in a place keep the quality they were built with; **Apply to all effects** in the HD card upgrades them.
 ### Fixed
-- Playing an effect at a new CFrame now moves and rotates child mesh templates with the root. Temporary copied parts are anchored and do not collide, touch or block raycasts. Source effects stay unchanged. Runtime version 9.
+- Playing an effect at a new CFrame now moves and rotates child mesh templates with the root. Temporary copied parts are anchored and do not collide, touch or block raycasts. Source effects stay unchanged.
 
 ### Eclipse Animator: vibe → edit → asset
 - `EasyVFX.BindAnimation(track, character)` plays effects at animation markers:

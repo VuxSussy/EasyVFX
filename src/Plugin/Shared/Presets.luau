@@ -42,22 +42,32 @@ export type Preset = {
 	name: { vi: string, en: string },
 	desc: { vi: string, en: string },
 	kind: string, -- "loop" | "burst"
+	style: string?, -- "dark" for the dark fantasy look, nil otherwise
 	placement: string?, -- "ground" | "sky" | "air"
 	area: Vector3?,
 	defaults: { [string]: any },
 	layers: { Layer },
 }
 
+-- Grouped by what the effect is for, so the library stays easy to scan. The look
+-- (dark fantasy...) is a separate filter: Presets.Styles.
 Presets.Categories = {
 	{ id = "all", vi = "Tất cả", en = "All" },
-	{ id = "combat", vi = "Chiến đấu", en = "Combat" },
-	{ id = "magic", vi = "Phép thuật", en = "Magic" },
+	{ id = "slash", vi = "Chém", en = "Slashes" },
+	{ id = "impact", vi = "Va chạm & nổ", en = "Impacts & Explosions" },
+	{ id = "projectile", vi = "Đạn, tia & lướt", en = "Projectiles, Beams & Dashes" },
+	{ id = "aura", vi = "Hào quang & buff", en = "Auras & Buffs" },
+	{ id = "circle", vi = "Vòng phép & cổng", en = "Circles & Portals" },
 	{ id = "elements", vi = "Nguyên tố", en = "Elements" },
-	{ id = "world", vi = "Môi trường", en = "World" },
-	{ id = "light", vi = "Ánh sáng", en = "Light" },
-	{ id = "dark", vi = "Hắc ám", en = "Dark Fantasy" },
+	{ id = "world", vi = "Môi trường", en = "Environment" },
 	{ id = "custom", vi = "Của tôi", en = "My Effects" },
 }
+
+Presets.Styles = {
+	{ id = "all", vi = "Mọi phong cách", en = "All styles" },
+	{ id = "dark", vi = "Hắc ám", en = "Dark Fantasy" },
+}
+
 
 local function rgb(r: number, g: number, b: number): Color3
 	return Color3.fromRGB(r, g, b)
@@ -85,91 +95,32 @@ local function sparks(count: number, speed: number, at: any?): Layer
 end
 
 -- HD (asset pack) layers ------------------------------------------------------
--- These only appear after the Blender pack is imported. They are flat particles
--- (VelocityPerpendicular + tiny speed), so the texture lies in the attachment's
--- plane; `rotatable` adds the plugin's Rotation slider to their angle.
+-- Layers marked `hd` only appear when the Blender pack is available (built in by
+-- default); `basic` layers only without it.
 
-local function hdSlash(o: { [string]: any }): { Layer }
-	local radius = o.radius or 5
-	local quad = radius / 0.48 -- the crescent's outer edge is at 48% of the texture
-	local life = o.life or 0.34
-	local rot = o.rotation or 0
-	local spin = (o.sweep or 50) / life
-	local common = {
-		hd = true,
-		group = o.group,
-		tilt = o.tilt,
-		randomTilt = o.randomTilt,
-		delay = o.delay,
-		orientation = "VelocityPerpendicular",
-		direction = "Top",
-		speed = { 0.01, 0.01 },
-		rotation = { rot, rot },
-		rotSpeed = { spin, spin },
-		rotatable = true,
-		lightEmission = 1,
-		at = o.at or "center",
-	}
-	local function with(extra: { [string]: any }): Layer
-		local layer = table.clone(common)
-		for k, v in extra do
-			layer[k] = v
-		end
-		return layer
-	end
+-- Slashes stay the sharp Slash shape (hot edge, eroding tail) in HD too; the pack
+-- adds star twinkles thrown off the blade (plus the hit spark / weight below).
+local function twinkles(count: number, speed: number, at: any?, delay: number?, color: { any }?): Layer
 	return {
-		with({
-			type = "particles",
-			name = "SlashHD",
-			pack = "slash_arc",
-			burst = 1,
-			size = { { 0, quad * 0.82 }, { 0.12, quad }, { 1, quad * 1.12 } },
-			transparency = { { 0, 0 }, { 0.45, 0.05 }, { 1, 1 } },
-			lifetime = { life, life },
-			color = { "w", "w", "p", "s" },
-			brightness = 4,
-			zOffset = 1,
-		}),
-		with({
-			type = "particles",
-			name = "SlashDissolve",
-			pack = "flip_slash",
-			flipbook = "Grid4x4",
-			flipMode = "OneShot",
-			burst = 1,
-			size = { { 0, quad * 1.0 }, { 1, quad * 1.16 } },
-			transparency = { { 0, 0.15 }, { 1, 0.35 } },
-			lifetime = { life * 1.3, life * 1.3 },
-			color = { "p", "s" },
-			brightness = 2,
-			zOffset = 0.5,
-		}),
-		{
-			type = "particles",
-			name = "Twinkles",
-			hd = true,
-			group = o.group,
-			tilt = o.tilt,
-			randomTilt = o.randomTilt,
-			pack = "spark_star",
-			at = o.at or "center",
-			delay = (o.delay or 0) + 0.04,
-			burst = o.twinkles or 16,
-			direction = "Front",
-			speed = { radius * 3, radius * 6 },
-			drag = 5,
-			spread = { 80, 80 },
-			size = { { 0, 0 }, { 0.15, 0.8 }, { 1, 0 } },
-			lifetime = { 0.35, 0.8 },
-			rotation = { 0, 360 },
-			color = { "w", "p" },
-			lightEmission = 1,
-			brightness = 2,
-		},
+		type = "particles",
+		name = "Twinkles",
+		hd = true,
+		pack = "spark_star",
+		at = at or "center",
+		delay = delay,
+		burst = count,
+		direction = "Front",
+		speed = { speed * 0.5, speed },
+		drag = 5,
+		spread = { 80, 80 },
+		size = { { 0, 0 }, { 0.15, 0.8 }, { 1, 0 } },
+		lifetime = { 0.35, 0.8 },
+		rotation = { 0, 360 },
+		color = color or { "w", "p" },
+		lightEmission = 1,
+		brightness = 2,
 	}
 end
-
-local hdSlashLayers = hdSlash
 
 -- Marks a layer as "only without the HD pack".
 local function basic(layer: Layer): Layer
@@ -312,11 +263,92 @@ local function embers(rate: number, at: any?, color: { any }?): Layer
 	}
 end
 
+
+-- Impact kit -------------------------------------------------------------------
+-- What makes a hit feel heavy (see docs/impact.md): a hard white hit spark held for
+-- a couple of frames, a crisp ring that is gone before the main effect, a short
+-- hit-stop, a camera kick and a small FOV punch. The HD layers use the v3 Blender
+-- textures and simply drop out when they are not available.
+
+local function hitSpark(at: any, size: number, delay: number?): { Layer }
+	return {
+		{
+			type = "particles",
+			name = "HitStarHD",
+			hd = true,
+			pack = "hit_star",
+			at = at,
+			delay = delay,
+			burst = 1,
+			size = { { 0, size * 0.8 }, { 0.3, size }, { 1, size * 1.1 } },
+			transparency = { { 0, 0 }, { 0.5, 0 }, { 1, 1 } },
+			lifetime = { 0.09, 0.09 }, -- a 2-3 frame hold
+			rotation = { 0, 360 },
+			color = { "w" },
+			lightEmission = 1,
+			brightness = 4,
+			zOffset = 3,
+		},
+		{
+			type = "particles",
+			name = "HitSparkHD",
+			hd = true,
+			pack = "flip_hitspark",
+			at = at,
+			delay = (delay or 0) + 0.03,
+			flipbook = "Grid4x4",
+			flipMode = "OneShot",
+			burst = 1,
+			size = { { 0, size * 1.1 }, { 1, size * 1.6 } },
+			lifetime = { 0.32, 0.32 },
+			rotation = { 0, 360 },
+			color = { "w", "p", "s" },
+			lightEmission = 1,
+			brightness = 3,
+			zOffset = 2.5,
+		},
+	}
+end
+
+local function hardRing(at: any, size: number, life: number, tilt: Vector3?, delay: number?): Layer
+	return {
+		type = "particles",
+		name = "RingHardHD",
+		hd = true,
+		pack = "ring_hard",
+		at = at,
+		tilt = tilt,
+		delay = delay,
+		burst = 1,
+		orientation = "VelocityPerpendicular",
+		direction = "Top",
+		speed = { 0.01, 0.01 },
+		size = { { 0, size * 0.15 }, { 0.35, size * 0.85 }, { 1, size } },
+		transparency = { { 0, 0 }, { 0.4, 0.1 }, { 1, 1 } },
+		lifetime = { life, life },
+		color = { "w", "p" },
+		lightEmission = 1,
+		brightness = 3,
+	}
+end
+
+-- hit-stop + FOV punch + camera kick, scaled by how heavy the hit is (0..1)
+local function weight(heavy: number, at: Vector3?, delay: number?): { Layer }
+	return {
+		{ type = "shape", kind = "HitStop", attrs = { Delay = delay or 0, Duration = 0.04 + 0.05 * heavy } },
+		{ type = "shape", kind = "Punch", attrs = { Offset = at, Delay = delay or 0, Amount = -(2 + 6 * heavy), Duration = 0.18 + 0.15 * heavy } },
+		{ type = "shape", kind = "Shake", attrs = { Offset = at, Delay = delay or 0, Kick = true, Magnitude = 1 + 2 * heavy, Duration = 0.2 + 0.25 * heavy, Roughness = 26 } },
+	}
+end
+
+-- extra layers per preset (appended after the list below)
+local IMPACT_KIT: { [string]: { Layer } } = {}
+
 Presets.List = ({
 	------------------------------------------------------------------ Combat
 	{
 		id = "fireball",
-		category = "combat",
+		category = "projectile",
 		name = { vi = "Cầu lửa", en = "Fireball" },
 		desc = { vi = "Quả cầu bay theo đường cong rồi nổ", en = "Arcing shot that bursts on impact" },
 		kind = "burst",
@@ -357,7 +389,7 @@ Presets.List = ({
 	},
 	{
 		id = "impact_frame",
-		category = "combat",
+		category = "impact",
 		name = { vi = "Khung hình va chạm", en = "Impact Frame" },
 		desc = { vi = "Chớp màn hình kiểu anime + rung camera", en = "Anime screen flash + camera shake" },
 		kind = "burst",
@@ -392,7 +424,7 @@ Presets.List = ({
 	},
 	{
 		id = "slash",
-		category = "combat",
+		category = "slash",
 		name = { vi = "Chém lưỡi liềm", en = "Crescent Slash" },
 		desc = { vi = "Vệt chém sắc nét kiểu anime", en = "Crisp anime sword slash" },
 		kind = "burst",
@@ -402,12 +434,11 @@ Presets.List = ({
 			{
 				type = "shape",
 				kind = "Slash",
-				basic = true,
 				attrs = { Radius = 5, Arc = 170, Width = 2, Sweep = 60, Duration = 0.4, Brightness = 2, TailFade = 0.8 },
 				color0 = "p",
 				color1 = "s",
 			},
-			hdSlashLayers({ group = "a", radius = 5, sweep = 60 }),
+			twinkles(14, 28, Vector3.new(0, 0, -4.5), 0.04),
 			{
 				type = "shape",
 				kind = "Lines",
@@ -421,7 +452,7 @@ Presets.List = ({
 	},
 	{
 		id = "multi_slash",
-		category = "combat",
+		category = "slash",
 		name = { vi = "Liên hoàn trảm", en = "Slash Flurry" },
 		desc = { vi = "Nhiều nhát chém xoay ngẫu nhiên", en = "Many slashes at random angles" },
 		kind = "burst",
@@ -431,17 +462,12 @@ Presets.List = ({
 			{
 				type = "shape",
 				kind = "Slash",
-				basic = true,
 				attrs = { Count = 5, Stagger = 0.07, RandomTilt = 70, Radius = 4.5, Arc = 150, Width = 1.6, Sweep = 40, Duration = 0.35, Brightness = 2 },
 				color0 = "p",
 				color1 = "s",
 			},
-			-- upright planes facing forward, crossing at different angles (an "X" flurry)
-			-- upright planes facing forward, off-centre and crossing (an anime "X" flurry)
-			hdSlashLayers({ group = "a", at = Vector3.new(-1.4, 0.9, 0), radius = 3.8, tilt = Vector3.new(90, 0, 0), randomTilt = 15, rotation = 20, twinkles = 8 }),
-			hdSlashLayers({ group = "b", at = Vector3.new(1.5, -0.7, 0), radius = 3.6, tilt = Vector3.new(90, 0, 0), randomTilt = 15, rotation = 200, delay = 0.07, twinkles = 8 }),
-			hdSlashLayers({ group = "c", at = Vector3.new(0.5, 1.6, 0), radius = 4.0, tilt = Vector3.new(90, 0, 0), randomTilt = 15, rotation = 120, delay = 0.14, twinkles = 8 }),
-			hdSlashLayers({ group = "d", at = Vector3.new(-0.7, -1.3, 0), radius = 3.7, tilt = Vector3.new(90, 0, 0), randomTilt = 15, rotation = 300, delay = 0.21, twinkles = 8 }),
+			twinkles(8, 22, "center", 0.04),
+			twinkles(8, 22, "center", 0.18),
 			{
 				type = "shape",
 				kind = "Orb",
@@ -456,7 +482,7 @@ Presets.List = ({
 	},
 	{
 		id = "impact",
-		category = "combat",
+		category = "impact",
 		name = { vi = "Va chạm", en = "Hit Impact" },
 		desc = { vi = "Chớp sáng + tia + sóng khi đánh trúng", en = "Flash, needles and ring on hit" },
 		kind = "burst",
@@ -493,7 +519,7 @@ Presets.List = ({
 	},
 	{
 		id = "ground_slam",
-		category = "combat",
+		category = "impact",
 		name = { vi = "Đập đất", en = "Ground Slam" },
 		desc = { vi = "Hố nứt, đá văng, sóng xung kích", en = "Crater, flying rocks, shockwave" },
 		kind = "burst",
@@ -526,7 +552,7 @@ Presets.List = ({
 	},
 	{
 		id = "energy_blast",
-		category = "combat",
+		category = "projectile",
 		name = { vi = "Pháo năng lượng", en = "Energy Blast" },
 		desc = { vi = "Đường hầm vòng sáng bắn về phía trước", en = "Tunnel of rings firing forward" },
 		kind = "burst",
@@ -572,7 +598,7 @@ Presets.List = ({
 	},
 	{
 		id = "explosion",
-		category = "combat",
+		category = "impact",
 		name = { vi = "Vụ nổ", en = "Explosion" },
 		desc = { vi = "Cầu lửa, khói, tia lửa, đá vụn", en = "Fireball, smoke, sparks, rubble" },
 		kind = "burst",
@@ -651,7 +677,7 @@ Presets.List = ({
 	},
 	{
 		id = "lightning",
-		category = "combat",
+		category = "projectile",
 		name = { vi = "Sét đánh", en = "Lightning Strike" },
 		desc = { vi = "Tia sét zig-zag từ trời xuống", en = "Zig-zag bolt from the sky" },
 		kind = "burst",
@@ -688,7 +714,7 @@ Presets.List = ({
 	},
 	{
 		id = "shockwave",
-		category = "combat",
+		category = "impact",
 		name = { vi = "Sóng xung kích", en = "Shockwave" },
 		desc = { vi = "Nhiều vòng sóng lan trên mặt đất", en = "Rings racing across the ground" },
 		kind = "burst",
@@ -710,7 +736,7 @@ Presets.List = ({
 	},
 	{
 		id = "sword_trail",
-		category = "combat",
+		category = "slash",
 		name = { vi = "Vệt vũ khí", en = "Weapon Trail" },
 		desc = { vi = "Gắn vào kiếm: để lại vệt khi vung", en = "Put on a sword: streak when swung" },
 		kind = "loop",
@@ -726,6 +752,36 @@ Presets.List = ({
 				widthScale = { { 0, 1 }, { 1, 0.2 } },
 				lightEmission = 1,
 				brightness = 2,
+				-- HD: fibrous slash streaks instead of a flat band
+				packTexture = "slash_fiber",
+			},
+			{
+				-- a thin white-hot edge along the tip of the swing
+				type = "trail",
+				color = { "w", "w", "p" },
+				transparency = { { 0, 0 }, { 0.5, 0.4 }, { 1, 1 } },
+				lifetime = 0.12,
+				widthScale = { { 0, 1 }, { 1, 0.4 } },
+				lightEmission = 1,
+				brightness = 3,
+				hd = true,
+				packTexture = "slash_core",
+			},
+			{
+				-- glints along the blade so a still weapon still reads as enchanted
+				type = "particles",
+				name = "Glint",
+				hd = true,
+				pack = "spark_star",
+				at = "part",
+				rate = 3,
+				size = { { 0, 0 }, { 0.3, 0.7 }, { 1, 0 } },
+				lifetime = { 0.3, 0.5 },
+				speed = { 0, 0 },
+				rotation = { 0, 360 },
+				color = { "w", "p" },
+				lightEmission = 1,
+				brightness = 2,
 			},
 		},
 	},
@@ -733,7 +789,7 @@ Presets.List = ({
 	------------------------------------------------------------------ Magic
 	{
 		id = "magic_circle",
-		category = "magic",
+		category = "circle",
 		name = { vi = "Vòng phép", en = "Magic Circle" },
 		desc = { vi = "Vòng sáng xoay + hạt bay lên", en = "Spinning rings with rising motes" },
 		kind = "loop",
@@ -771,7 +827,7 @@ Presets.List = ({
 	},
 	{
 		id = "heal",
-		category = "magic",
+		category = "aura",
 		name = { vi = "Hồi máu", en = "Heal" },
 		desc = { vi = "Vòng xanh + tia sáng bay lên", en = "Green ring and rising light" },
 		kind = "burst",
@@ -811,7 +867,7 @@ Presets.List = ({
 	},
 	{
 		id = "level_up",
-		category = "magic",
+		category = "aura",
 		name = { vi = "Lên cấp", en = "Level Up" },
 		desc = { vi = "Cột sáng + vòng bay lên + sao", en = "Light pillar, rising rings, stars" },
 		kind = "burst",
@@ -851,7 +907,7 @@ Presets.List = ({
 	},
 	{
 		id = "power_aura",
-		category = "magic",
+		category = "aura",
 		name = { vi = "Hào quang sức mạnh", en = "Power Aura" },
 		desc = { vi = "Tia năng lượng liên tục bốc lên", en = "Energy streaks rising nonstop" },
 		kind = "loop",
@@ -883,7 +939,7 @@ Presets.List = ({
 	},
 	{
 		id = "portal",
-		category = "magic",
+		category = "circle",
 		name = { vi = "Cổng dịch chuyển", en = "Portal" },
 		desc = { vi = "Hạt xoáy hút vào tâm", en = "Particles swirling inward" },
 		kind = "loop",
@@ -931,7 +987,7 @@ Presets.List = ({
 	},
 	{
 		id = "shield",
-		category = "magic",
+		category = "aura",
 		name = { vi = "Khiên năng lượng", en = "Energy Shield" },
 		desc = { vi = "Bong bóng bảo vệ lung linh", en = "Shimmering protective bubble" },
 		kind = "loop",
@@ -958,7 +1014,7 @@ Presets.List = ({
 	},
 	{
 		id = "energy_orb",
-		category = "magic",
+		category = "aura",
 		name = { vi = "Quả cầu năng lượng", en = "Energy Orb" },
 		desc = { vi = "Lõi neon phát sáng + tia điện", en = "Neon core with crackling sparks" },
 		kind = "loop",
@@ -992,7 +1048,7 @@ Presets.List = ({
 	},
 	{
 		id = "sparkles",
-		category = "magic",
+		category = "aura",
 		name = { vi = "Lấp lánh", en = "Sparkles" },
 		desc = { vi = "Sao lấp lánh quanh vật thể", en = "Twinkling stars around an object" },
 		kind = "loop",
@@ -1360,7 +1416,7 @@ Presets.List = ({
 	------------------------------------------------------------------ Light
 	{
 		id = "laser",
-		category = "light",
+		category = "projectile",
 		name = { vi = "Tia laser", en = "Laser Beam" },
 		desc = { vi = "Tia sáng bắn thẳng phía trước", en = "Straight beam shooting forward" },
 		kind = "loop",
@@ -1369,7 +1425,69 @@ Presets.List = ({
 		defaults = { color1 = rgb(255, 40, 70), color2 = rgb(255, 160, 160), trigger = "Always", duration = 1 },
 		layers = {
 			{ type = "beam", from = Vector3.zero, to = Vector3.new(0, 0, -30), width = 0.35, color = { "w" }, lightEmission = 1, brightness = 3 },
-			{ type = "beam", from = Vector3.zero, to = Vector3.new(0, 0, -30), width = 1.4, color = { "p", "s" }, transparency = { { 0, 0.3 }, { 1, 0.5 } }, lightEmission = 1, brightness = 2 },
+			{ type = "beam", from = Vector3.zero, to = Vector3.new(0, 0, -30), width = 1.4, color = { "p", "s" }, transparency = { { 0, 0.3 }, { 1, 0.5 } }, lightEmission = 1, brightness = 2, basic = true },
+			-- HD: a soft-edged body with energy pulses running down it
+			{
+				type = "beam",
+				hd = true,
+				from = Vector3.zero,
+				to = Vector3.new(0, 0, -30),
+				width = 2.4,
+				color = { "p", "s" },
+				lightEmission = 1,
+				brightness = 3,
+				packTexture = "slash_core",
+				textureMode = "Wrap",
+				textureLength = 7,
+				textureSpeed = 2.5,
+			},
+			{
+				type = "beam",
+				hd = true,
+				from = Vector3.zero,
+				to = Vector3.new(0, 0, -30),
+				width = 1.2,
+				color = { "w", "p" },
+				lightEmission = 1,
+				brightness = 2,
+				packTexture = "slash_core",
+				textureMode = "Wrap",
+				textureLength = 30,
+			},
+			-- muzzle flare and the burning hit point
+			{
+				type = "particles",
+				name = "MuzzleHD",
+				hd = true,
+				pack = "hit_star",
+				at = Vector3.zero,
+				rate = 14,
+				size = { { 0, 1.6 }, { 1, 2.2 } },
+				transparency = { { 0, 0 }, { 1, 1 } },
+				lifetime = { 0.08, 0.12 },
+				speed = { 0, 0 },
+				rotation = { 0, 360 },
+				color = { "w", "p" },
+				lightEmission = 1,
+				brightness = 3,
+			},
+			{
+				type = "particles",
+				name = "HitPointHD",
+				hd = true,
+				pack = "flip_hitspark",
+				at = Vector3.new(0, 0, -30),
+				flipbook = "Grid4x4",
+				flipMode = "OneShot",
+				rate = 10,
+				size = { { 0, 2.5 }, { 1, 4 } },
+				lifetime = { 0.25, 0.3 },
+				speed = { 0, 0 },
+				rotation = { 0, 360 },
+				color = { "w", "p" },
+				lightEmission = 1,
+				brightness = 3,
+			},
 			{
 				type = "particles",
 				at = Vector3.new(0, 0, -30),
@@ -1390,7 +1508,7 @@ Presets.List = ({
 	},
 	{
 		id = "glow",
-		category = "light",
+		category = "aura",
 		name = { vi = "Quầng sáng", en = "Soft Glow" },
 		desc = { vi = "Vầng sáng dịu + đèn", en = "Soft halo with a light" },
 		kind = "loop",
@@ -1414,7 +1532,7 @@ Presets.List = ({
 	},
 	{
 		id = "outline",
-		category = "light",
+		category = "aura",
 		name = { vi = "Viền phát sáng", en = "Glowing Outline" },
 		desc = { vi = "Tô viền vật thể (Highlight)", en = "Outline the object (Highlight)" },
 		kind = "loop",
@@ -1451,7 +1569,7 @@ Presets.List = ({
 	},
 	{
 		id = "charge_up",
-		category = "magic",
+		category = "aura",
 		name = { vi = "Tụ lực", en = "Charge Up" },
 		desc = { vi = "Năng lượng xoáy và hút vào tâm", en = "Energy spiraling and pulling inward" },
 		kind = "burst",
@@ -1484,7 +1602,8 @@ Presets.List = ({
 	------------------------------------------------------------------ Dark fantasy
 	{
 		id = "shadow_slash",
-		category = "dark",
+		category = "slash",
+		style = "dark",
 		name = { vi = "Chém bóng tối", en = "Shadow Slash" },
 		desc = { vi = "Vệt chém đen, viền tím, khói tan", en = "Black slash, violet edge, fading smoke" },
 		kind = "burst",
@@ -1513,12 +1632,13 @@ Presets.List = ({
 				color1 = "s",
 			},
 			darkSmoke(8, "center", { delay = 0.1, speed = { 2, 5 } }),
-			{ type = "shape", kind = "Shake", attrs = { Delay = 0.05, Magnitude = 0.6, Duration = 0.3, Roughness = 20 } },
+			twinkles(12, 26, Vector3.new(0, 0, -5), 0.06, { "p", "s" }),
 		},
 	},
 	{
 		id = "soul_flame",
-		category = "dark",
+		category = "elements",
+		style = "dark",
 		name = { vi = "Lửa linh hồn", en = "Soul Flame" },
 		desc = { vi = "Lửa ma xanh lục, khói đen, tàn bay", en = "Ghostly green fire, black smoke, embers" },
 		kind = "loop",
@@ -1561,7 +1681,8 @@ Presets.List = ({
 	},
 	{
 		id = "blood_burst",
-		category = "dark",
+		category = "impact",
+		style = "dark",
 		name = { vi = "Huyết bạo", en = "Blood Burst" },
 		desc = { vi = "Vụ nổ máu đỏ thẫm, giọt văng, vòng đỏ", en = "Crimson burst, flying drops, red ring" },
 		kind = "burst",
@@ -1614,7 +1735,8 @@ Presets.List = ({
 	},
 	{
 		id = "void_rift",
-		category = "dark",
+		category = "circle",
+		style = "dark",
 		name = { vi = "Khe nứt hư vô", en = "Void Rift" },
 		desc = { vi = "Lỗ đen viền tím hút mọi thứ vào trong", en = "Black hole with a violet rim that pulls everything in" },
 		kind = "burst",
@@ -1670,7 +1792,8 @@ Presets.List = ({
 	},
 	{
 		id = "cursed_sigil",
-		category = "dark",
+		category = "circle",
+		style = "dark",
 		name = { vi = "Ấn chú nguyền", en = "Cursed Sigil" },
 		desc = { vi = "Vòng ấn đỏ xoay, khói đen bốc lên", en = "Spinning red sigil, black smoke rising" },
 		kind = "burst",
@@ -1706,7 +1829,8 @@ Presets.List = ({
 	},
 	{
 		id = "necrotic_aura",
-		category = "dark",
+		category = "aura",
+		style = "dark",
 		name = { vi = "Hào quang tử khí", en = "Necrotic Aura" },
 		desc = { vi = "Khí đen xanh bao quanh nhân vật", en = "Green-black miasma around a character" },
 		kind = "loop",
@@ -1748,7 +1872,8 @@ Presets.List = ({
 	},
 	{
 		id = "soul_release",
-		category = "dark",
+		category = "impact",
+		style = "dark",
 		name = { vi = "Giải phóng linh hồn", en = "Soul Release" },
 		desc = { vi = "Nổ đen co lại rồi bung linh hồn sáng", en = "Black implosion, then bright souls burst out" },
 		kind = "burst",
@@ -1792,7 +1917,8 @@ Presets.List = ({
 	},
 	{
 		id = "ash_embers",
-		category = "dark",
+		category = "world",
+		style = "dark",
 		name = { vi = "Tro và tàn lửa", en = "Ash & Embers" },
 		desc = { vi = "Tro xám rơi, tàn lửa bay lơ lửng", en = "Falling grey ash and drifting embers" },
 		kind = "loop",
@@ -1836,6 +1962,157 @@ Presets.List = ({
 			},
 		},
 	},
+	------------------------------------------------------------------ From the reference clips
+	{
+		id = "lightning_slash",
+		category = "slash",
+		name = { vi = "Chém sét", en = "Lightning Slash" },
+		desc = { vi = "Vệt chém xanh điện, tia điện chạy dọc lưỡi", en = "Electric blue slash with arcs running along it" },
+		kind = "burst",
+		defaults = { color1 = rgb(110, 180, 255), color2 = rgb(40, 50, 255), trigger = "Loop", interval = 1.4 },
+		layers = {
+			{
+				type = "shape",
+				kind = "Slash",
+				attrs = { Radius = 5.5, Arc = 170, Width = 2.2, Sweep = 70, Duration = 0.4, Brightness = 3, TailFade = 0.85 },
+				color0 = "p",
+				color1 = "s",
+			},
+			{
+				type = "shape",
+				kind = "Crackle",
+				attrs = { Delay = 0.03, Count = 9, Radius = 5.6, Arc = 160, Length = 1.8, Jitter = 0.45, Width = 0.14, Duration = 0.45, Brightness = 3 },
+				color0 = "w",
+				color1 = "p",
+			},
+			{
+				type = "shape",
+				kind = "Lines",
+				attrs = { Delay = 0.05, Count = 10, Mode = "Ring", Distance0 = 4, Distance1 = 10, Length = 2.5, Width = 0.18, Duration = 0.3, Brightness = 2 },
+				color0 = "w",
+				color1 = "p",
+			},
+			sparks(26, 45),
+			twinkles(12, 30, Vector3.new(0, 0, -5), 0.04),
+			hdFlip("flip_electric", Vector3.new(0, 0, -5), 2, { { 0, 4 }, { 1, 6 } }, { 0.3, 0.4 }, { delay = 0.04, color = { "w", "p" }, brightness = 3 }),
+			{ type = "shape", kind = "Impact", attrs = { Delay = 0.04, Duration = 0.06, Style = "Flash", Strength = 0.45 } },
+			{ type = "light", brightness = 6, range = 20, color = "p", flash = 0.35 },
+		},
+	},
+	{
+		id = "flash_step",
+		category = "projectile",
+		name = { vi = "Bước chớp", en = "Flash Step" },
+		desc = { vi = "Lướt nhanh: vệt trắng, bóng mờ đen, tia ở điểm dừng", en = "Instant dash: white streak, dark afterimage, burst at the end" },
+		kind = "burst",
+		defaults = { color1 = rgb(230, 245, 255), color2 = rgb(90, 140, 255), trigger = "Loop", interval = 1.6 },
+		layers = {
+			{
+				type = "shape",
+				kind = "Streak",
+				attrs = { To = Vector3.new(0, 0, -24), Width = 0.7, Smear = 3, Duration = 0.45, Brightness = 3 },
+				color0 = "w",
+				color1 = "s",
+			},
+			{
+				type = "shape",
+				kind = "Lines",
+				attrs = { Offset = Vector3.new(0, 0, -24), Delay = 0.06, Count = 12, Distance0 = 0.5, Distance1 = 7, Length = 3, Width = 0.2, Duration = 0.3, Brightness = 2 },
+				color0 = "w",
+				color1 = "s",
+			},
+			{
+				type = "shape",
+				kind = "Crackle",
+				attrs = { Offset = Vector3.new(0, 0, -24), Delay = 0.05, Count = 5, Radius = 1.5, Arc = 360, Length = 1.4, Jitter = 0.5, Width = 0.1, Duration = 0.3, Brightness = 3 },
+				color0 = "s",
+				color1 = "w",
+			},
+			sparks(16, 30, Vector3.new(0, 0, -24)),
+			{ type = "shape", kind = "Shake", attrs = { Delay = 0.05, Magnitude = 0.5, Duration = 0.25, Roughness = 22 } },
+		},
+	},
+	{
+		id = "wind_vortex",
+		category = "circle",
+		name = { vi = "Lốc gió", en = "Wind Vortex" },
+		desc = { vi = "Đĩa gió xoáy, mảnh vụn bay, sao lấp lánh", en = "Spinning wind disc, flying debris, sparkles" },
+		kind = "burst",
+		area = Vector3.new(8, 4, 8),
+		defaults = { color1 = rgb(235, 255, 245), color2 = rgb(70, 255, 130), trigger = "Loop", interval = 0.75 },
+		layers = {
+			{
+				type = "shape",
+				kind = "Whirl",
+				attrs = { Count = 8, Strands = 3, Radius0 = 2, Radius1 = 7, Width = 0.42, ArcMin = 110, ArcMax = 240, Spin = 460, Grow = 0.25, Duration = 1.1, Tilt = Vector3.new(12, 0, -8), Transparency = 0.1, Brightness = 1.2, Ease = "Out" },
+				color0 = "p",
+				color1 = "s",
+			},
+			{
+				-- a second, wider and fainter layer gives the vortex depth
+				type = "shape",
+				kind = "Whirl",
+				attrs = { Delay = 0.05, Count = 5, Strands = 2, Radius0 = 4, Radius1 = 9, Width = 0.3, ArcMin = 90, ArcMax = 180, Spin = 320, Grow = 0.3, Duration = 1, Tilt = Vector3.new(12, 0, -8), Transparency = 0.5, Brightness = 1, Core = false },
+				color0 = "w",
+				color1 = "s",
+			},
+			{
+				-- leaves / grit caught in the wind: thin slivers flung outward and up
+				type = "particles",
+				at = "part",
+				texture = T.Square,
+				burst = 22,
+				color = { "w", "p" },
+				size = { { 0, 0.18 }, { 1, 0 } },
+				squash = { { 0, -1.8 }, { 1, -1.8 } },
+				orientation = "VelocityParallel",
+				lifetime = { 0.6, 1.1 },
+				speed = { 10, 20 },
+				spread = { 180, 25 },
+				direction = "Top",
+				drag = 3,
+				accel = Vector3.new(0, 4, 0),
+				lightEmission = 1,
+				brightness = 2,
+			},
+			{
+				type = "particles",
+				at = "part",
+				texture = T.Star,
+				burst = 14,
+				color = { "w", "s" },
+				size = { { 0, 0 }, { 0.2, 0.9 }, { 1, 0 } },
+				lifetime = { 0.5, 1 },
+				speed = { 3, 8 },
+				spread = { 180, 180 },
+				drag = 3,
+				rotation = { 0, 360 },
+				lightEmission = 1,
+				brightness = 2,
+			},
+			{
+				type = "particles",
+				at = "center",
+				texture = T.Glow,
+				burst = 1,
+				color = { "p" },
+				size = { { 0, 2 }, { 0.3, 4.5 }, { 1, 5 } },
+				transparency = { { 0, 0.7 }, { 1, 1 } },
+				lifetime = { 0.7, 0.7 },
+				speed = { 0, 0 },
+				lightEmission = 1,
+			},
+			hdRing(Vector3.new(0, -1.8, 0), 13, 0.6),
+			hdFlip("flip_smoke", Vector3.new(0, -1.6, 0), 8, { { 0, 2 }, { 1, 5 } }, { 0.7, 1.1 }, {
+				color = { "w" },
+				transparency = { { 0, 0.55 }, { 1, 1 } },
+				speed = { 12, 18 },
+				spread = { 180, 5 },
+				direction = "Top",
+				drag = 4,
+			}),
+		},
+	},
 } :: any) :: { Preset }
 
 -- Helpers like hdSlash() return several layers; flatten them into the list.
@@ -1851,6 +2128,53 @@ for _, preset in Presets.List do
 		end
 	end
 	preset.layers = flat
+end
+
+
+-- Weight and sharpness on the hits (layers appended per preset; HD parts need the pack)
+local function kit(id: string, ...: { Layer })
+	local all = {}
+	for _, group in { ... } do
+		for _, layer in group do
+			table.insert(all, layer)
+		end
+	end
+	IMPACT_KIT[id] = all
+end
+local FRONT = Vector3.new(0, 0, -28)
+kit("impact", hitSpark("center", 9), { hardRing("center", 14, 0.22, Vector3.new(90, 0, 0)) }, weight(0.6))
+kit("ground_slam", hitSpark(Vector3.new(0, -1.5, 0), 12), { hardRing(Vector3.new(0, -1.8, 0), 34, 0.3) }, weight(1))
+kit("explosion", hitSpark("center", 14), { hardRing(Vector3.new(0, -1.8, 0), 40, 0.32) }, weight(0.9))
+kit("slash", hitSpark(Vector3.new(0, 0, -4.5), 6, 0.05), weight(0.3, nil, 0.05))
+kit("multi_slash", hitSpark(Vector3.new(-1, 0.6, -1), 3.5, 0.04), hitSpark(Vector3.new(1, -0.5, -1), 3.5, 0.18), hitSpark("center", 5, 0.32), weight(0.45, nil, 0.32))
+kit("shadow_slash", hitSpark(Vector3.new(0, 0, -5.5), 7, 0.06), weight(0.5, nil, 0.06))
+kit("lightning_slash", hitSpark(Vector3.new(0, 0, -5), 8, 0.04), weight(0.5, nil, 0.04))
+kit("flash_step", hitSpark(FRONT + Vector3.new(0, 0, 4), 7, 0.06), weight(0.4, Vector3.new(0, 0, -24), 0.06))
+kit("fireball", hitSpark(FRONT, 10, 0.55), { hardRing(FRONT, 18, 0.25, Vector3.new(90, 0, 0), 0.55) }, weight(0.6, FRONT, 0.55))
+kit("impact_frame", hitSpark("center", 12), weight(1))
+kit("blood_burst", hitSpark("center", 9), weight(0.7))
+kit("soul_release", hitSpark("center", 10, 0.35), weight(0.8, nil, 0.35))
+kit("shockwave", { hardRing(Vector3.new(0, -1.8, 0), 30, 0.28) })
+kit("energy_blast", hitSpark("center", 8))
+
+-- HD strokes for the reference-clip effects
+local BEAM_PACK = { Streak = "stroke_wind", Crackle = "arc_electric" }
+
+for _, preset in Presets.List do
+	for _, layer in preset.layers do
+		if layer.type == "shape" and BEAM_PACK[layer.kind] and layer.beamPack == nil then
+			layer.beamPack = BEAM_PACK[layer.kind]
+		end
+		if layer.type == "shape" and layer.kind == "Impact" then
+			layer.packAttrs = { SpeedLines = "speed_lines" }
+		end
+	end
+	local extra = IMPACT_KIT[preset.id]
+	if extra then
+		for _, layer in extra do
+			table.insert(preset.layers, layer)
+		end
+	end
 end
 
 Presets.ById = {} :: { [string]: Preset }
