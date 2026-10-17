@@ -29,7 +29,7 @@ All of these are on the heavy presets: Hit Impact, Ground Slam, Explosion, Light
 | `flip_hitspark` (4×4) | Spikes shooting out, hollowing and thinning |
 | `ring_hard` | Crisp anime shockwave ring, gone fast |
 | `speed_lines` | Full-screen manga focus lines in `Impact` |
-| `stroke_wind` | Dry-brush stroke: `Whirl` and `Streak` draw each stroke as one textured beam |
+| `stroke_wind` | Dry-brush stroke: `Streak` draws its dash as one textured beam (`Whirl` stays untextured: a long curved beam twists the texture) |
 | `arc_electric` | Jagged arc: `Crackle` draws each arc as one textured beam |
 
 The Blender script makes them (`--only hit_star,flip_hitspark,ring_hard,speed_lines,stroke_wind,arc_electric`). The PNGs are in `pack/textures/`. They are uploaded and built into `src/Plugin/Shared/DefaultAssets.luau`, so they are on with HD.

@@ -854,6 +854,8 @@ do
 		end
 	end
 	check(emitted, "EclipseVFX marker played the EasyVFX effect")
+	-- (Lune throws on reading a destroyed light; Roblox just reads nil Parent)
+	H.warnings = {}
 	signals.EclipseVFX:Fire('{"Version":1,"Emits":[{"Path":"nope"}]}')
 	signals.EclipseVFX:Fire("not json")
 	signals.EasyVFX:Fire("VFX_DoesNotExist")

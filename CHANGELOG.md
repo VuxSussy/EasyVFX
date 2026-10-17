@@ -4,6 +4,18 @@ All notable changes to EasyVFX are listed here. Versions follow [Semantic Versio
 
 ## [Unreleased]
 
+### Rough and missing-HD effects fixed
+- Slashes keep their sharp `Slash` blade (hot edge, eroding tail) in HD as well. Before, HD replaced it with soft particle crescents. HD now adds v3 on top:
+  - star twinkles thrown off the blade;
+  - a hit spark (`hit_star` + `flip_hitspark`);
+  - weight (hit-stop, FOV punch, kick).
+  - This applies to Crescent Slash, Slash Flurry, Shadow Slash and Lightning Slash. Lightning Slash also gets the electric flipbook.
+- `Whirl` no longer stretches one textured beam over a long arc, which twisted and showed blunt white blocks. Each stroke is a smooth, comet-tapered chain, and the new `Strands` attribute (1-4) turns it into a bundle of thin lines.
+- Wind Vortex was rebuilt with two strand layers, flung grit, a soft core glow, a ground ring and a dust ring. The glass ball and black squares are gone.
+- Laser has an HD body with energy pulses running down it, a muzzle flare and a burning hit point.
+- Weapon Trail has an HD fibrous slash streak, a white-hot tip trail and glints along the blade.
+- Beams and trails accept a pack texture (`packTexture`, `textureMode`, `textureLength`, `textureSpeed`). Runtime version 11.
+
 ### Weight and sharper hits
 - New runtime tools:
   - `HitStop` shape and `EasyVFX.HitStop(seconds)`: effects hold their frame; tracks registered with `EasyVFX.TrackHitStop` slow down.
@@ -13,7 +25,7 @@ All notable changes to EasyVFX are listed here. Versions follow [Semantic Versio
 - An impact kit (hit spark, hard ring, hit-stop, punch, kick) on 11 hit presets.
 - New Create blocks: Hit spark, Hit-stop, Camera punch. Camera shake is now a kick, and Impact frame has speed lines.
 - v3 Blender textures: `hit_star`, `flip_hitspark`, `ring_hard`, `speed_lines`, `stroke_wind`, `arc_electric`.
-  - With a texture, `Whirl`, `Streak` and `Crackle` draw each stroke as one textured beam.
+  - With a texture, `Streak` and `Crackle` draw each stroke as one textured beam.
   - All six are uploaded and built in (`DefaultAssets.luau`), so they are on with HD.
 - `docs/impact.md` covers the research and the tools. Runtime version 10 (includes the relocation fix below).
 

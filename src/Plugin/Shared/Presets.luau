@@ -95,91 +95,32 @@ local function sparks(count: number, speed: number, at: any?): Layer
 end
 
 -- HD (asset pack) layers ------------------------------------------------------
--- These only appear after the Blender pack is imported. They are flat particles
--- (VelocityPerpendicular + tiny speed), so the texture lies in the attachment's
--- plane; `rotatable` adds the plugin's Rotation slider to their angle.
+-- Layers marked `hd` only appear when the Blender pack is available (built in by
+-- default); `basic` layers only without it.
 
-local function hdSlash(o: { [string]: any }): { Layer }
-	local radius = o.radius or 5
-	local quad = radius / 0.48 -- the crescent's outer edge is at 48% of the texture
-	local life = o.life or 0.34
-	local rot = o.rotation or 0
-	local spin = (o.sweep or 50) / life
-	local common = {
-		hd = true,
-		group = o.group,
-		tilt = o.tilt,
-		randomTilt = o.randomTilt,
-		delay = o.delay,
-		orientation = "VelocityPerpendicular",
-		direction = "Top",
-		speed = { 0.01, 0.01 },
-		rotation = { rot, rot },
-		rotSpeed = { spin, spin },
-		rotatable = true,
-		lightEmission = 1,
-		at = o.at or "center",
-	}
-	local function with(extra: { [string]: any }): Layer
-		local layer = table.clone(common)
-		for k, v in extra do
-			layer[k] = v
-		end
-		return layer
-	end
+-- Slashes stay the sharp Slash shape (hot edge, eroding tail) in HD too; the pack
+-- adds star twinkles thrown off the blade (plus the hit spark / weight below).
+local function twinkles(count: number, speed: number, at: any?, delay: number?, color: { any }?): Layer
 	return {
-		with({
-			type = "particles",
-			name = "SlashHD",
-			pack = "slash_arc",
-			burst = 1,
-			size = { { 0, quad * 0.82 }, { 0.12, quad }, { 1, quad * 1.12 } },
-			transparency = { { 0, 0 }, { 0.45, 0.05 }, { 1, 1 } },
-			lifetime = { life, life },
-			color = { "w", "w", "p", "s" },
-			brightness = 4,
-			zOffset = 1,
-		}),
-		with({
-			type = "particles",
-			name = "SlashDissolve",
-			pack = "flip_slash",
-			flipbook = "Grid4x4",
-			flipMode = "OneShot",
-			burst = 1,
-			size = { { 0, quad * 1.0 }, { 1, quad * 1.16 } },
-			transparency = { { 0, 0.15 }, { 1, 0.35 } },
-			lifetime = { life * 1.3, life * 1.3 },
-			color = { "p", "s" },
-			brightness = 2,
-			zOffset = 0.5,
-		}),
-		{
-			type = "particles",
-			name = "Twinkles",
-			hd = true,
-			group = o.group,
-			tilt = o.tilt,
-			randomTilt = o.randomTilt,
-			pack = "spark_star",
-			at = o.at or "center",
-			delay = (o.delay or 0) + 0.04,
-			burst = o.twinkles or 16,
-			direction = "Front",
-			speed = { radius * 3, radius * 6 },
-			drag = 5,
-			spread = { 80, 80 },
-			size = { { 0, 0 }, { 0.15, 0.8 }, { 1, 0 } },
-			lifetime = { 0.35, 0.8 },
-			rotation = { 0, 360 },
-			color = { "w", "p" },
-			lightEmission = 1,
-			brightness = 2,
-		},
+		type = "particles",
+		name = "Twinkles",
+		hd = true,
+		pack = "spark_star",
+		at = at or "center",
+		delay = delay,
+		burst = count,
+		direction = "Front",
+		speed = { speed * 0.5, speed },
+		drag = 5,
+		spread = { 80, 80 },
+		size = { { 0, 0 }, { 0.15, 0.8 }, { 1, 0 } },
+		lifetime = { 0.35, 0.8 },
+		rotation = { 0, 360 },
+		color = color or { "w", "p" },
+		lightEmission = 1,
+		brightness = 2,
 	}
 end
-
-local hdSlashLayers = hdSlash
 
 -- Marks a layer as "only without the HD pack".
 local function basic(layer: Layer): Layer
@@ -493,12 +434,11 @@ Presets.List = ({
 			{
 				type = "shape",
 				kind = "Slash",
-				basic = true,
 				attrs = { Radius = 5, Arc = 170, Width = 2, Sweep = 60, Duration = 0.4, Brightness = 2, TailFade = 0.8 },
 				color0 = "p",
 				color1 = "s",
 			},
-			hdSlashLayers({ group = "a", radius = 5, sweep = 60 }),
+			twinkles(14, 28, Vector3.new(0, 0, -4.5), 0.04),
 			{
 				type = "shape",
 				kind = "Lines",
@@ -522,17 +462,12 @@ Presets.List = ({
 			{
 				type = "shape",
 				kind = "Slash",
-				basic = true,
 				attrs = { Count = 5, Stagger = 0.07, RandomTilt = 70, Radius = 4.5, Arc = 150, Width = 1.6, Sweep = 40, Duration = 0.35, Brightness = 2 },
 				color0 = "p",
 				color1 = "s",
 			},
-			-- upright planes facing forward, crossing at different angles (an "X" flurry)
-			-- upright planes facing forward, off-centre and crossing (an anime "X" flurry)
-			hdSlashLayers({ group = "a", at = Vector3.new(-1.4, 0.9, 0), radius = 3.8, tilt = Vector3.new(90, 0, 0), randomTilt = 15, rotation = 20, twinkles = 8 }),
-			hdSlashLayers({ group = "b", at = Vector3.new(1.5, -0.7, 0), radius = 3.6, tilt = Vector3.new(90, 0, 0), randomTilt = 15, rotation = 200, delay = 0.07, twinkles = 8 }),
-			hdSlashLayers({ group = "c", at = Vector3.new(0.5, 1.6, 0), radius = 4.0, tilt = Vector3.new(90, 0, 0), randomTilt = 15, rotation = 120, delay = 0.14, twinkles = 8 }),
-			hdSlashLayers({ group = "d", at = Vector3.new(-0.7, -1.3, 0), radius = 3.7, tilt = Vector3.new(90, 0, 0), randomTilt = 15, rotation = 300, delay = 0.21, twinkles = 8 }),
+			twinkles(8, 22, "center", 0.04),
+			twinkles(8, 22, "center", 0.18),
 			{
 				type = "shape",
 				kind = "Orb",
@@ -815,6 +750,36 @@ Presets.List = ({
 				transparency = { { 0, 0.1 }, { 1, 1 } },
 				lifetime = 0.25,
 				widthScale = { { 0, 1 }, { 1, 0.2 } },
+				lightEmission = 1,
+				brightness = 2,
+				-- HD: fibrous slash streaks instead of a flat band
+				packTexture = "slash_fiber",
+			},
+			{
+				-- a thin white-hot edge along the tip of the swing
+				type = "trail",
+				color = { "w", "w", "p" },
+				transparency = { { 0, 0 }, { 0.5, 0.4 }, { 1, 1 } },
+				lifetime = 0.12,
+				widthScale = { { 0, 1 }, { 1, 0.4 } },
+				lightEmission = 1,
+				brightness = 3,
+				hd = true,
+				packTexture = "slash_core",
+			},
+			{
+				-- glints along the blade so a still weapon still reads as enchanted
+				type = "particles",
+				name = "Glint",
+				hd = true,
+				pack = "spark_star",
+				at = "part",
+				rate = 3,
+				size = { { 0, 0 }, { 0.3, 0.7 }, { 1, 0 } },
+				lifetime = { 0.3, 0.5 },
+				speed = { 0, 0 },
+				rotation = { 0, 360 },
+				color = { "w", "p" },
 				lightEmission = 1,
 				brightness = 2,
 			},
@@ -1460,7 +1425,69 @@ Presets.List = ({
 		defaults = { color1 = rgb(255, 40, 70), color2 = rgb(255, 160, 160), trigger = "Always", duration = 1 },
 		layers = {
 			{ type = "beam", from = Vector3.zero, to = Vector3.new(0, 0, -30), width = 0.35, color = { "w" }, lightEmission = 1, brightness = 3 },
-			{ type = "beam", from = Vector3.zero, to = Vector3.new(0, 0, -30), width = 1.4, color = { "p", "s" }, transparency = { { 0, 0.3 }, { 1, 0.5 } }, lightEmission = 1, brightness = 2 },
+			{ type = "beam", from = Vector3.zero, to = Vector3.new(0, 0, -30), width = 1.4, color = { "p", "s" }, transparency = { { 0, 0.3 }, { 1, 0.5 } }, lightEmission = 1, brightness = 2, basic = true },
+			-- HD: a soft-edged body with energy pulses running down it
+			{
+				type = "beam",
+				hd = true,
+				from = Vector3.zero,
+				to = Vector3.new(0, 0, -30),
+				width = 2.4,
+				color = { "p", "s" },
+				lightEmission = 1,
+				brightness = 3,
+				packTexture = "slash_core",
+				textureMode = "Wrap",
+				textureLength = 7,
+				textureSpeed = 2.5,
+			},
+			{
+				type = "beam",
+				hd = true,
+				from = Vector3.zero,
+				to = Vector3.new(0, 0, -30),
+				width = 1.2,
+				color = { "w", "p" },
+				lightEmission = 1,
+				brightness = 2,
+				packTexture = "slash_core",
+				textureMode = "Wrap",
+				textureLength = 30,
+			},
+			-- muzzle flare and the burning hit point
+			{
+				type = "particles",
+				name = "MuzzleHD",
+				hd = true,
+				pack = "hit_star",
+				at = Vector3.zero,
+				rate = 14,
+				size = { { 0, 1.6 }, { 1, 2.2 } },
+				transparency = { { 0, 0 }, { 1, 1 } },
+				lifetime = { 0.08, 0.12 },
+				speed = { 0, 0 },
+				rotation = { 0, 360 },
+				color = { "w", "p" },
+				lightEmission = 1,
+				brightness = 3,
+			},
+			{
+				type = "particles",
+				name = "HitPointHD",
+				hd = true,
+				pack = "flip_hitspark",
+				at = Vector3.new(0, 0, -30),
+				flipbook = "Grid4x4",
+				flipMode = "OneShot",
+				rate = 10,
+				size = { { 0, 2.5 }, { 1, 4 } },
+				lifetime = { 0.25, 0.3 },
+				speed = { 0, 0 },
+				rotation = { 0, 360 },
+				color = { "w", "p" },
+				lightEmission = 1,
+				brightness = 3,
+			},
 			{
 				type = "particles",
 				at = Vector3.new(0, 0, -30),
@@ -1605,7 +1632,7 @@ Presets.List = ({
 				color1 = "s",
 			},
 			darkSmoke(8, "center", { delay = 0.1, speed = { 2, 5 } }),
-			{ type = "shape", kind = "Shake", attrs = { Delay = 0.05, Magnitude = 0.6, Duration = 0.3, Roughness = 20 } },
+			twinkles(12, 26, Vector3.new(0, 0, -5), 0.06, { "p", "s" }),
 		},
 	},
 	{
@@ -1966,8 +1993,9 @@ Presets.List = ({
 				color1 = "p",
 			},
 			sparks(26, 45),
+			twinkles(12, 30, Vector3.new(0, 0, -5), 0.04),
+			hdFlip("flip_electric", Vector3.new(0, 0, -5), 2, { { 0, 4 }, { 1, 6 } }, { 0.3, 0.4 }, { delay = 0.04, color = { "w", "p" }, brightness = 3 }),
 			{ type = "shape", kind = "Impact", attrs = { Delay = 0.04, Duration = 0.06, Style = "Flash", Strength = 0.45 } },
-			{ type = "shape", kind = "Shake", attrs = { Delay = 0.04, Magnitude = 0.6, Duration = 0.3, Roughness = 24 } },
 			{ type = "light", brightness = 6, range = 20, color = "p", flash = 0.35 },
 		},
 	},
@@ -2016,34 +2044,36 @@ Presets.List = ({
 			{
 				type = "shape",
 				kind = "Whirl",
-				attrs = { Count = 7, Radius0 = 2.5, Radius1 = 6.5, Width = 0.8, ArcMin = 80, ArcMax = 220, Spin = 420, Duration = 1.1, Tilt = Vector3.new(12, 0, -8), Transparency = 0.05, Brightness = 2 },
+				attrs = { Count = 8, Strands = 3, Radius0 = 2, Radius1 = 7, Width = 0.42, ArcMin = 110, ArcMax = 240, Spin = 460, Grow = 0.25, Duration = 1.1, Tilt = Vector3.new(12, 0, -8), Transparency = 0.1, Brightness = 1.2, Ease = "Out" },
 				color0 = "p",
 				color1 = "s",
 			},
 			{
+				-- a second, wider and fainter layer gives the vortex depth
 				type = "shape",
-				kind = "Orb",
-				attrs = { Size0 = 1.6, Size1 = 1.9, Duration = 1.1, Material = "Glass", Transparency = 0.15, FadeStart = 0.8, Ease = "Linear" },
-				color0 = "p",
-				color1 = "w",
+				kind = "Whirl",
+				attrs = { Delay = 0.05, Count = 5, Strands = 2, Radius0 = 4, Radius1 = 9, Width = 0.3, ArcMin = 90, ArcMax = 180, Spin = 320, Grow = 0.3, Duration = 1, Tilt = Vector3.new(12, 0, -8), Transparency = 0.5, Brightness = 1, Core = false },
+				color0 = "w",
+				color1 = "s",
 			},
 			{
+				-- leaves / grit caught in the wind: thin slivers flung outward and up
 				type = "particles",
 				at = "part",
 				texture = T.Square,
-				burst = 18,
-				color = { "k" },
-				size = { { 0, 0.25 }, { 1, 0.15 } },
-				lifetime = { 0.8, 1.3 },
-				speed = { 6, 12 },
-				spread = { 180, 30 },
+				burst = 22,
+				color = { "w", "p" },
+				size = { { 0, 0.18 }, { 1, 0 } },
+				squash = { { 0, -1.8 }, { 1, -1.8 } },
+				orientation = "VelocityParallel",
+				lifetime = { 0.6, 1.1 },
+				speed = { 10, 20 },
+				spread = { 180, 25 },
 				direction = "Top",
-				drag = 2,
-				accel = Vector3.new(0, -6, 0),
-				rotation = { 0, 360 },
-				rotSpeed = { -360, 360 },
-				lightEmission = 0,
-				lightInfluence = 1,
+				drag = 3,
+				accel = Vector3.new(0, 4, 0),
+				lightEmission = 1,
+				brightness = 2,
 			},
 			{
 				type = "particles",
@@ -2060,6 +2090,27 @@ Presets.List = ({
 				lightEmission = 1,
 				brightness = 2,
 			},
+			{
+				type = "particles",
+				at = "center",
+				texture = T.Glow,
+				burst = 1,
+				color = { "p" },
+				size = { { 0, 2 }, { 0.3, 4.5 }, { 1, 5 } },
+				transparency = { { 0, 0.7 }, { 1, 1 } },
+				lifetime = { 0.7, 0.7 },
+				speed = { 0, 0 },
+				lightEmission = 1,
+			},
+			hdRing(Vector3.new(0, -1.8, 0), 13, 0.6),
+			hdFlip("flip_smoke", Vector3.new(0, -1.6, 0), 8, { { 0, 2 }, { 1, 5 } }, { 0.7, 1.1 }, {
+				color = { "w" },
+				transparency = { { 0, 0.55 }, { 1, 1 } },
+				speed = { 12, 18 },
+				spread = { 180, 5 },
+				direction = "Top",
+				drag = 4,
+			}),
 		},
 	},
 } :: any) :: { Preset }
@@ -2094,7 +2145,10 @@ local FRONT = Vector3.new(0, 0, -28)
 kit("impact", hitSpark("center", 9), { hardRing("center", 14, 0.22, Vector3.new(90, 0, 0)) }, weight(0.6))
 kit("ground_slam", hitSpark(Vector3.new(0, -1.5, 0), 12), { hardRing(Vector3.new(0, -1.8, 0), 34, 0.3) }, weight(1))
 kit("explosion", hitSpark("center", 14), { hardRing(Vector3.new(0, -1.8, 0), 40, 0.32) }, weight(0.9))
-kit("lightning_slash", hitSpark("center", 8, 0.04), weight(0.5, nil, 0.04))
+kit("slash", hitSpark(Vector3.new(0, 0, -4.5), 6, 0.05), weight(0.3, nil, 0.05))
+kit("multi_slash", hitSpark(Vector3.new(-1, 0.6, -1), 3.5, 0.04), hitSpark(Vector3.new(1, -0.5, -1), 3.5, 0.18), hitSpark("center", 5, 0.32), weight(0.45, nil, 0.32))
+kit("shadow_slash", hitSpark(Vector3.new(0, 0, -5.5), 7, 0.06), weight(0.5, nil, 0.06))
+kit("lightning_slash", hitSpark(Vector3.new(0, 0, -5), 8, 0.04), weight(0.5, nil, 0.04))
 kit("flash_step", hitSpark(FRONT + Vector3.new(0, 0, 4), 7, 0.06), weight(0.4, Vector3.new(0, 0, -24), 0.06))
 kit("fireball", hitSpark(FRONT, 10, 0.55), { hardRing(FRONT, 18, 0.25, Vector3.new(90, 0, 0), 0.55) }, weight(0.6, FRONT, 0.55))
 kit("impact_frame", hitSpark("center", 12), weight(1))
@@ -2104,7 +2158,7 @@ kit("shockwave", { hardRing(Vector3.new(0, -1.8, 0), 30, 0.28) })
 kit("energy_blast", hitSpark("center", 8))
 
 -- HD strokes for the reference-clip effects
-local BEAM_PACK = { Whirl = "stroke_wind", Streak = "stroke_wind", Crackle = "arc_electric" }
+local BEAM_PACK = { Streak = "stroke_wind", Crackle = "arc_electric" }
 
 for _, preset in Presets.List do
 	for _, layer in preset.layers do

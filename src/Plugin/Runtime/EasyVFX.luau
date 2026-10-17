@@ -30,7 +30,7 @@ local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 
 local EasyVFX = {}
-EasyVFX.Version = 10
+EasyVFX.Version = 11
 EasyVFX.Tag = "EasyVFX"
 -- 0.25 .. 1. Multiplies particle, line and rock counts. Lowered automatically on the
 -- client when the player picks a low graphics level.
@@ -713,9 +713,13 @@ end
 
 -- Whirl: a tilted disc of brush-stroke arcs spinning around the center (wind
 -- vortex, cyclone kick, spinning slash). Every stroke is tapered at both ends and
--- has its own radius, length and speed, so it reads as a swirl, not a ring.
+-- has its own radius, length and speed, so it reads as a swirl, not a ring. With
+-- Strands > 1 each stroke is a bundle of thin lines (anime wind) instead of one
+-- band. Strokes are always smooth segment chains: one textured Bezier beam over a
+-- long arc twists and shows blunt, square ends, so Whirl ignores Texture.
 Shapes.Whirl = function(cfg, ctx)
 	local strokes = math.clamp(math.floor(num(cfg, "Count", 6)), 1, 16)
+	local strands = math.clamp(math.floor(num(cfg, "Strands", 1)), 1, 4)
 	local delay = num(cfg, "Delay", 0)
 	local duration = num(cfg, "Duration", 0.9)
 	local r0, r1 = num(cfg, "Radius0", 2), num(cfg, "Radius1", 6)
@@ -733,29 +737,39 @@ Shapes.Whirl = function(cfg, ctx)
 	local carrier = newPart(base)
 	local list = {}
 	for i = 1, strokes do
-		local atts, beams = beamChain(carrier, N, style, false)
-		local cores = if style.core then select(2, beamChain(carrier, N, style, true)) else nil
-		table.insert(list, {
-			atts = atts,
-			beams = beams,
-			cores = cores,
-			span = texturedSpan(carrier, atts, beams, cores, style),
-			radius = lerp(r0, r1, (i - 0.5) / strokes) * ctx.rng:NextNumber(0.9, 1.1),
-			-- one Bezier beam can only follow ~170 degrees of arc
-			arc = math.min(ctx.rng:NextNumber(arcMin, arcMax), if style.texture ~= "" then math.rad(170) else math.huge),
-			phase = ctx.rng:NextNumber(0, math.pi * 2),
-			speed = ctx.rng:NextNumber(0.75, 1.25),
-			lift = ctx.rng:NextNumber(-0.15, 0.15) * r1,
-			width = width * ctx.rng:NextNumber(0.6, 1.2),
-		})
+		local radius = lerp(r0, r1, (i - 0.5) / strokes) * ctx.rng:NextNumber(0.9, 1.1)
+		local arc = ctx.rng:NextNumber(arcMin, arcMax)
+		local phase = ctx.rng:NextNumber(0, math.pi * 2)
+		local speed = ctx.rng:NextNumber(0.75, 1.25)
+		local lift = ctx.rng:NextNumber(-0.15, 0.15) * r1
+		local w = width * ctx.rng:NextNumber(0.6, 1.2)
+		for s = 1, strands do
+			-- the main strand carries the hot core; the others are thinner, shorter
+			-- and slightly off-radius, trailing behind it
+			local main = s == 1
+			local atts, beams = beamChain(carrier, N, style, false)
+			local cores = if style.core and main then select(2, beamChain(carrier, N, style, true)) else nil
+			table.insert(list, {
+				atts = atts,
+				beams = beams,
+				cores = cores,
+				radius = radius + (if main then 0 else ctx.rng:NextNumber(-1, 1) * w * 1.6),
+				arc = arc * (if main then 1 else ctx.rng:NextNumber(0.45, 0.85)),
+				phase = phase - (if main then 0 else ctx.rng:NextNumber(0.05, 0.35)),
+				speed = speed,
+				lift = lift,
+				width = if main then w else w * ctx.rng:NextNumber(0.3, 0.55),
+				fade = if main then 0 else ctx.rng:NextNumber(0.15, 0.4),
+			})
+		end
 	end
 	local function step(alpha: number)
 		local e = ease(alpha, style.ease)
 		-- in fast, hold, then thin out and fade
 		local env = math.min(1, alpha / 0.15) * (1 - math.clamp((alpha - 0.65) / 0.35, 0, 1) ^ 1.5)
-		local tr = lerp(1, style.fade0, env)
 		local eye = eyeIn(carrier)
 		for _, sd in list do
+			local tr = lerp(1, lerp(style.fade0, 1, sd.fade), env)
 			local r = sd.radius * (1 + grow * e)
 			local start = sd.phase + spin * e * sd.speed
 			local dTheta = sd.arc / N
@@ -768,12 +782,13 @@ Shapes.Whirl = function(cfg, ctx)
 			end
 			for k = 1, N do
 				local g0, g1 = (k - 1) / N, k / N
-				local w0 = sd.width * math.sin(math.pi * g0) ^ 0.7 * env
-				local w1 = sd.width * math.sin(math.pi * g1) ^ 0.7 * env
+				-- a comet: thin tail, full just behind the head, sharp point at the head
+				local w0 = sd.width * (math.sin(math.pi * g0 ^ 1.6) ^ 0.8) * env
+				local w1 = sd.width * (math.sin(math.pi * g1 ^ 1.6) ^ 0.8) * env
 				local b = sd.beams[k]
 				b.CurveSize0, b.CurveSize1 = c, c
 				b.Width0, b.Width1 = w0, w1
-				b.Transparency = NumberSequence.new(lerp(tr, 1, (1 - g0) * 0.6), lerp(tr, 1, (1 - g1) * 0.6))
+				b.Transparency = NumberSequence.new(lerp(tr, 1, (1 - g0) ^ 2 * 0.85), lerp(tr, 1, (1 - g1) ^ 2 * 0.85))
 				b.Color = ColorSequence.new(style.color1:Lerp(style.color0, g0), style.color1:Lerp(style.color0, g1))
 				local cb = sd.cores and sd.cores[k]
 				if cb then
@@ -781,14 +796,6 @@ Shapes.Whirl = function(cfg, ctx)
 					cb.Width0, cb.Width1 = w0 * 0.3, w1 * 0.3
 					cb.Transparency = b.Transparency
 				end
-			end
-			local span = sd.span
-			if span then
-				local whole = r * KAPPA * math.tan(sd.arc / 4)
-				span.CurveSize0, span.CurveSize1 = whole, whole
-				span.Width0, span.Width1 = sd.width * 2 * env, sd.width * 2 * env
-				span.Transparency = NumberSequence.new(tr)
-				span.Color = ColorSequence.new(style.color1, style.color0)
 			end
 		end
 	end

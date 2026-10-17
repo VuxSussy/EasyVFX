@@ -462,6 +462,23 @@ LayerBuilders.shape = function(ctx, key, layer)
 	end
 end
 
+-- Beams and trails: the user's texture wins; in HD a layer may name a pack texture
+-- (`packTexture`, with optional textureMode / textureLength / textureSpeed).
+local function ribbonTexture(ctx: any, layer: { [string]: any }, inst: any)
+	local params: Params = ctx.params
+	local texture = params.texture
+	local packed = params.texture == "" and layer.packTexture and ctx.hd and ctx.assets[layer.packTexture]
+	if packed then
+		texture = packed
+	end
+	inst.Texture = texture
+	inst.TextureMode = if packed then enumItem(Enum.TextureMode, layer.textureMode, Enum.TextureMode.Stretch) :: any else Enum.TextureMode.Stretch
+	inst.TextureLength = if packed then (layer.textureLength or 1) * params.size else 1
+	if inst:IsA("Beam") then
+		inst.TextureSpeed = if packed then layer.textureSpeed or 0 else 0
+	end
+end
+
 LayerBuilders.light = function(ctx, key, layer)
 	local params: Params = ctx.params
 	local parent = layerParent(ctx, key, layer, "center")
@@ -506,7 +523,7 @@ LayerBuilders.beam = function(ctx, key, layer)
 	beam.Brightness = (layer.brightness or 1) * params.glow
 	beam.FaceCamera = true
 	beam.Segments = 1
-	beam.Texture = params.texture
+	ribbonTexture(ctx, layer, beam)
 	setStreaming(beam, ctx, function()
 		beam.Enabled = true
 	end, function()
@@ -540,7 +557,7 @@ LayerBuilders.trail = function(ctx, key, layer)
 	trail.Brightness = (layer.brightness or 1) * params.glow
 	trail.MinLength = 0.05
 	trail.FaceCamera = false
-	trail.Texture = params.texture
+	ribbonTexture(ctx, layer, trail)
 	setStreaming(trail, ctx, function()
 		trail.Enabled = true
 	end, function()
@@ -613,7 +630,7 @@ function Builder.hasHD(presetId: string): boolean
 		return false
 	end
 	for _, layer in preset.layers do
-		if layer.hd or layer.pack then
+		if layer.hd or layer.pack or layer.beamPack or layer.packTexture then
 			return true
 		end
 	end

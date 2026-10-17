@@ -95,7 +95,7 @@ Roblox's built-in textures are soft, so EasyVFX builds its crisp parts from **ge
 | **Projectile** | Neon/ForceField head flying along a Bezier arc with a tapered trail; hit layers fire at the end | fireball |
 | **Shake** | Smooth-noise camera shake with distance falloff (client only, never the editor camera) | fireball, ground slam, explosion, lightning, impact frame |
 | **Impact** | Anime impact frame: a few frames of Flash / Mono / Invert color correction, never stacked | fireball, impact frame |
-| **Whirl** | A tilted disc of tapered brush-stroke arcs spinning at different speeds | wind vortex |
+| **Whirl** | A tilted disc of tapered brush-stroke arcs spinning at different speeds; `Strands` splits each stroke into thin lines | wind vortex |
 | **Streak** | A straight dash line that wipes in, then erodes from the tail, with an optional dark afterimage (Smear) | flash step |
 | **Crackle** | Short electric zig-zags jumping along a crescent or around a point, re-shaping and flickering | lightning slash, flash step |
 
