@@ -458,6 +458,39 @@ do
 	holder:Destroy()
 end
 
+print("== Relocated effect parts")
+do
+	local root = roblox.Instance.new("Part")
+	root.Name = "RelocatedMeshTest"
+	root.CFrame = roblox.CFrame.new(10, 3, -8) * roblox.CFrame.Angles(0, 0.4, 0)
+	root.Parent = H.workspace
+	local offset = roblox.CFrame.new(2, 1, -3) * roblox.CFrame.Angles(0.3, 0, 0)
+	local mesh = roblox.Instance.new("Part")
+	mesh.Name = "MeshTemplate"
+	mesh.CFrame = root.CFrame * offset
+	mesh:SetAttribute("VFX_Mesh", true)
+	mesh.Parent = root
+	local weld = roblox.Instance.new("WeldConstraint")
+	weld.Part0, weld.Part1 = root, mesh
+	weld.Parent = mesh
+	local at = roblox.CFrame.new(-30, 8, 12) * roblox.CFrame.Angles(0, 1.2, 0)
+	EasyVFX.PlayLocal(root, at)
+	local folder = (H.workspace.CurrentCamera or H.workspace):FindFirstChild("EasyVFX_Live")
+	local copy = folder and folder:FindFirstChild(root.Name)
+	local child = copy and copy:FindFirstChild(mesh.Name)
+	check(child ~= nil, "relocated copy keeps mesh template")
+	if child then
+		local expected = at * offset
+		check((child.CFrame.Position - expected.Position).Magnitude < 0.001, "mesh moves with relocated root")
+		check((child.CFrame.LookVector - expected.LookVector).Magnitude < 0.001, "mesh rotates with relocated root")
+		check(child.Anchored and not child.CanCollide and not child.CanTouch and not child.CanQuery, "copied mesh cannot fall or collide")
+		check(child:FindFirstChildWhichIsA("WeldConstraint") == nil, "copy drops source weld")
+	end
+	check((mesh.CFrame.Position - (root.CFrame * offset).Position).Magnitude < 0.001 and mesh.CanCollide and not mesh.Anchored, "source mesh unchanged")
+	waitForQuiet(400)
+	root:Destroy()
+end
+
 print("== Custom effects (My Effects)")
 do
 	local Custom = H.require("Shared/Custom")

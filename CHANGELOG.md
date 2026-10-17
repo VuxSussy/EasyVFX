@@ -4,6 +4,9 @@ All notable changes to EasyVFX are listed here. Versions follow [Semantic Versio
 
 ## [Unreleased]
 
+### Fixed
+- Playing an effect at a new CFrame now moves and rotates child mesh templates with the root. Temporary copied parts are anchored and do not collide, touch or block raycasts. Source effects stay unchanged. Runtime version 9.
+
 ### Eclipse Animator: vibe → edit → asset
 - `EasyVFX.BindAnimation(track, character)` plays effects at animation markers:
   - `EasyVFX` markers carry an effect name (with an optional body part, offset and rotation).
