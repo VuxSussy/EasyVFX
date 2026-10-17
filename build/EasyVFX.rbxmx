@@ -49,6 +49,29 @@ local function setSetting(key: string, value: any)
 	end)
 end
 
+-- Authoring API for AI agents and command-bar scripts (Builder, Presets, Custom,
+-- EclipseBridge, Runtime) at ServerStorage.EasyVFX_Authoring while Studio is in
+-- edit mode. Archivable = false, so it is never saved with the place.
+if RunService:IsEdit() then
+	pcall(function()
+		local ServerStorage = game:GetService("ServerStorage")
+		local old = ServerStorage:FindFirstChild("EasyVFX_Authoring")
+		if old then
+			old:Destroy()
+		end
+		local folder = script.Shared:Clone()
+		folder.Name = "EasyVFX_Authoring"
+		folder.Archivable = false
+		local runtime = script.Runtime.EasyVFX:Clone()
+		runtime.Name = "Runtime"
+		runtime.Parent = folder
+		for _, d in folder:GetDescendants() do
+			d.Archivable = false
+		end
+		folder.Parent = ServerStorage
+	end)
+end
+
 -- Effects people made themselves ("My Effects") join the library on start.
 Custom.register(Custom.load(setting(Custom.SETTING)))
 
@@ -657,6 +680,7 @@ end)
 		EasyVFX.Play(workspace.Part.VFX_Explosion)          -- play an effect where it is
 		EasyVFX.Play("VFX_Explosion", CFrame.new(0, 5, 0))  -- play a copy somewhere else
 		EasyVFX.SetEnabled(effect, false)                    -- turn looping layers off
+		EasyVFX.BindAnimation(track, character)              -- fire effects at animation markers
 
 	How it works:
 	  * Called on the server, Play() asks every client to play the effect (one small
@@ -671,12 +695,13 @@ end)
 ]]
 
 local CollectionService = game:GetService("CollectionService")
+local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 
 local EasyVFX = {}
-EasyVFX.Version = 7
+EasyVFX.Version = 8
 EasyVFX.Tag = "EasyVFX"
 -- 0.25 .. 1. Multiplies particle, line and rock counts. Lowered automatically on the
 -- client when the player picks a low graphics level.
@@ -2203,6 +2228,164 @@ function EasyVFX.Play(target: Instance | string, at: CFrame?): number
 	return EasyVFX.PlayLocal(target, at)
 end
 
+------------------------------------------------------------------------------------
+-- Animation markers: effects timed to an animation (Eclipse Animator, Moon, the
+-- Roblox Animation Editor...). Two marker names are understood:
+--
+--   "EasyVFX"    Value = an effect name ("VFX_CrescentSlash"), optionally with a body
+--                part or attachment to play it at ("VFX_CrescentSlash@RightHand"), or
+--                JSON: {"effect":"VFX_GroundSlam","at":"HumanoidRootPart",
+--                       "offset":[0,-3,-4],"rot":[0,0,0]}
+--                (offset in studs and rot in degrees, in the space of "at").
+--   "EclipseVFX" Eclipse Animator's own event-track markers. When an emit points at an
+--                EasyVFX effect inside the character, the whole effect plays, including
+--                shapes, shakes and impact frames that Eclipse's emitter alone skips.
+--
+-- Effects are looked up in ReplicatedStorage.EasyVFX_Effects first, then among all
+-- EasyVFX effects in the game. The copy is played where the marker says, so one
+-- template serves every character.
+------------------------------------------------------------------------------------
+
+type Marker = { effect: string, at: string?, offset: Vector3, rot: Vector3 }
+
+local function vector(v: any): Vector3
+	if type(v) == "table" and type(v[1]) == "number" and type(v[2]) == "number" and type(v[3]) == "number" then
+		return Vector3.new(v[1], v[2], v[3])
+	end
+	return Vector3.zero
+end
+
+-- Reads a marker value. Returns nil for anything malformed (markers are data).
+function EasyVFX.ParseMarker(value: string?): Marker?
+	if type(value) ~= "string" or value == "" or #value > 2000 then
+		return nil
+	end
+	local trimmed = value:match("^%s*(.-)%s*$") :: string
+	if trimmed:sub(1, 1) == "{" then
+		local ok, data = pcall(function()
+			return HttpService:JSONDecode(trimmed)
+		end)
+		if not ok or type(data) ~= "table" or type(data.effect) ~= "string" or data.effect == "" then
+			return nil
+		end
+		return {
+			effect = data.effect,
+			at = if type(data.at) == "string" and data.at ~= "" then data.at else nil,
+			offset = vector(data.offset),
+			rot = vector(data.rot),
+		}
+	end
+	local effect, at = trimmed:match("^([^@]+)@(.+)$")
+	return { effect = effect or trimmed, at = at, offset = Vector3.zero, rot = Vector3.zero }
+end
+
+local function findEffect(name: string): Instance?
+	local folder = game:GetService("ReplicatedStorage"):FindFirstChild("EasyVFX_Effects")
+	local inFolder = folder and folder:FindFirstChild(name, true)
+	if inFolder and inFolder:HasTag(EasyVFX.Tag) then
+		return inFolder
+	end
+	return findByName(name)
+end
+
+local function anchorOf(character: Instance, name: string?): CFrame
+	local inst: Instance? = nil
+	if name then
+		inst = if character.Name == name then character else character:FindFirstChild(name, true)
+	end
+	if not inst then
+		inst = character:FindFirstChild("HumanoidRootPart") or character
+	end
+	return originOf(inst :: Instance)
+end
+
+-- Plays the effect a marker describes, relative to `character`. Returns its length.
+function EasyVFX.PlayMarker(character: Instance, value: string?): number
+	local marker = EasyVFX.ParseMarker(value)
+	if not marker then
+		return 0
+	end
+	local effect = findEffect(marker.effect)
+	if not effect then
+		warn("[EasyVFX] Animation marker: no effect named " .. marker.effect)
+		return 0
+	end
+	local cf = anchorOf(character, marker.at) * CFrame.new(marker.offset) * rad(marker.rot)
+	return EasyVFX.Play(effect, cf)
+end
+
+-- The EasyVFX effect an Eclipse emit path points at (the path is relative to the
+-- root passed to Bind), or nil when it targets a plain emitter Eclipse handles.
+local function eclipseTarget(root: Instance, path: any): Instance?
+	if type(path) ~= "table" or #path > 128 then
+		return nil
+	end
+	local target: Instance? = root
+	for _, step in path do
+		if not target or type(step) ~= "table" or type(step.Name) ~= "string" then
+			return nil
+		end
+		local found, index = nil, 0
+		for _, child in (target :: Instance):GetChildren() do
+			if child.Name == step.Name and child.ClassName == step.Class then
+				index += 1
+				if index == step.Index then
+					found = child
+					break
+				end
+			end
+		end
+		target = found
+	end
+	local node: Instance? = target
+	while node and node ~= root.Parent do
+		if (node :: Instance):HasTag(EasyVFX.Tag) then
+			return node
+		end
+		node = node.Parent
+	end
+	return nil
+end
+
+-- Fires effects at an AnimationTrack's markers. Call it where the animation plays
+-- (usually the client for player characters). Returns a binding with Disconnect().
+function EasyVFX.BindAnimation(track: AnimationTrack, character: Instance): { Disconnect: (any) -> () }
+	local connections: { RBXScriptConnection } = {}
+	table.insert(
+		connections,
+		track:GetMarkerReachedSignal("EasyVFX"):Connect(function(value)
+			EasyVFX.PlayMarker(character, value)
+		end)
+	)
+	table.insert(
+		connections,
+		track:GetMarkerReachedSignal("EclipseVFX"):Connect(function(value)
+			local ok, data = pcall(function()
+				return HttpService:JSONDecode(value)
+			end)
+			if not ok or type(data) ~= "table" or type(data.Emits) ~= "table" then
+				return
+			end
+			local played: { [Instance]: boolean } = {}
+			for _, row in data.Emits do
+				local effect = if type(row) == "table" then eclipseTarget(character, row.Path) else nil
+				if effect and not played[effect] then
+					played[effect] = true
+					EasyVFX.Play(effect)
+				end
+			end
+		end)
+	)
+	return {
+		Disconnect = function()
+			for _, c in connections do
+				c:Disconnect()
+			end
+			table.clear(connections)
+		end,
+	}
+end
+
 -- Turns the always-on layers (looping emitters, beams, lights...) on or off.
 function EasyVFX.SetEnabled(root: Instance, on: boolean)
 	for _, d in root:GetDescendants() do
@@ -3512,6 +3695,286 @@ return Custom
         </Properties>
       </Item>
       <Item class="ModuleScript" referent="8">
+        <Properties>
+          <string name="Name">EclipseBridge</string>
+          <string name="Source"><![CDATA[--!strict
+--[[
+	EasyVFX <-> Eclipse Animator.
+
+	The AI ("vibe") flow:
+	  1. Make an animation on a rig (Eclipse Animator's MCP tools save it into the
+	     rig's AnimSaves folder as a KeyframeSequence).
+	  2. attach() puts EasyVFX effects inside the rig, welded to a hand, weapon or
+	     the root, so they follow the body.
+	  3. writeEvents() writes Eclipse Animator's own event track into that animation
+	     (the "EclipseEvents" folder, format version 8) with one event per effect
+	     cue. Opening the animation in Eclipse shows the cues on its event track,
+	     where they can be moved, retimed or removed by hand. It also writes the
+	     KeyframeMarkers Eclipse would export, so the KeyframeSequence plays in a game
+	     right away, before anyone opens Eclipse.
+	  4. In the game, EasyVFX.BindAnimation(track, character) plays the full effects
+	     (shapes, shakes and impact frames included) at those markers.
+
+	Cues pointing at an effect inside the rig become Eclipse "Emits" (Eclipse's
+	native way to fire VFX, previewed in its editor). Cues pointing at an effect
+	elsewhere (templates in ReplicatedStorage.EasyVFX_Effects) become an "EasyVFX"
+	marker on the event, which Eclipse keeps and exports as a KeyframeMarker.
+]]
+
+local HttpService = game:GetService("HttpService")
+
+local Bridge = {}
+
+Bridge.FOLDER = "EclipseEvents"
+Bridge.FORMAT = 8 -- Eclipse Animator event document version
+Bridge.FPS = 60 -- Eclipse's default FPS
+Bridge.EFFECTS_FOLDER = "EasyVFX"
+
+export type Cue = {
+	time: number, -- seconds into the animation
+	effect: Instance, -- an EasyVFX effect root
+	name: string?, -- event label shown on the track
+	at: string?, -- body part / attachment (marker cues only)
+	offset: Vector3?, -- studs, marker cues only
+	rot: Vector3?, -- degrees, marker cues only
+}
+
+-- Eclipse's emit path: one step per ancestor, matched by name, class and index
+-- among same-named siblings.
+function Bridge.path(root: Instance, target: Instance): { { Name: string, Class: string, Index: number } }?
+	local path = {}
+	local cursor: Instance? = target
+	while cursor ~= root do
+		if not cursor or not cursor.Parent then
+			return nil
+		end
+		local index = 0
+		for _, child in (cursor.Parent :: Instance):GetChildren() do
+			if child.Name == cursor.Name and child.ClassName == cursor.ClassName then
+				index += 1
+			end
+			if child == cursor then
+				break
+			end
+		end
+		table.insert(path, 1, { Name = cursor.Name, Class = cursor.ClassName, Index = index })
+		cursor = cursor.Parent
+	end
+	return path
+end
+
+local function stringValue(parent: Instance, name: string, value: string)
+	local v = Instance.new("StringValue")
+	v.Name = name
+	v.Value = value
+	v.Parent = parent
+end
+
+local function markerPayload(cue: Cue): string
+	local data: { [string]: any } = { effect = cue.effect.Name }
+	if cue.at then
+		data.at = cue.at
+	end
+	if cue.offset then
+		data.offset = { cue.offset.X, cue.offset.Y, cue.offset.Z }
+	end
+	if cue.rot then
+		data.rot = { cue.rot.X, cue.rot.Y, cue.rot.Z }
+	end
+	return HttpService:JSONEncode(data)
+end
+
+-- Moves an effect into the rig, welded to `partName` (a BasePart in the rig;
+-- default HumanoidRootPart), placed at `offset` from it. Returns the effect.
+function Bridge.attach(rig: Instance, effect: BasePart, partName: string?, offset: CFrame?): BasePart
+	local found = rig:FindFirstChild(partName or "HumanoidRootPart", true)
+	if not (found and found:IsA("BasePart")) then
+		found = rig:FindFirstChildWhichIsA("BasePart", true)
+	end
+	assert(found and found:IsA("BasePart"), "rig has no parts to attach to")
+	local part: BasePart = found
+	local folder: Instance? = rig:FindFirstChild(Bridge.EFFECTS_FOLDER)
+	if not folder then
+		local f = Instance.new("Folder")
+		f.Name = Bridge.EFFECTS_FOLDER
+		f.Parent = rig
+		folder = f
+	end
+	for _, j in effect:GetChildren() do
+		if j:IsA("WeldConstraint") or j:IsA("JointInstance") then
+			j:Destroy()
+		end
+	end
+	effect.Anchored = false
+	effect.CanCollide = false
+	effect.CanQuery = false
+	effect.CanTouch = false
+	effect.Massless = true
+	effect.CFrame = part.CFrame * (offset or CFrame.identity)
+	effect:SetAttribute("VFX_Trigger", "Script") -- played by the animation, not on its own
+	effect.Parent = folder
+	local weld = Instance.new("WeldConstraint")
+	weld.Name = "EasyVFX_Weld"
+	weld.Part0 = part
+	weld.Part1 = effect
+	weld.Parent = effect
+	return effect
+end
+
+-- Writes the cues as Eclipse Animator's event track on `sequence` (replacing any
+-- previous track) plus the KeyframeMarkers Eclipse exports. Returns the folder.
+function Bridge.writeEvents(rig: Instance, sequence: KeyframeSequence, cues: { Cue }, fps: number?): Folder
+	local rate = fps or Bridge.FPS
+	local folder = Instance.new("Folder")
+	folder.Name = Bridge.FOLDER
+	folder:SetAttribute("Version", Bridge.FORMAT)
+	folder:SetAttribute("FPS", rate)
+	folder:SetAttribute("DefaultFPS", Bridge.FPS)
+	folder:SetAttribute("Enabled", true)
+	folder:SetAttribute("FacesEnabled", false)
+	folder:SetAttribute("ProjectSubtitles", false)
+	folder:SetAttribute("Revision", 1)
+	folder:SetAttribute("CreatedBy", "EasyVFX")
+	stringValue(folder, "FaceKeys", "{}")
+
+	-- Eclipse keeps one event per frame; cues on the same frame share it.
+	local byFrame: { [number]: { emits: { any }, markers: { any }, names: { string } } } = {}
+	local frames: { number } = {}
+	for _, cue in cues do
+		local frame = math.max(0, math.floor(cue.time * rate + 0.5))
+		local slot = byFrame[frame]
+		if not slot then
+			slot = { emits = {}, markers = {}, names = {} }
+			byFrame[frame] = slot
+			table.insert(frames, frame)
+		end
+		local inRig = cue.effect:IsDescendantOf(rig)
+		local path = if inRig then Bridge.path(rig, cue.effect) else nil
+		if path then
+			table.insert(slot.emits, { Mode = "All", Path = path })
+		else
+			table.insert(slot.markers, { Name = "EasyVFX", Parameter = markerPayload(cue) })
+		end
+		table.insert(slot.names, cue.name or cue.effect.Name:gsub("^VFX_", ""))
+	end
+	table.sort(frames)
+
+	for _, frame in frames do
+		local slot = byFrame[frame]
+		local item = Instance.new("Folder")
+		item.Name = HttpService:GenerateGUID(false)
+		item:SetAttribute("Frame", frame)
+		item:SetAttribute("Duration", 0)
+		item:SetAttribute("Speed", 1)
+		local label = table.concat(slot.names, " + ")
+		local markers = slot.markers
+		if #markers == 0 then
+			-- an event always has a name; the first marker is what Eclipse displays
+			markers = { { Name = label, Parameter = "" } }
+		end
+		item:SetAttribute("EventName", markers[1].Name)
+		item:SetAttribute("Parameter", markers[1].Parameter)
+		item:SetAttribute("Enabled", true)
+		stringValue(item, "Markers", HttpService:JSONEncode(markers))
+		stringValue(item, "CodeBegin", "")
+		stringValue(item, "CodeEnd", "")
+		stringValue(item, "Emits", HttpService:JSONEncode(slot.emits))
+		local sounds = Instance.new("Folder")
+		sounds.Name = "Sounds"
+		sounds.Parent = item
+		item.Parent = folder
+	end
+
+	-- KeyframeMarkers, as Eclipse's export writes them, so the animation works in
+	-- a game before it is ever opened in Eclipse. Old EasyVFX/Eclipse markers go.
+	local keyAt: { [number]: Keyframe } = {}
+	for _, key in sequence:GetKeyframes() do
+		if key:IsA("Keyframe") then
+			for _, marker in key:GetMarkers() do
+				if marker.Name == "EclipseVFX" or marker.Name == "EasyVFX" then
+					marker:Destroy()
+				end
+			end
+			keyAt[math.floor(key.Time * rate + 0.5)] = key
+		end
+	end
+	for _, frame in frames do
+		local slot = byFrame[frame]
+		local key = keyAt[frame]
+		if not key then
+			local k = Instance.new("Keyframe")
+			k.Name = "Keyframe"
+			k.Time = frame / rate
+			k.Parent = sequence
+			keyAt[frame] = k
+			key = k
+		end
+		assert(key)
+		if #slot.emits > 0 then
+			local marker = Instance.new("KeyframeMarker")
+			marker.Name = "EclipseVFX"
+			marker.Value = HttpService:JSONEncode({ Version = 1, Emits = slot.emits })
+			marker.Parent = key
+		end
+		for _, m in slot.markers do
+			local marker = Instance.new("KeyframeMarker")
+			marker.Name = m.Name
+			marker.Value = m.Parameter
+			marker.Parent = key
+		end
+	end
+
+	local previous = sequence:FindFirstChild(Bridge.FOLDER)
+	folder.Parent = sequence
+	if previous and previous ~= folder then
+		previous:Destroy()
+	end
+	if sequence:GetAttribute("EclipseEventDocumentId") == nil then
+		sequence:SetAttribute("EclipseEventDocumentId", HttpService:GenerateGUID(false))
+	end
+	if rig:GetAttribute("EclipseEventRigId") == nil then
+		rig:SetAttribute("EclipseEventRigId", HttpService:GenerateGUID(false))
+	end
+	return folder
+end
+
+-- Reads back an Eclipse event track (written by Eclipse or by writeEvents) as a
+-- list of { frame, time, markers, emits } so a tool can inspect what's there.
+function Bridge.readEvents(sequence: KeyframeSequence): { any }
+	local folder = sequence:FindFirstChild(Bridge.FOLDER)
+	local out = {}
+	if not folder then
+		return out
+	end
+	local fps = folder:GetAttribute("FPS")
+	local rate = if type(fps) == "number" and fps > 0 then fps else Bridge.FPS
+	for _, item in folder:GetChildren() do
+		local frame = item:GetAttribute("Frame")
+		if item:IsA("Folder") and type(frame) == "number" then
+			local function json(name: string): any
+				local v = item:FindFirstChild(name)
+				if not (v and v:IsA("StringValue")) then
+					return {}
+				end
+				local ok, data = pcall(function()
+					return HttpService:JSONDecode(v.Value)
+				end)
+				return if ok and type(data) == "table" then data else {}
+			end
+			table.insert(out, { frame = frame, time = frame / rate, markers = json("Markers"), emits = json("Emits") })
+		end
+	end
+	table.sort(out, function(a, b)
+		return a.frame < b.frame
+	end)
+	return out
+end
+
+return Bridge
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="9">
         <Properties>
           <string name="Name">Presets</string>
           <string name="Source"><![CDATA[--!nonstrict
@@ -5378,7 +5841,7 @@ return Presets
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="9">
+      <Item class="ModuleScript" referent="10">
         <Properties>
           <string name="Name">Strings</string>
           <string name="Source"><![CDATA[--!strict
@@ -5705,11 +6168,11 @@ return Strings
         </Properties>
       </Item>
     </Item>
-    <Item class="Folder" referent="10">
+    <Item class="Folder" referent="11">
       <Properties>
         <string name="Name">UI</string>
       </Properties>
-      <Item class="ModuleScript" referent="11">
+      <Item class="ModuleScript" referent="12">
         <Properties>
           <string name="Name">App</string>
           <string name="Source"><![CDATA[--!nonstrict
@@ -7404,7 +7867,7 @@ return App
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="12">
+      <Item class="ModuleScript" referent="13">
         <Properties>
           <string name="Name">Components</string>
           <string name="Source"><![CDATA[--!strict
@@ -8102,7 +8565,7 @@ return C
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="13">
+      <Item class="ModuleScript" referent="14">
         <Properties>
           <string name="Name">Theme</string>
           <string name="Source"><![CDATA[--!strict

@@ -172,6 +172,10 @@ Put a **MeshPart** (e.g. a slash exported from Blender) inside a `VFX_…` Part 
 
 ---
 
+## 4b. Effects timed to animations (Eclipse Animator)
+
+EasyVFX writes Eclipse Animator's own event-track format, so an AI (or you) can make an animation with VFX cues, open it in Eclipse to adjust the timing, then export it as an asset. In the game, `EasyVFX.BindAnimation(track, character)` plays the cues: `EasyVFX` and `EclipseVFX` keyframe markers, including shapes, shakes and impact frames. Full flow and format: **[docs/eclipse-animator.md](docs/eclipse-animator.md)**.
+
 ## 5. For scripters (optional)
 
 The plugin installs three things into your game **once**, when you add your first effect:
@@ -188,6 +192,7 @@ local EasyVFX = require(game.ReplicatedStorage.EasyVFX)
 EasyVFX.Play(workspace.Sword.VFX_CrescentSlash)              -- play in place (server: plays for everyone)
 EasyVFX.Play("VFX_Explosion", CFrame.new(0, 5, 0))           -- play a copy somewhere else
 EasyVFX.SetEnabled(workspace.Torch.VFX_Fire, false)          -- turn always-on layers off
+EasyVFX.BindAnimation(animationTrack, character)             -- play effects at animation markers
 ```
 
 Choosing the **From a script** trigger shows a ready-to-paste line with the correct path. All effect settings are stored in the Part's `VFX_*` attributes and can be edited in the Properties window.
@@ -214,6 +219,7 @@ src/Plugin/
   init.server.luau        plugin: toolbar, dock panel, inserting effects, undo, runtime install
   Shared/Presets.luau     42 presets (plain data)
   Shared/Custom.luau      "My Effects": blocks, validation, share codes, registration
+  Shared/EclipseBridge.luau  writes Eclipse Animator event tracks (EclipseEvents + markers)
   Shared/Builder.luau     preset + settings -> instances (updated in place, no flicker)
   Shared/Strings.luau     English / Vietnamese text
   Runtime/EasyVFX.luau    runtime: emit, Ring/Slash/Lines/Bolt/Orb/Debris/Crater, triggers
