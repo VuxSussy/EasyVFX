@@ -1838,43 +1838,59 @@ local function playMesh(template: BasePart, ctx: Ctx): number
 end
 
 -- A mesh shell (Builder's `shell` layer): grows from Size0 to Size1, turns by SpinDeg,
--- fades, and swaps TextureID through its frames, since a mesh can't play an atlas.
+-- fades and shows one baked frame at a time (each frame is its own MeshPart with a
+-- SurfaceAppearance, since TextureID alpha doesn't cut a mesh out). Tint and emissive
+-- are the SurfaceAppearance properties a script may set.
 local function playShell(template: BasePart, ctx: Ctx): number
 	local delay = num(template, "Delay", 0)
 	local duration = num(template, "Duration", 0.3)
 	local size0 = vec(template, "Size0", template.Size)
 	local size1 = vec(template, "Size1", size0)
 	local spin = vec(template, "SpinDeg", Vector3.zero)
+	local emissive = num(template, "Emissive", 3)
 	local style = readStyle(template)
-	local frames = string.split(str(template, "Frames", ""), ",")
-	if frames[1] == "" then
-		frames = {}
-	end
 	local cf = ctx.origin * CFrame.new(vec(template, "Offset", Vector3.zero)) * rad(vec(template, "Tilt", Vector3.zero))
-	local copy = template:Clone() :: any
+	local copy = template:Clone()
 	for _, d in copy:GetDescendants() do
 		if d:IsA("BaseScript") then
 			d:Destroy()
 		end
 	end
 	copy.Archivable = false
-	local okMat, material = pcall(function()
-		return (Enum.Material :: any)[str(template, "Material", "Neon")]
-	end)
-	copy.Material = if okMat and material then material else Enum.Material.Neon
-	local shown = 0
+	copy.Transparency = 1
+	local frames: { BasePart } = {}
+	for _, c in copy:GetChildren() do
+		local index = c:GetAttribute("VFX_Frame")
+		if c:IsA("BasePart") and type(index) == "number" then
+			frames[index] = c
+		end
+	end
+	local shown: BasePart? = nil
 	local function step(alpha: number)
+		if #frames == 0 then
+			return
+		end
 		local e = ease(alpha, style.ease)
-		copy.Size = size0:Lerp(size1, e)
-		copy.CFrame = cf * CFrame.Angles(math.rad(spin.X * e), math.rad(spin.Y * e), math.rad(spin.Z * e))
-		copy.Transparency = fadeAt(style, alpha)
-		copy.Color = style.color0:Lerp(style.color1, e)
-		if #frames > 0 then
-			local k = math.min(#frames, math.floor(alpha * #frames) + 1)
-			if k ~= shown then
-				shown = k
-				copy.TextureID = frames[k]
-			end
+		local frame = frames[math.min(#frames, math.floor(alpha * #frames) + 1)]
+		if shown and shown ~= frame then
+			shown.Transparency = 1
+		end
+		shown = frame
+		local color = style.color0:Lerp(style.color1, e)
+		frame.Size = size0:Lerp(size1, e)
+		frame.CFrame = cf * CFrame.Angles(math.rad(spin.X * e), math.rad(spin.Y * e), math.rad(spin.Z * e))
+		-- 0.02, not 0: at 0 a SurfaceAppearance's alpha is dithered
+		frame.Transparency = math.max(0.02, fadeAt(style, alpha))
+		frame.Color = color
+		frame:SetAttribute("VFX_Emissive", emissive)
+		local sa = frame:FindFirstChildOfClass("SurfaceAppearance")
+		if sa then
+			-- newer properties; guarded for engines and test harnesses without them
+			pcall(function()
+				sa.Color = color
+				sa.EmissiveTint = color
+				sa.EmissiveStrength = emissive
+			end)
 		end
 	end
 	step(0)

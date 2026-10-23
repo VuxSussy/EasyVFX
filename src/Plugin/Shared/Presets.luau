@@ -435,9 +435,10 @@ local function heroShards(at: any, count: number, speed: number, fields: { [stri
 	return layer
 end
 
--- a crescent shell carrying the slash ribbon's 16 frames (seq_slash_ribbon_00..15)
+-- a crescent shell carrying every other frame of the slash ribbon (8 of 16): each frame
+-- is a baked MeshPart, so fewer frames keep the template light
 local RIBBON = {}
-for k = 0, 15 do
+for k = 0, 15, 2 do
 	table.insert(RIBBON, string.format("seq_slash_ribbon_%02d", k))
 end
 

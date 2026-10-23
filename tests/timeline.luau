@@ -193,7 +193,9 @@ local function partInfo(d: BasePart)
 		t = d.Transparency,
 		className = d.ClassName,
 		meshId = if d:IsA("MeshPart") then (d :: MeshPart).MeshId else nil,
-		textureId = if d:IsA("MeshPart") then (d :: MeshPart).TextureID else nil,
+		-- a shell frame's texture lives in its SurfaceAppearance (Builder's shell layer)
+		textureId = if d:IsA("MeshPart") then (d:GetAttribute("VFX_FrameTexture") or (d :: MeshPart).TextureID) else nil,
+		emissive = d:GetAttribute("VFX_Emissive"),
 	}
 end
 

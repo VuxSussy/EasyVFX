@@ -328,6 +328,12 @@ def _fill(canvas, quad, color, alpha, additive):
 GLOWING = ("Neon", "ForceField")
 
 
+def glows(part):
+    """A part that glows: a glowing material, or a mesh shell frame whose
+    SurfaceAppearance has an emissive mask (recorded as `emissive`)."""
+    return part["material"] in GLOWING or (part.get("emissive") or 0) > 0
+
+
 _meshes = {}
 
 
@@ -402,7 +408,7 @@ def _mesh_part(canvas, part):
     rot = np.array(cf[3:12], np.float64).reshape(3, 3)
     world = local @ rot.T + np.asarray(cf[:3], np.float64)
     tex = texture(part.get("textureId") or "") if part.get("textureId") else np.ones((4, 4), np.float32)
-    glowing = part["material"] in GLOWING
+    glowing = glows(part)
     draw_mesh(canvas, world, uvs, tris, tex, part["color"], 1 - part["t"], 1.0 if glowing else 0.0)
 
 

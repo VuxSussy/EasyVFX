@@ -37,7 +37,7 @@ def census(timeline):
     rows = []
     for frame in timeline["frames"]:
         t = frame["t"]
-        plain = sum(1 for p in frame["parts"] if p["material"] not in GLOWING)
+        plain = sum(1 for p in frame["parts"] if not render.glows(p))
         rows.append(
             {
                 "t": t,

@@ -41,11 +41,74 @@ A `shell` layer names a mesh and its texture frames:
   color0 = "w", color1 = "p" }
 ```
 
-- **Building:** a script can't set `MeshId`, so the builder makes a hidden template MeshPart with
-  `AssetService:CreateMeshPartAsync` (plugins may call it).
-- **Playing:** the runtime clones the template. The clone grows from `Size0` to `Size1`, turns by `SpinDeg` and fades.
-  It also swaps `TextureID` through the frames, since a mesh can't play a flipbook atlas.
+- **Building:** a script can't set `MeshId`, so the builder makes a hidden lead MeshPart with
+  `AssetService:CreateMeshPartAsync` (plugins may call it). A MeshPart's `TextureID` alpha doesn't cut it out (see
+  "In Studio" below), so the builder also bakes one frame MeshPart per texture frame under the lead. Each frame gets
+  its own `SurfaceAppearance`: `AlphaMode` Transparency, the frame as `ColorMapContent` and `EmissiveMaskContent`.
+  Only a plugin may set those.
+- **Playing:** the runtime clones the lead and shows one frame at a time. The visible frame grows from `Size0` to
+  `Size1`, turns by `SpinDeg` and fades (never below `Transparency` 0.02, where the alpha dithers). The runtime also
+  sets the `SurfaceAppearance`'s `Color`, `EmissiveTint` and `EmissiveStrength` (`Emissive`, default 3), which scripts
+  may write.
+- **Cost:** every frame is a MeshPart, so a shell carries few frames; `slash_v4` uses every other ribbon frame (8).
 - **Frames:** texgen's `sequence` kind writes frames as separate images (`seq/slash_ribbon` gives 16).
 - **Before upload:** without uploaded IDs the layer is skipped.
 - **evfx:** draws `pack://` meshes from `pack/meshes`, with perspective-correct UVs and two-sided coverage counted
   once.
+
+## In Studio (2026-10-23, edit mode, no upload)
+
+`python3 tools/meshgen studio` writes a preview script in chunks: a setup chunk, then one per shot. Each shot builds
+its shell with `EditableMesh` and its frame with `EditableImage`, so nothing has to be uploaded. What it showed:
+
+- **`TextureID` alpha doesn't cut a MeshPart out.** The shells drew the full band in every frame, opaque and grey;
+  transparent texels let the part's `Color` show through instead.
+
+  ![TextureID](meshes/studio-texture-id.jpg)
+- **`SurfaceAppearance` with `AlphaMode = Transparency` does cut it out.** With the frame as `ColorMapContent` and
+  `EmissiveMaskContent`, `EmissiveStrength` 3 and `Color` and `EmissiveTint` set to the element colour, the shells
+  glow and the ribbon erodes frame by frame. Set `Transparency` to 0.02, not 0: at 0 the alpha is dithered.
+
+  ![SurfaceAppearance](meshes/studio-surface-appearance.jpg)
+  ![Frames 0, 4, 8, 12](meshes/studio-frames.jpg)
+- **Only a plugin can write the colour map.** `SurfaceAppearance.ColorMap` and `ColorMapContent` need
+  `PluginSecurity`. `AlphaMode`, `Color`, `EmissiveStrength` and `EmissiveTint` are writable at runtime. So the
+  builder (a plugin) has to bake one part per frame with its own `SurfaceAppearance`, and the runtime can only switch
+  which one is visible and drive its emissive. The `shell` layer works that way now.
+
+### The runtime path in Studio (2026-10-23, edit mode, no upload)
+
+`python3 tools/meshgen studio --play` writes the data for `slash_v4`'s two crescent shells and every other ribbon
+frame. In an edit Studio:
+
+1. The data is turned into `EditableMesh` and `EditableImage` content and handed to `Builder.previewContent`.
+2. The real `Builder.create` baked each shell: a lead plus 8 frame MeshParts, each with its own `SurfaceAppearance`.
+3. The runtime's `PlayLocal` played it at 1/20 speed.
+
+One frame showed at a time, stepping from Frame02 to Frame05 to Frame07. The arc turned and its tint shifted, the tail
+eroded, and the shell faded. It ran in edit mode because an `EditableImage` doesn't survive the copy into a Play
+session.
+
+![start](meshes/studio-play-1-start.jpg)
+![middle](meshes/studio-play-2-mid.jpg)
+![end](meshes/studio-play-3-end.jpg)
+
+### The halftone on the yellow shells (2026-10-23, edit mode)
+
+Phát saw a halftone pattern on the yellow slash shells that the blue torus didn't have. An A/B in Studio settled it:
+
+![close: soft and solid both smooth](meshes/studio-close-ab.png)
+![far: columns 1-4 shimmer, column 5 smooth](meshes/studio-aliasing-ab.png)
+
+- **Close up, it's smooth.** The ribbon renders smooth with alpha in `soft` mode (detail in alpha) and in `solid`
+  mode (crisp alpha, detail in grey RGB), at `Transparency` 0.02 and 0.45 alike.
+- **At a distance it aliases.** Both modes shimmer into stripes, with a dotted inner edge. The same texture shrunk
+  to 64 × 16, the size a mipmap would pick there (column 5), is smooth.
+- **So the pattern is minification aliasing.** An `EditableImage` has no mipmaps, so a preview of a fine-striped
+  texture sparkles when it's small on screen. The blue strip's broad gradients barely alias.
+- **Uploaded images get mipmaps,** so the game should look like column 5. That can only be confirmed after an upload.
+- **`Transparency` 0 dithers on purpose.** A `SurfaceAppearance` at 0 is screen-door dithered, which is why the
+  runtime never goes below 0.02.
+
+The ribbon keeps its look (`alpha="soft"`). The `alpha` and `fibres` knobs stay for tuning, and so does the `"rgb":
+"luma"` check for grey mesh frames.

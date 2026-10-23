@@ -4,6 +4,21 @@ All notable changes to EasyVFX are listed here. Versions follow [Semantic Versio
 
 ## [Unreleased]
 
+### Shells on SurfaceAppearance
+- In Studio, a MeshPart's `TextureID` alpha doesn't cut it out, and only a plugin may set a `SurfaceAppearance`'s
+  colour map. The `shell` layer now bakes one frame MeshPart per texture frame under a hidden lead, each with its own
+  `SurfaceAppearance`: alpha cut out, emissive mask. The runtime shows one frame at a time and drives tint, emissive
+  and fade. `slash_v4` uses 8 frames per shell.
+- `meshgen studio` writes a chunked Luau preview that builds the shells with `EditableMesh` and `EditableImage`, so
+  they can be seen in Studio without an upload. `docs/meshgen.md` has the Studio shots.
+- evfx draws an emissive shell frame as glowing, and doesn't count it as a plain block.
+- The halftone on Studio previews of the slash shells is aliasing from `EditableImage`s, which have no mipmaps, not
+  the alpha (an A/B is in `docs/meshgen.md`). `seq/slash_ribbon` gains `alpha` and `fibres` knobs; texgen checks accept
+  `"rgb": "luma"` (grey detail for mesh frames).
+- `Builder.previewContent` lets a Studio preview hand the builder `EditableMesh` and `EditableImage` content for assets
+  not uploaded yet (empty in the plugin and in games). `meshgen studio --play` writes the data to bake `slash_v4` with
+  the real builder and play it with the runtime in an edit Studio.
+
 ### The mesh set (`tools/meshgen`)
 - `tools/meshgen` writes six shells as OBJ in `pack/meshes`, not uploaded: crescent (wide and thin), cone, sphere,
   torus and cylinder. Each is a recipe with knobs, and `check` and `selftest` run in `tools/check.sh`.

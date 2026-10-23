@@ -142,6 +142,18 @@ def plain_blocks_fail():
 
 
 @check
+def an_emissive_shell_frame_is_not_a_plain_block():
+    shell = dict(ROCK, className="MeshPart", material="SmoothPlastic", emissive=3)
+    tl = timeline()
+    tl["frames"][0]["parts"] = [shell]
+    ok, reason = gate(tl, "plain_pieces")
+    assert ok, reason
+    tl["frames"][0]["parts"] = [dict(shell, emissive=None)]
+    ok, reason = gate(tl, "plain_pieces")
+    assert not ok, "a plastic mesh without an emissive mask passed as glowing"
+
+
+@check
 def particle_flies_at_its_speed():
     p = core._particle(emitter(), IDENTITY, [0, 0, 0], 0.25, core._rng("x"))
     assert abs(p["pos"][1] - (2 + 2.5)) < 1e-6, p["pos"]
