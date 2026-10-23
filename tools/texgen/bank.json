@@ -16,6 +16,8 @@
     "flip/slash_erode": {"recipe": "slash_erode", "kind": "flipbook", "size": 1024, "grid": 4, "seed": 15, "dissolve": true, "role": "base", "use": "a crescent slash eroding from its tail (OneShot, VelocityPerpendicular, Emit 4)"},
     "flip/dust_ring": {"recipe": "dust_ring", "kind": "flipbook", "size": 1024, "grid": 4, "seed": 16, "dissolve": true, "role": "volume", "use": "a ground dust ring from above (OneShot, flat, normal blend)"},
 
+    "seq/slash_ribbon": {"recipe": "slash_ribbon", "kind": "sequence", "size": 512, "grid": 4, "seed": 17, "dissolve": true, "role": "base", "use": "a slash on mesh/crescent_* shells: 16 frames as separate images, swapped through TextureID"},
+
     "sheet/rock_chunks": {"recipe": "rock_chunks", "kind": "sheet", "size": 1024, "grid": 4, "seed": 21, "role": "base", "use": "flat rock debris instead of plain blocks (FlipbookStartRandom, framerate 0)"},
     "sheet/embers": {"recipe": "embers", "kind": "sheet", "size": 512, "grid": 4, "seed": 22, "role": "sparks", "use": "hot fragments, one random variant per particle"},
     "sheet/bolt_variants": {"recipe": "bolt_variants", "kind": "sheet", "size": 1024, "grid": 4, "seed": 23, "role": "sparks", "use": "lightning bolts, one random variant per particle"},

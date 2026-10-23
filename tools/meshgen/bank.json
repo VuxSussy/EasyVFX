@@ -1,0 +1,13 @@
+{
+  "bank": 1,
+  "name": "mesh-set",
+  "note": "The mesh set (plan §3, step 2) as recipes in tools/meshgen/shells.py, written to pack/meshes as <family>_<name>.obj. Not uploaded: meshes go up with the textures through the ledger script.",
+  "entries": {
+    "mesh/crescent_wide": {"recipe": "crescent", "use": "a heavy slash: the slash-erodes sequence on a wide, deep shell"},
+    "mesh/crescent_thin": {"recipe": "crescent", "params": {"sweep": 170, "width": 0.16, "cone": 0.1}, "use": "a quick slash or an afterimage arc"},
+    "mesh/cone": {"recipe": "cone", "use": "a burst thrown up from the ground; a shockwave with height"},
+    "mesh/sphere": {"recipe": "sphere", "use": "a dome flash or a shield"},
+    "mesh/torus": {"recipe": "torus", "use": "a hard ring that keeps its thickness at any angle"},
+    "mesh/cylinder": {"recipe": "cylinder", "use": "a light pillar or a beam's body"}
+  }
+}

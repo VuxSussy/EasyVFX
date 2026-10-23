@@ -531,6 +531,76 @@ LayerBuilders.beam = function(ctx, key, layer)
 	end)
 end
 
+-- A textured mesh shell (tools/meshgen, docs/plan-real-vfx.md step 2): the template
+-- MeshPart the runtime clones and animates. A script can't set MeshId, so the template
+-- comes from AssetService; texture frames are swapped through TextureID at play time,
+-- since a mesh can't play a flipbook atlas.
+LayerBuilders.shell = function(ctx, key, layer)
+	local params: Params = ctx.params
+	local meshId = ctx.assets[layer.mesh]
+	if type(meshId) ~= "string" then
+		return
+	end
+	local found = ctx.existing[key]
+	local part: MeshPart
+	if found and found:IsA("MeshPart") and found:GetAttribute("VFX_MeshAsset") == meshId then
+		part = found :: MeshPart
+	else
+		if found then
+			found:Destroy()
+		end
+		local ok, made = pcall(function()
+			return game:GetService("AssetService"):CreateMeshPartAsync(meshId)
+		end)
+		if not ok or not made then
+			warn("[EasyVFX] Could not load mesh " .. meshId .. ": " .. tostring(made))
+			return
+		end
+		part = made :: MeshPart
+		part:SetAttribute(Builder.LAYER_ATTR, key)
+		part:SetAttribute("VFX_MeshAsset", meshId)
+		ctx.existing[key] = part
+	end
+	ctx.wanted[key] = true
+	part.Name = layer.name or "Shell"
+	part.Anchored = true
+	part.CanCollide = false
+	part.CanTouch = false
+	part.CanQuery = false
+	part.CastShadow = false
+	part.Transparency = 1
+	part.CFrame = ctx.root.CFrame
+	local frames = {}
+	for _, k in layer.frames or {} do
+		if ctx.assets[k] then
+			table.insert(frames, ctx.assets[k])
+		end
+	end
+	part.TextureID = frames[1] or ""
+	local attrs: { [string]: any } = table.clone(layer.attrs or {})
+	local timeScale = params.lifetime / math.max(0.05, params.speed)
+	for _, k in { "Size0", "Size1", "Offset" } do
+		if typeof(attrs[k]) == "Vector3" then
+			attrs[k] *= params.size
+		end
+	end
+	for _, k in { "Delay", "Duration" } do
+		if type(attrs[k]) == "number" then
+			attrs[k] *= timeScale
+		end
+	end
+	attrs.Color0 = resolveColor(layer.color0 or "w", params)
+	attrs.Color1 = resolveColor(layer.color1 or layer.color0 or "p", params)
+	attrs.Frames = table.concat(frames, ",")
+	attrs.VFX_Shell = true
+	for name, value in attrs do
+		part:SetAttribute(name, value)
+	end
+	if part.Parent ~= ctx.root then
+		part.Parent = ctx.root
+	end
+end
+
 LayerBuilders.trail = function(ctx, key, layer)
 	local params: Params = ctx.params
 	local size: Vector3 = ctx.root.Size
@@ -630,7 +700,7 @@ function Builder.hasHD(presetId: string): boolean
 		return false
 	end
 	for _, layer in preset.layers do
-		if layer.hd or layer.pack or layer.beamPack or layer.packTexture then
+		if layer.hd or layer.pack or layer.beamPack or layer.packTexture or layer.mesh then
 			return true
 		end
 	end

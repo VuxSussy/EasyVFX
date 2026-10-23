@@ -74,6 +74,7 @@ Scores are for comparing before and after, not pass or fail.
 
 ## What it can't see yet
 
+- **Meshes** from `pack/meshes` (tools/meshgen) are drawn with their texture; other MeshParts are still drawn as boxes.
 - **Trails and highlights** are counted, not drawn (a trail needs the attachment's path over time).
 - **Studio's renderer**: lighting, Bloom, `LightInfluence` and texture filtering are approximated. Built-in
   `rbxasset://` textures (smoke, sparkles, fire) are stood in for by simple shapes; pack textures are read from

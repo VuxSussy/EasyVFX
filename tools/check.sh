@@ -39,6 +39,10 @@ echo "== texgen selftest"
 echo "== texgen check (library v4 matches its recipes and the rules)"
 "$PYTHON" tools/texgen check --fresh | tail -1
 
+echo "== meshgen selftest and check (the mesh set matches its recipes and the rules)"
+"$PYTHON" tools/meshgen selftest | tail -1
+"$PYTHON" tools/meshgen check | tail -1
+
 echo "== evfx selftest"
 "$PYTHON" tools/evfx selftest | tail -1
 

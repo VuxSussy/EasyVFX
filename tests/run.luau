@@ -199,6 +199,9 @@ do
 	for key in serde.decode("json", require("@lune/fs").readFile("pack/generated/manifest.json")).textures do
 		assets[key] = "rbxassetid://" .. (2000 + #key)
 	end
+	for key in serde.decode("json", require("@lune/fs").readFile("pack/meshes/manifest.json")).meshes do
+		assets[key] = "rbxassetid://" .. (3000 + #key)
+	end
 	check(Builder.isHD(assets), "isHD with pack")
 	check(not Builder.isHD({}), "not HD without pack")
 	local hdCount = 0
@@ -661,6 +664,52 @@ do
 		local okV4, v4Root = pcall(Builder.create, Builder.defaultParams(id), { cframe = roblox.CFrame.new(), size = roblox.Vector3.new(4, 4, 4), parent = holderP }, withV4)
 		check(okNow and not names(nowRoot).Core, id .. " skips its v4 layers without IDs")
 		check(okV4 and names(v4Root).Core, id .. " builds its v4 core with IDs")
+	end
+	-- mesh shells: a MeshPart template from AssetService, frames swapped at play time
+	local withMesh = table.clone(withV4)
+	withMesh.mesh_crescent_wide = "rbxassetid://31"
+	withMesh.mesh_crescent_thin = "rbxassetid://32"
+	for k = 0, 15 do
+		withMesh[string.format("seq_slash_ribbon_%02d", k)] = "rbxassetid://" .. (400 + k)
+	end
+	local okShell, shellRoot = pcall(Builder.create, Builder.defaultParams("slash_v4"), { cframe = roblox.CFrame.new(), size = roblox.Vector3.new(4, 4, 4), parent = holderP }, withMesh)
+	local template
+	for _, d in (if okShell then shellRoot:GetChildren() else {}) do
+		if d:IsA("MeshPart") and d.Name == "Slash" then
+			template = d
+		end
+	end
+	check(template ~= nil and template.MeshId == "rbxassetid://31", "slash_v4 builds its crescent shell template")
+	check(template ~= nil and template.Transparency == 1 and template:GetAttribute("VFX_Shell") == true, "the shell template stays hidden")
+	local frameList = if template then string.split(template:GetAttribute("Frames") :: string, ",") else {}
+	check(#frameList == 16 and frameList[1] == "rbxassetid://400", "the shell carries its 16 ribbon frames")
+	local okNoMesh, noMeshRoot = pcall(Builder.create, Builder.defaultParams("slash_v4"), { cframe = roblox.CFrame.new(), size = roblox.Vector3.new(4, 4, 4), parent = holderP }, withV4)
+	local anyMesh = false
+	for _, d in (if okNoMesh then noMeshRoot:GetDescendants() else {}) do
+		anyMesh = anyMesh or d:IsA("MeshPart")
+	end
+	check(okNoMesh and not anyMesh, "without a mesh ID the shell layer is skipped")
+	if okShell then
+		local seen = {}
+		local live = EasyVFX.PlayLocal(shellRoot)
+		check(live > 0, "slash_v4 with shells has a length")
+		for _ = 1, 60 do
+			task.wait()
+			local folder = (H.workspace.CurrentCamera or H.workspace):FindFirstChild("EasyVFX_Live")
+			for _, d in (if folder then folder:GetChildren() else {}) do
+				if d:IsA("MeshPart") then
+					seen[d.TextureID] = true
+				end
+			end
+		end
+		local n = 0
+		for _ in seen do
+			n += 1
+		end
+		check(n >= 4, "a playing shell swaps through its frames (" .. n .. " seen)")
+		for _ = 1, 120 do
+			task.wait()
+		end
 	end
 	local okImp, impRoot = pcall(Builder.create, Builder.defaultParams("impact"), { cframe = roblox.CFrame.new(), size = roblox.Vector3.new(4, 4, 4), parent = holderP }, withV4)
 	check(okImp and names(impRoot).HitStarHD and not names(impRoot).Core, "the original impact is unchanged by v4 IDs")

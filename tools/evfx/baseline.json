@@ -1051,7 +1051,7 @@
     {
      "name": "budget.pieces",
      "ok": true,
-     "reason": "peak 0 (cap 64)"
+     "reason": "peak 1 (cap 64)"
     },
     {
      "name": "budget.lights",
@@ -1085,14 +1085,14 @@
     "beams": 0,
     "lights": 1,
     "particles": 42,
-    "pieces": 0,
+    "pieces": 1,
     "plain": 0,
     "screens": 0
    },
    "scores": {
-    "body_buried": 0.4924,
-    "coverage_far": 0.0571,
-    "crisp": 0.0962
+    "body_buried": 0.4857,
+    "coverage_far": 0.0611,
+    "crisp": 0.0988
    },
    "seconds": 0.567
   },
@@ -2201,7 +2201,7 @@
     {
      "name": "budget.particles",
      "ok": true,
-     "reason": "peak 28 (cap 400)"
+     "reason": "peak 25 (cap 400)"
     },
     {
      "name": "budget.beams",
@@ -2211,7 +2211,7 @@
     {
      "name": "budget.pieces",
      "ok": true,
-     "reason": "peak 0 (cap 64)"
+     "reason": "peak 2 (cap 64)"
     },
     {
      "name": "budget.lights",
@@ -2221,7 +2221,7 @@
     {
      "name": "ends_clean",
      "ok": true,
-     "reason": "lasts 0.47 s (cap 3.0), 0 left behind"
+     "reason": "lasts 0.50 s (cap 3.0), 0 left behind"
     },
     {
      "name": "flash.frames",
@@ -2231,7 +2231,7 @@
     {
      "name": "flash.rate",
      "ok": true,
-     "reason": "0 screen flashes in 0.47 s (cap 3/s)"
+     "reason": "0 screen flashes in 0.50 s (cap 3/s)"
     },
     {
      "name": "plain_pieces",
@@ -2244,17 +2244,17 @@
    "peak": {
     "beams": 0,
     "lights": 1,
-    "particles": 28,
-    "pieces": 0,
+    "particles": 25,
+    "pieces": 2,
     "plain": 0,
     "screens": 0
    },
    "scores": {
-    "body_buried": 0.221,
-    "coverage_far": 0.0215,
-    "crisp": 0.1906
+    "body_buried": 0.2244,
+    "coverage_far": 0.0421,
+    "crisp": 0.1558
    },
-   "seconds": 0.467
+   "seconds": 0.5
   },
   "smoke": {
    "gates": [

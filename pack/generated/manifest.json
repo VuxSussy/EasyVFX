@@ -242,6 +242,262 @@
       "sha256": "14fab4d6bb64a4d05ea507cbf8df0ab77928d1f29fba540c7ac60a05d3cb0e9e",
       "use": "domain-warped smoke, normal blend (OneShot)"
     },
+    "seq_slash_ribbon_00": {
+      "id": "seq/slash_ribbon",
+      "kind": "frame",
+      "frame": 0,
+      "size": [
+        512,
+        128
+      ],
+      "grid": 1,
+      "frames": 1,
+      "role": "base",
+      "upload": true,
+      "rgb": "white",
+      "sha256": "cc4c9d1d39f96f0620a31e2f5d15cbcd98861011d9e84e66597691d6b789782e",
+      "use": "frame 0 of seq/slash_ribbon"
+    },
+    "seq_slash_ribbon_01": {
+      "id": "seq/slash_ribbon",
+      "kind": "frame",
+      "frame": 1,
+      "size": [
+        512,
+        128
+      ],
+      "grid": 1,
+      "frames": 1,
+      "role": "base",
+      "upload": true,
+      "rgb": "white",
+      "sha256": "5ebcd89421139273636e9513cec27b5e4c8b02d7b20688c25787e7d9dc35550c",
+      "use": "frame 1 of seq/slash_ribbon"
+    },
+    "seq_slash_ribbon_02": {
+      "id": "seq/slash_ribbon",
+      "kind": "frame",
+      "frame": 2,
+      "size": [
+        512,
+        128
+      ],
+      "grid": 1,
+      "frames": 1,
+      "role": "base",
+      "upload": true,
+      "rgb": "white",
+      "sha256": "ab7772b1b83c281308ecf3c2c2e4e0865773ae8b69967f37234b590fa891edf1",
+      "use": "frame 2 of seq/slash_ribbon"
+    },
+    "seq_slash_ribbon_03": {
+      "id": "seq/slash_ribbon",
+      "kind": "frame",
+      "frame": 3,
+      "size": [
+        512,
+        128
+      ],
+      "grid": 1,
+      "frames": 1,
+      "role": "base",
+      "upload": true,
+      "rgb": "white",
+      "sha256": "e9d0db829dc9de332fab67352908156c37a7198d577ecef57dfcef45cf409627",
+      "use": "frame 3 of seq/slash_ribbon"
+    },
+    "seq_slash_ribbon_04": {
+      "id": "seq/slash_ribbon",
+      "kind": "frame",
+      "frame": 4,
+      "size": [
+        512,
+        128
+      ],
+      "grid": 1,
+      "frames": 1,
+      "role": "base",
+      "upload": true,
+      "rgb": "white",
+      "sha256": "c3818eff05df15e08a0a122b3e4377baec4e4fc94165a62ac4a847c43b7bf592",
+      "use": "frame 4 of seq/slash_ribbon"
+    },
+    "seq_slash_ribbon_05": {
+      "id": "seq/slash_ribbon",
+      "kind": "frame",
+      "frame": 5,
+      "size": [
+        512,
+        128
+      ],
+      "grid": 1,
+      "frames": 1,
+      "role": "base",
+      "upload": true,
+      "rgb": "white",
+      "sha256": "74b23bfc0b59c6243464971321c07f23044829793fdc5a24f7df21f2ba3175d6",
+      "use": "frame 5 of seq/slash_ribbon"
+    },
+    "seq_slash_ribbon_06": {
+      "id": "seq/slash_ribbon",
+      "kind": "frame",
+      "frame": 6,
+      "size": [
+        512,
+        128
+      ],
+      "grid": 1,
+      "frames": 1,
+      "role": "base",
+      "upload": true,
+      "rgb": "white",
+      "sha256": "561e3a345f9a336e010549c78595df7eccebea6b135270f1a90c7495e922e693",
+      "use": "frame 6 of seq/slash_ribbon"
+    },
+    "seq_slash_ribbon_07": {
+      "id": "seq/slash_ribbon",
+      "kind": "frame",
+      "frame": 7,
+      "size": [
+        512,
+        128
+      ],
+      "grid": 1,
+      "frames": 1,
+      "role": "base",
+      "upload": true,
+      "rgb": "white",
+      "sha256": "c583499b16507b5fe2c4d5c38d991c61f53ef7a56f86738e6dbce6982be85af3",
+      "use": "frame 7 of seq/slash_ribbon"
+    },
+    "seq_slash_ribbon_08": {
+      "id": "seq/slash_ribbon",
+      "kind": "frame",
+      "frame": 8,
+      "size": [
+        512,
+        128
+      ],
+      "grid": 1,
+      "frames": 1,
+      "role": "base",
+      "upload": true,
+      "rgb": "white",
+      "sha256": "1c1c0ec4c3e387f82ba42e4e2689eeccaf1950646248868a13409db19ccbd6af",
+      "use": "frame 8 of seq/slash_ribbon"
+    },
+    "seq_slash_ribbon_09": {
+      "id": "seq/slash_ribbon",
+      "kind": "frame",
+      "frame": 9,
+      "size": [
+        512,
+        128
+      ],
+      "grid": 1,
+      "frames": 1,
+      "role": "base",
+      "upload": true,
+      "rgb": "white",
+      "sha256": "9479f838a72e45cc39000e715e667c97f4779b780bdab72adfc56c07f98c222b",
+      "use": "frame 9 of seq/slash_ribbon"
+    },
+    "seq_slash_ribbon_10": {
+      "id": "seq/slash_ribbon",
+      "kind": "frame",
+      "frame": 10,
+      "size": [
+        512,
+        128
+      ],
+      "grid": 1,
+      "frames": 1,
+      "role": "base",
+      "upload": true,
+      "rgb": "white",
+      "sha256": "b9877a630ef11307c09dbe7b487d7b2a708387057dbf0a48dbf261c515126ce2",
+      "use": "frame 10 of seq/slash_ribbon"
+    },
+    "seq_slash_ribbon_11": {
+      "id": "seq/slash_ribbon",
+      "kind": "frame",
+      "frame": 11,
+      "size": [
+        512,
+        128
+      ],
+      "grid": 1,
+      "frames": 1,
+      "role": "base",
+      "upload": true,
+      "rgb": "white",
+      "sha256": "afec41a84d9d4d0530fd18b1827f411c9ce9e5e052c2b8858f8d443b1a54e2c1",
+      "use": "frame 11 of seq/slash_ribbon"
+    },
+    "seq_slash_ribbon_12": {
+      "id": "seq/slash_ribbon",
+      "kind": "frame",
+      "frame": 12,
+      "size": [
+        512,
+        128
+      ],
+      "grid": 1,
+      "frames": 1,
+      "role": "base",
+      "upload": true,
+      "rgb": "white",
+      "sha256": "a5274285ab96c243929fd3feb6058bc5cdaef2ee896cdb0cadc41685440f8318",
+      "use": "frame 12 of seq/slash_ribbon"
+    },
+    "seq_slash_ribbon_13": {
+      "id": "seq/slash_ribbon",
+      "kind": "frame",
+      "frame": 13,
+      "size": [
+        512,
+        128
+      ],
+      "grid": 1,
+      "frames": 1,
+      "role": "base",
+      "upload": true,
+      "rgb": "white",
+      "sha256": "e35c273009736d11e004af739fc50e62bfbd5430b30c1d751b7515f8b9579042",
+      "use": "frame 13 of seq/slash_ribbon"
+    },
+    "seq_slash_ribbon_14": {
+      "id": "seq/slash_ribbon",
+      "kind": "frame",
+      "frame": 14,
+      "size": [
+        512,
+        128
+      ],
+      "grid": 1,
+      "frames": 1,
+      "role": "base",
+      "upload": true,
+      "rgb": "white",
+      "sha256": "e35c273009736d11e004af739fc50e62bfbd5430b30c1d751b7515f8b9579042",
+      "use": "frame 14 of seq/slash_ribbon"
+    },
+    "seq_slash_ribbon_15": {
+      "id": "seq/slash_ribbon",
+      "kind": "frame",
+      "frame": 15,
+      "size": [
+        512,
+        128
+      ],
+      "grid": 1,
+      "frames": 1,
+      "role": "base",
+      "upload": true,
+      "rgb": "white",
+      "sha256": "e35c273009736d11e004af739fc50e62bfbd5430b30c1d751b7515f8b9579042",
+      "use": "frame 15 of seq/slash_ribbon"
+    },
     "shape_aniso_shard": {
       "id": "shape/aniso_shard",
       "kind": "shape",

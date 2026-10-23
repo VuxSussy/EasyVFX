@@ -1837,6 +1837,55 @@ local function playMesh(template: BasePart, ctx: Ctx): number
 	return delay + duration
 end
 
+-- A mesh shell (Builder's `shell` layer): grows from Size0 to Size1, turns by SpinDeg,
+-- fades, and swaps TextureID through its frames, since a mesh can't play an atlas.
+local function playShell(template: BasePart, ctx: Ctx): number
+	local delay = num(template, "Delay", 0)
+	local duration = num(template, "Duration", 0.3)
+	local size0 = vec(template, "Size0", template.Size)
+	local size1 = vec(template, "Size1", size0)
+	local spin = vec(template, "SpinDeg", Vector3.zero)
+	local style = readStyle(template)
+	local frames = string.split(str(template, "Frames", ""), ",")
+	if frames[1] == "" then
+		frames = {}
+	end
+	local cf = ctx.origin * CFrame.new(vec(template, "Offset", Vector3.zero)) * rad(vec(template, "Tilt", Vector3.zero))
+	local copy = template:Clone() :: any
+	for _, d in copy:GetDescendants() do
+		if d:IsA("BaseScript") then
+			d:Destroy()
+		end
+	end
+	copy.Archivable = false
+	local okMat, material = pcall(function()
+		return (Enum.Material :: any)[str(template, "Material", "Neon")]
+	end)
+	copy.Material = if okMat and material then material else Enum.Material.Neon
+	local shown = 0
+	local function step(alpha: number)
+		local e = ease(alpha, style.ease)
+		copy.Size = size0:Lerp(size1, e)
+		copy.CFrame = cf * CFrame.Angles(math.rad(spin.X * e), math.rad(spin.Y * e), math.rad(spin.Z * e))
+		copy.Transparency = fadeAt(style, alpha)
+		copy.Color = style.color0:Lerp(style.color1, e)
+		if #frames > 0 then
+			local k = math.min(#frames, math.floor(alpha * #frames) + 1)
+			if k ~= shown then
+				shown = k
+				copy.TextureID = frames[k]
+			end
+		end
+	end
+	step(0)
+	addAnim(delay, duration, function()
+		copy.Parent = liveFolder()
+	end, step, function()
+		copy:Destroy()
+	end)
+	return delay + duration
+end
+
 local function findByName(name: string): Instance?
 	for _, inst in CollectionService:GetTagged(EasyVFX.Tag) do
 		if inst.Name == name then
@@ -1971,7 +2020,9 @@ function EasyVFX.PlayLocal(target: Instance | string, at: CFrame?): number
 				end
 			end
 		elseif d:IsA("BasePart") then
-			if d:GetAttribute("VFX_Mesh") then
+			if d:GetAttribute("VFX_Shell") then
+				length = math.max(length, playShell(d, ctx))
+			elseif d:GetAttribute("VFX_Mesh") then
 				length = math.max(length, playMesh(d, ctx))
 			elseif type(duration) == "number" and duration > 0 and d:GetAttribute("TransparencySequence") == nil then
 				pulse(d, delay, duration)
@@ -2168,7 +2219,7 @@ end
 -- True when the effect has pieces that only show when played (bursts, shapes...).
 function EasyVFX.HasBursts(root: Instance): boolean
 	for _, d in root:GetDescendants() do
-		if d:GetAttribute("EmitCount") ~= nil or d:GetAttribute("EmitDuration") ~= nil or d:GetAttribute("VFX_Mesh") then
+		if d:GetAttribute("EmitCount") ~= nil or d:GetAttribute("EmitDuration") ~= nil or d:GetAttribute("VFX_Mesh") or d:GetAttribute("VFX_Shell") then
 			return true
 		end
 		if d:IsA("Configuration") and d:GetAttribute("Kind") ~= nil then

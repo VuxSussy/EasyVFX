@@ -1,6 +1,6 @@
 # Plan: real VFX art for EasyVFX and SE370
 
-Status: calls made (2026-10-23, §7). Built: step 1, `tools/texgen` and library v4 ([texgen](texgen.md)); step 3's first pass, the hero set as `impact_v4`, `ground_slam_v4` and `slash_v4` beside the originals. Nothing is uploaded until the hero set looks right (Phát, 2026-10-23). Next: step 2, the mesh set, which the slash needs. Read with [the agentic loop](agentic-loop.md) (PR #8), which is
+Status: calls made (2026-10-23, §7). Built: step 1, `tools/texgen` and library v4 ([texgen](texgen.md)); step 3's first pass, the hero set as `impact_v4`, `ground_slam_v4` and `slash_v4` beside the originals. Step 2, the mesh set ([meshgen](meshgen.md)): six shells, with `slash_v4` on crescent shells and a cone on `ground_slam_v4`. Nothing is uploaded until the hero set looks right (Phát, 2026-10-23). Next: a Studio look at the shells, then step 4's evfx metrics. Read with [the agentic loop](agentic-loop.md) (PR #8), which is
 how every step below is judged.
 
 **The gap.** The 45 presets are geometry and a 19-texture pack: crisp, but they read as Roblox. Seen against the

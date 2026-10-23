@@ -302,6 +302,33 @@ def dust_ring(p, rng, size):
     return lib.frames(_frames(p), frame)
 
 
+# ================================================================== sequences (frames as separate images, for meshes)
+
+
+@recipe("slash_ribbon", frames=16, hold=0.1, ease=1.4, edge=0.16)
+def slash_ribbon(p, rng, size):
+    """A slash laid along a crescent shell: u runs from the tail (left) to the tip, v from
+    the inner edge (top) to the outer one (bottom). A white-hot outer edge over a fibrous
+    body; it erodes from the tail toward the tip and thins from the inside. Frames are
+    separate images because a mesh can't play an atlas (reference H)."""
+    w, h = size, size // 4
+    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+    x, y = (xx + 0.5) / w, (yy + 0.5) / h
+    seed = _seed(rng)
+    streaks = lib.normalize(lib.perlin((h, w), (10, 3), seed) * 0.6 + lib.perlin((h, w), (20, 6), seed + 1) * 0.4)
+    noise = lib.fbm((h, w), 4, 4, seed=seed + 2)
+    edge = lib.smooth(1 - p["edge"], 1 - p["edge"] * 0.3, y)
+    body = 0.45 + 0.4 * lib.smooth(0.35, 0.75, streaks) * lib.smooth(0.0, 0.5, y)
+    base = np.maximum(edge, body * lib.smooth(0.0, 0.25, y))
+
+    def frame(t):
+        cut = lib.ease_in(lib.smooth(p["hold"], 1.0, t), p["ease"]) * 1.25 - 0.1
+        keep = lib.smooth(cut - 0.02, cut + 0.1, x + (noise - 0.5) * 0.25)
+        thin = lib.smooth(t * 0.9 - 0.05, t * 0.9 + 0.1, y + (streaks - 0.5) * 0.2)
+        return base * keep * np.maximum(thin, edge * (t < 0.85))
+    return lib.frames(_frames(p), frame)
+
+
 # ================================================================== spritesheets (variants, not a sequence)
 
 

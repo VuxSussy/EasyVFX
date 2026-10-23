@@ -302,6 +302,12 @@ function Harness.install()
 	roblox.implementMethod("RunService", "IsClient", function()
 		return isClient
 	end)
+	-- Studio loads a mesh by ID; here the MeshPart just carries the ID it was given
+	roblox.implementMethod("AssetService", "CreateMeshPartAsync", function(_as, meshId)
+		local part = roblox.Instance.new("MeshPart")
+		part.MeshId = meshId
+		return part
+	end)
 	roblox.implementMethod("ParticleEmitter", "Emit", function(inst, n)
 		Harness.emitted[inst] = (Harness.emitted[inst] or 0) + (n or 16)
 		if Harness.recordEmits then
