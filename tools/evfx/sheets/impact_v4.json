@@ -1,6 +1,6 @@
 {
  "preset": "impact_v4",
- "status": "draft",
+ "status": "approved 2026-10-24",
  "note": "Frames are 60 fps from the effect's start, which is the hit.",
  "move": {"from": "BasicHeavy.Barge", "windup": 0.08, "active": 0.08, "recovery": 0.3, "style": "Brawler", "fire": 0},
  "beats": [

@@ -1,6 +1,6 @@
 {
  "preset": "slash_v4",
- "status": "draft",
+ "status": "approved 2026-10-24",
  "note": "Frames are 60 fps from the effect's start. The crescents sweep in for 4 frames before contact, so the effect fires 0.067 s before the hit.",
  "move": {"from": "BasicSingle.Chop", "windup": 0.07, "active": 0.08, "recovery": 0.26, "style": "Duelist", "fire": -0.067},
  "beats": [
