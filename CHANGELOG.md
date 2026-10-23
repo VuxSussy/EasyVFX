@@ -22,6 +22,8 @@ All notable changes to EasyVFX are listed here. Versions follow [Semantic Versio
   `art/petal_single`, `strip/pillar_streaks`, `strip/dome_glow`, `sheet/grass`. New meshes: `mesh/dome` and
   `mesh/lotus`, a petal crown dressed by one petal texture.
 - Found on the way: a hit-stop pauses shells but not particle emit delays, so a multi-beat preset skips it.
+- Seen in Studio with editable content: the shells play, but particles don't draw an `EditableImage` texture, so
+  particle layers need uploaded textures to be seen there ([meshgen](docs/meshgen.md)).
   Layers in one group share an attachment, placed by the group's first layer.
 
 ### Shells on SurfaceAppearance
