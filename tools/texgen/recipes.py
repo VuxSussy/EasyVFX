@@ -249,9 +249,9 @@ def shock_ring(p, rng, size):
         radius = p["start"] + p["reach"] * lib.ease_out(t, 3)
         th = p["thick"] * (1 - t) ** 1.3 + 0.01
         lead = lib.aa(r - radius, size)
-        trail = np.exp(-np.clip(radius - r, 0, None) / th) * lead
+        trail = np.exp(-np.clip(radius - r, 0, None) / (th * 0.6)) * lead
         edge = lib.aa(np.abs(r - radius + th * 0.18) - th * 0.12, size)
-        ring = np.maximum(trail * 0.7, edge)
+        ring = np.maximum(trail * 0.45, edge)
         alpha = lib.erode(ring, 0.7 * ang + 0.3 * grain, _amount(t, p), 0.05)
         return alpha * lib.vignette(u, v, 0.88, 0.98)
     return lib.frames(_frames(p), frame)

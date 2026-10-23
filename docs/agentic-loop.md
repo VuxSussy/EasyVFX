@@ -62,6 +62,14 @@ the right pixels). `tools/check.sh` runs `selftest` and `audit --check --no-scor
 | `body_buried` | the largest share of the mannequin covered by bright effect pixels in the close view |
 | `crisp` | high-frequency detail over brightness inside the effect; higher reads sharper |
 
+## Phases
+
+`python3 tools/evfx phases <preset> [--frames]` reads the grammar of [the plan](plan-real-vfx.md) §4 from every frame
+of the close view: how many frames the flash holds (added brightness at least half its peak), the frame the burst
+peaks, when the tail ends, whether the brightest 2% of the effect is white, how many hues it uses and the most of the
+body it buries. `--frames` prints the coverage and brightness curves. These are readings to judge by, not gates yet:
+with no screen-wide flash, a hit's brightest moment is its burst, so the flash count reads the burst's length.
+
 Scores are for comparing before and after, not pass or fail.
 
 ## What it can't see yet

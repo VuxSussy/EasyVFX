@@ -1112,6 +1112,8 @@ function App:renderCards()
 		end
 	end
 	local shown = 0
+	-- presets that `need` a texture not uploaded yet (the v4 hero set) stay hidden
+	local assets = self.api.getAssets() or {}
 	for c, cat in Presets.Categories do
 		if cat.id == "all" or (self.state.category ~= "all" and self.state.category ~= cat.id) then
 			continue
@@ -1120,7 +1122,8 @@ function App:renderCards()
 		for i, preset in Presets.List do
 			local p = preset :: any
 			local styleOk = self.state.style == "all" or p.style == self.state.style
-			if p.category == cat.id and styleOk and matches(p, self.state.search) then
+			local ready = p.needs == nil or (assets :: any)[p.needs] ~= nil
+			if p.category == cat.id and styleOk and ready and matches(p, self.state.search) then
 				table.insert(list, { preset = p, order = i })
 			end
 		end

@@ -261,10 +261,31 @@ check(not app.overlay.Visible, "overlay closed after guide")
 check(settingsStore.EasyVFX_Onboarded == true, "onboarding remembered")
 
 print("== Library: categories, search, every card")
+-- presets that need a texture not uploaded yet (the v4 hero set) stay hidden
+local readyCount = 0
+for _, preset in Presets.List do
+	if (preset :: any).needs == nil then
+		readyCount += 1
+	end
+end
 local cards = findAll(app.grid, function(d)
 	return d:IsA("TextButton")
 end)
-check(#cards == #Presets.List, ("all %d cards shown (got %d)"):format(#Presets.List, #cards))
+check(#cards == readyCount, ("all %d cards shown (got %d)"):format(readyCount, #cards))
+run("v4 hero cards wait for their textures", function()
+	local saved = packAssets
+	packAssets = table.clone(H.require("Shared/DefaultAssets"))
+	packAssets.shape_core_flash = "rbxassetid://21"
+	app:renderCards()
+	check(#findAll(app.grid, function(d)
+		return d:IsA("TextButton")
+	end) == #Presets.List, "with v4 IDs every card shows")
+	packAssets = saved
+	app:renderCards()
+	check(#findAll(app.grid, function(d)
+		return d:IsA("TextButton")
+	end) == readyCount, "without them the hero set hides again")
+end)
 run("categories", function()
 	for _, cat in Presets.Categories do
 		local chip = buttonWithText(app.libraryPage, cat.en)
@@ -296,7 +317,7 @@ run("categories", function()
 	fire(buttonWithText(app.libraryPage, "All styles"), "Activated")
 	check(#findAll(app.grid, function(d)
 		return d:IsA("TextButton")
-	end) == #Presets.List, "all styles shows everything again")
+	end) == readyCount, "all styles shows everything again")
 end)
 run("search", function()
 	local box = findAll(app.libraryPage, function(d)
@@ -317,6 +338,9 @@ end)
 
 print("== Insert + customize every preset")
 for _, preset in Presets.List do
+	if (preset :: any).needs then
+		continue
+	end
 	run("preset " .. preset.id, function()
 		local card
 		for _, d in app.grid:GetDescendants() do

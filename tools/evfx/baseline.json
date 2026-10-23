@@ -1036,6 +1036,66 @@
    },
    "seconds": 3.233
   },
+  "ground_slam_v4": {
+   "gates": [
+    {
+     "name": "budget.particles",
+     "ok": true,
+     "reason": "peak 42 (cap 400)"
+    },
+    {
+     "name": "budget.beams",
+     "ok": true,
+     "reason": "peak 0 (cap 96)"
+    },
+    {
+     "name": "budget.pieces",
+     "ok": true,
+     "reason": "peak 0 (cap 64)"
+    },
+    {
+     "name": "budget.lights",
+     "ok": true,
+     "reason": "peak 1 (cap 4)"
+    },
+    {
+     "name": "ends_clean",
+     "ok": true,
+     "reason": "lasts 0.57 s (cap 3.0), 0 left behind"
+    },
+    {
+     "name": "flash.frames",
+     "ok": true,
+     "reason": "longest screen flash 0 frames (cap 3)"
+    },
+    {
+     "name": "flash.rate",
+     "ok": true,
+     "reason": "0 screen flashes in 0.57 s (cap 3/s)"
+    },
+    {
+     "name": "plain_pieces",
+     "ok": true,
+     "reason": "peak 0 plain blocks (cap 0)"
+    }
+   ],
+   "id": "ground_slam_v4",
+   "kind": "burst",
+   "peak": {
+    "beams": 0,
+    "lights": 1,
+    "particles": 42,
+    "pieces": 0,
+    "plain": 0,
+    "screens": 0
+   },
+   "scores": {
+    "body_buried": 0.4924,
+    "coverage_far": 0.0571,
+    "crisp": 0.0962
+   },
+   "seconds": 0.567
+  },
   "heal": {
    "gates": [
     {
@@ -1212,9 +1272,69 @@
    "scores": {
     "body_buried": 1.0,
     "coverage_far": 0.9999,
-    "crisp": 0.3407
+    "crisp": 0.3406
    },
    "seconds": 0.633
+  },
+  "impact_v4": {
+   "gates": [
+    {
+     "name": "budget.particles",
+     "ok": true,
+     "reason": "peak 30 (cap 400)"
+    },
+    {
+     "name": "budget.beams",
+     "ok": true,
+     "reason": "peak 0 (cap 96)"
+    },
+    {
+     "name": "budget.pieces",
+     "ok": true,
+     "reason": "peak 0 (cap 64)"
+    },
+    {
+     "name": "budget.lights",
+     "ok": true,
+     "reason": "peak 1 (cap 4)"
+    },
+    {
+     "name": "ends_clean",
+     "ok": true,
+     "reason": "lasts 0.47 s (cap 3.0), 0 left behind"
+    },
+    {
+     "name": "flash.frames",
+     "ok": true,
+     "reason": "longest screen flash 0 frames (cap 3)"
+    },
+    {
+     "name": "flash.rate",
+     "ok": true,
+     "reason": "0 screen flashes in 0.47 s (cap 3/s)"
+    },
+    {
+     "name": "plain_pieces",
+     "ok": true,
+     "reason": "peak 0 plain blocks (cap 0)"
+    }
+   ],
+   "id": "impact_v4",
+   "kind": "burst",
+   "peak": {
+    "beams": 0,
+    "lights": 1,
+    "particles": 30,
+    "pieces": 0,
+    "plain": 0,
+    "screens": 0
+   },
+   "scores": {
+    "body_buried": 0.5177,
+    "coverage_far": 0.0404,
+    "crisp": 0.1907
+   },
+   "seconds": 0.467
   },
   "laser": {
    "gates": [
@@ -2075,6 +2195,66 @@
     "crisp": 0.2292
    },
    "seconds": 0.567
+  },
+  "slash_v4": {
+   "gates": [
+    {
+     "name": "budget.particles",
+     "ok": true,
+     "reason": "peak 28 (cap 400)"
+    },
+    {
+     "name": "budget.beams",
+     "ok": true,
+     "reason": "peak 0 (cap 96)"
+    },
+    {
+     "name": "budget.pieces",
+     "ok": true,
+     "reason": "peak 0 (cap 64)"
+    },
+    {
+     "name": "budget.lights",
+     "ok": true,
+     "reason": "peak 1 (cap 4)"
+    },
+    {
+     "name": "ends_clean",
+     "ok": true,
+     "reason": "lasts 0.47 s (cap 3.0), 0 left behind"
+    },
+    {
+     "name": "flash.frames",
+     "ok": true,
+     "reason": "longest screen flash 0 frames (cap 3)"
+    },
+    {
+     "name": "flash.rate",
+     "ok": true,
+     "reason": "0 screen flashes in 0.47 s (cap 3/s)"
+    },
+    {
+     "name": "plain_pieces",
+     "ok": true,
+     "reason": "peak 0 plain blocks (cap 0)"
+    }
+   ],
+   "id": "slash_v4",
+   "kind": "burst",
+   "peak": {
+    "beams": 0,
+    "lights": 1,
+    "particles": 28,
+    "pieces": 0,
+    "plain": 0,
+    "screens": 0
+   },
+   "scores": {
+    "body_buried": 0.221,
+    "coverage_far": 0.0215,
+    "crisp": 0.1906
+   },
+   "seconds": 0.467
   },
   "smoke": {
    "gates": [

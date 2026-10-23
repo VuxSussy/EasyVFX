@@ -149,3 +149,56 @@ def summary(timeline, with_scores=True):
     if with_scores:
         result["scores"] = scores(timeline, limits)
     return result, rows
+
+
+def phases(timeline, limits=None):
+    """The grammar of plan §4, read frame by frame from the close view: how many frames
+    the flash holds (the view's added brightness at least half its peak, the way the ZZZ
+    capture was measured), the frame the burst peaks, when the tail ends, whether the
+    brightest pixels are white, how many hues the effect uses and the most of the body
+    it buries. Returns (summary, rows)."""
+    limits = limits or rules(timeline.get("id"))
+    lit, bright = limits["scores"]["lit"], limits["scores"]["bright"]
+    cams = core.views(timeline)
+    step = timeline.get("frameTime", 1 / 30)
+    count = int(round(core.duration(timeline) / step)) + 1
+    empty = render.draw({**timeline, "frames": [], "bursts": [], "emitters": []}, 0, cams["close"])[0]
+    rows, hue_hist = [], np.zeros(12)
+    for k in range(count):
+        t = k * step
+        rgb, info = render.draw(timeline, t, cams["close"])
+        diff = np.abs(rgb - empty).mean(axis=2)
+        mask = diff > lit
+        white = mask & (rgb.min(axis=2) > 0.85)
+        row = {"t": round(t, 3), "coverage": float(mask.mean()), "white": float(white.mean()),
+               "lum": float(np.clip(rgb - empty, 0, None).mean()), "core": 0.0, "buried": 0.0}
+        if mask.sum() > 20:
+            px = rgb[mask]
+            top = px[np.argsort(px.mean(axis=1))[-max(1, len(px) // 50):]]
+            row["core"] = float(top.min(axis=1).mean())
+            mx, mn = px.max(axis=1), px.min(axis=1)
+            sat = (mx - mn) / np.maximum(mx, 1e-4)
+            col = px[(sat > 0.35) & (mx > 0.2)]
+            if len(col):
+                r, g, b = col[:, 0], col[:, 1], col[:, 2]
+                hue = (np.degrees(np.arctan2(np.sqrt(3) * (g - b), 2 * r - g - b)) % 360) // 30
+                hue_hist += np.bincount(hue.astype(int), minlength=12)[:12]
+        body = info["body"]
+        if body is not None and body.any():
+            row["buried"] = float((diff[body] > bright).mean())
+        rows.append(row)
+    cov = np.array([r["coverage"] for r in rows])
+    lum = np.array([r["lum"] for r in rows])
+    flash = int((lum >= 0.5 * lum.max()).sum()) if len(lum) and lum.max() > 0.002 else 0
+    alive = np.nonzero(cov > 0.003)[0]
+    share = hue_hist / max(1, hue_hist.sum())
+    peak = int(cov.argmax()) if len(cov) else 0
+    summary = {
+        "flash_frames": flash,
+        "burst_peak_frame": peak,
+        "tail_end": round(float(alive[-1] * step), 3) if len(alive) else 0.0,
+        "core_white": round(rows[peak]["core"], 3) if rows else 0.0,
+        "hues": int((share >= 0.08).sum()),
+        "buried_peak": round(max((r["buried"] for r in rows), default=0.0), 3),
+    }
+    return summary, rows
