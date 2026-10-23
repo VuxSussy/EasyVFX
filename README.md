@@ -11,8 +11,8 @@ pick an object → click an effect → change colors and drag sliders → choose
 ![EasyVFX in Roblox Studio](docs/studio-showcase.png)
 *Real Roblox Studio screenshot: Crescent Slash, Ground Slam, Explosion, Tornado, Lightning Strike and Charge Up playing at once.*
 
-![Effect geometry preview](docs/preview-shapes.png)
-*Shapes rebuilt from runtime data (rings, slashes, needles, lightning, crater rocks) by `tools/render_snapshot.py`. An approximate preview, not a Roblox screenshot.*
+![Every preset, rendered headless](docs/evfx-sheet.jpg)
+*Every preset at its busiest moment, rendered from runtime data by `tools/evfx` (see [docs/agentic-loop.md](docs/agentic-loop.md)). An approximate preview, not a Roblox screenshot.*
 
 ---
 
@@ -251,8 +251,9 @@ src/Plugin/
   UI/Theme.luau, Components.luau, App.luau
 blender/    make_vfx_pack.py (builds the HD pack: textures, flipbooks, meshes, FBX)
 pack/       pre-rendered HD pack: EasyVFX_Pack.fbx + textures/*.png
-tests/      run.luau (builder+runtime), ui.luau (clicks through the whole GUI), snapshot.luau (exports runtime data)
-tools/      blender_preview.py, render_snapshot.py, view_textures.py, check.sh
+tests/      run.luau (builder+runtime), ui.luau (clicks through the whole GUI), snapshot.luau (exports runtime data),
+            timeline.luau (records every frame of a play, for tools/evfx)
+tools/      evfx/ (headless strips, audit, selftest), blender_preview.py, view_textures.py, check.sh
 ```
 
 Tools are pinned in `rokit.toml`: [Rojo](https://github.com/rojo-rbx/rojo) 7.7, [Lune](https://github.com/lune-org/lune) 0.8, [luau-lsp](https://github.com/JohnnyMorganz/luau-lsp) 1.69, [selene](https://github.com/Kampfkarren/selene). Install them with [Rokit](https://github.com/rojo-rbx/rokit), and download the Roblox type definitions once for the type check:
@@ -267,6 +268,11 @@ rojo build default.project.json -o build/EasyVFX.rbxmx   # build the plugin
 lune run tests/run.luau        # 1752 checks: every preset (Basic and HD), shapes, custom effects and share codes
 lune run tests/ui.luau         # 1204 checks: every button, tab, slider, trigger, the HD card and the Create tab
 tools/check.sh                 # all of the above + strict type check (what CI runs)
+
+# Headless previews and the audit (pip install -r tools/evfx/requirements.txt)
+python3 tools/evfx strip slash                 # 11 moments, close and far
+python3 tools/evfx diff slash@HEAD slash       # before and after, with scores
+python3 tools/evfx audit --check               # gates against tools/evfx/baseline.json
 
 # Blender previews from runtime data (pip install bpy, or run with blender -b -P)
 lune run tests/snapshot.luau snap.json hd                       # or: basic / add "slash 2,4,6" for a timeline

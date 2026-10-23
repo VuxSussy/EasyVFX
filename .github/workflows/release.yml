@@ -17,6 +17,15 @@ jobs:
         with:
           cache: true
 
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: tools/evfx/requirements.txt
+
+      - name: Install evfx dependencies
+        run: pip install -r tools/evfx/requirements.txt
+
       - name: Download Roblox type definitions
         run: curl -fsSL -o globalTypes.d.luau https://raw.githubusercontent.com/JohnnyMorganz/luau-lsp/1.69.0/scripts/globalTypes.d.luau
 

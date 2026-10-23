@@ -8,6 +8,7 @@ ROJO="${ROJO:-rojo}"
 LUNE="${LUNE:-lune}"
 LUAU_LSP="${LUAU_LSP:-luau-lsp}"
 LUAU_DEFS="${LUAU_DEFS:-globalTypes.d.luau}"
+PYTHON="${PYTHON:-python3}"
 
 echo "== build"
 "$ROJO" build default.project.json -o build/EasyVFX.rbxmx
@@ -31,3 +32,9 @@ echo "== builder + runtime tests"
 
 echo "== UI tests"
 "$LUNE" run tests/ui.luau | tail -1
+
+echo "== evfx selftest"
+"$PYTHON" tools/evfx selftest | tail -1
+
+echo "== evfx audit (no gate worse than the baseline)"
+"$PYTHON" tools/evfx audit --check --no-scores | tail -2
