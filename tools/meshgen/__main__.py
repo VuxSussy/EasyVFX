@@ -5,6 +5,7 @@
     python tools/meshgen check [ids ...]      the rules below, and the files still match their recipes
     python tools/meshgen sheet [-o path]      every shell drawn with a texture, three angles each
     python tools/meshgen selftest             the rules each fail on a planted bad shell
+    python tools/meshgen studio [-o path]     a Luau script that shows the set in Studio, no upload
 
 Rules: at most 5000 triangles (Roblox allows 20000), no degenerate triangles, UVs in
 0..1, the shell fits the box -0.5..0.5 with its largest side 1, and every triangle has a
@@ -174,6 +175,12 @@ def cmd_selftest(args):
     return 1 if fails else 0
 
 
+def cmd_studio(args):
+    import studio
+
+    return studio.main(args.out)
+
+
 def main():
     ap = argparse.ArgumentParser(prog="meshgen", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -184,6 +191,9 @@ def main():
             p.add_argument("-o", "--out")
         p.set_defaults(fn=fn)
     sub.add_parser("selftest").set_defaults(fn=cmd_selftest)
+    p = sub.add_parser("studio")
+    p.add_argument("-o", "--out")
+    p.set_defaults(fn=cmd_studio)
     args = ap.parse_args()
     return args.fn(args) or 0
 
