@@ -8,7 +8,8 @@
 - sprites (each frame of a flipbook or sheet, each shape and decal) fade to zero before
   their border, so nothing clips when the engine scales them;
 - strips tile along their length and fade at their top and bottom; sources tile both ways;
-- a dissolve's last frame is empty.
+- a dissolve's last frame is empty;
+- a sequence (frames saved as separate images, for meshes) checks each frame's size.
 """
 
 import numpy as np
@@ -48,8 +49,10 @@ def check(entry, rgba):
     alpha = rgba[..., 3].astype(np.float32) / 255
     kind = entry["kind"]
     grid = int(entry.get("grid", 1))
-    if not (_pot(w) and _pot(h) and w <= 1024 and h <= 1024):
-        fails.append(f"size {w}x{h}: both sides must be powers of two, at most 1024")
+    fw, fh = (w // grid, h // grid) if kind == "sequence" else (w, h)
+    if not (_pot(fw) and _pot(fh) and fw <= 1024 and fh <= 1024):
+        what = "each frame" if kind == "sequence" else "size"
+        fails.append(f"{what} {fw}x{fh}: both sides must be powers of two, at most 1024")
     if entry.get("rgb") != "spectrum" and (rgba[..., :3] != 255).any():
         fails.append("RGB is not white: the shape belongs in alpha")
     if alpha.max() < 0.25:
@@ -58,7 +61,7 @@ def check(entry, rgba):
         fails.append(f"size {w}x{h} does not divide by its {grid}x{grid} grid")
         return fails
     frames = cells(alpha, grid)
-    if kind == "flipbook" and entry.get("frames", grid * grid) != grid * grid:
+    if kind in ("flipbook", "sequence") and entry.get("frames", grid * grid) != grid * grid:
         fails.append(f"{entry['frames']} frames for a {grid}x{grid} grid")
     if kind in SPRITES:
         for i, c in enumerate(frames):

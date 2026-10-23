@@ -2518,6 +2518,55 @@ local function playMesh(template: BasePart, ctx: Ctx): number
 	return delay + duration
 end
 
+-- A mesh shell (Builder's `shell` layer): grows from Size0 to Size1, turns by SpinDeg,
+-- fades, and swaps TextureID through its frames, since a mesh can't play an atlas.
+local function playShell(template: BasePart, ctx: Ctx): number
+	local delay = num(template, "Delay", 0)
+	local duration = num(template, "Duration", 0.3)
+	local size0 = vec(template, "Size0", template.Size)
+	local size1 = vec(template, "Size1", size0)
+	local spin = vec(template, "SpinDeg", Vector3.zero)
+	local style = readStyle(template)
+	local frames = string.split(str(template, "Frames", ""), ",")
+	if frames[1] == "" then
+		frames = {}
+	end
+	local cf = ctx.origin * CFrame.new(vec(template, "Offset", Vector3.zero)) * rad(vec(template, "Tilt", Vector3.zero))
+	local copy = template:Clone() :: any
+	for _, d in copy:GetDescendants() do
+		if d:IsA("BaseScript") then
+			d:Destroy()
+		end
+	end
+	copy.Archivable = false
+	local okMat, material = pcall(function()
+		return (Enum.Material :: any)[str(template, "Material", "Neon")]
+	end)
+	copy.Material = if okMat and material then material else Enum.Material.Neon
+	local shown = 0
+	local function step(alpha: number)
+		local e = ease(alpha, style.ease)
+		copy.Size = size0:Lerp(size1, e)
+		copy.CFrame = cf * CFrame.Angles(math.rad(spin.X * e), math.rad(spin.Y * e), math.rad(spin.Z * e))
+		copy.Transparency = fadeAt(style, alpha)
+		copy.Color = style.color0:Lerp(style.color1, e)
+		if #frames > 0 then
+			local k = math.min(#frames, math.floor(alpha * #frames) + 1)
+			if k ~= shown then
+				shown = k
+				copy.TextureID = frames[k]
+			end
+		end
+	end
+	step(0)
+	addAnim(delay, duration, function()
+		copy.Parent = liveFolder()
+	end, step, function()
+		copy:Destroy()
+	end)
+	return delay + duration
+end
+
 local function findByName(name: string): Instance?
 	for _, inst in CollectionService:GetTagged(EasyVFX.Tag) do
 		if inst.Name == name then
@@ -2652,7 +2701,9 @@ function EasyVFX.PlayLocal(target: Instance | string, at: CFrame?): number
 				end
 			end
 		elseif d:IsA("BasePart") then
-			if d:GetAttribute("VFX_Mesh") then
+			if d:GetAttribute("VFX_Shell") then
+				length = math.max(length, playShell(d, ctx))
+			elseif d:GetAttribute("VFX_Mesh") then
 				length = math.max(length, playMesh(d, ctx))
 			elseif type(duration) == "number" and duration > 0 and d:GetAttribute("TransparencySequence") == nil then
 				pulse(d, delay, duration)
@@ -2849,7 +2900,7 @@ end
 -- True when the effect has pieces that only show when played (bursts, shapes...).
 function EasyVFX.HasBursts(root: Instance): boolean
 	for _, d in root:GetDescendants() do
-		if d:GetAttribute("EmitCount") ~= nil or d:GetAttribute("EmitDuration") ~= nil or d:GetAttribute("VFX_Mesh") then
+		if d:GetAttribute("EmitCount") ~= nil or d:GetAttribute("EmitDuration") ~= nil or d:GetAttribute("VFX_Mesh") or d:GetAttribute("VFX_Shell") then
 			return true
 		end
 		if d:IsA("Configuration") and d:GetAttribute("Kind") ~= nil then
@@ -3611,6 +3662,76 @@ LayerBuilders.beam = function(ctx, key, layer)
 	end)
 end
 
+-- A textured mesh shell (tools/meshgen, docs/plan-real-vfx.md step 2): the template
+-- MeshPart the runtime clones and animates. A script can't set MeshId, so the template
+-- comes from AssetService; texture frames are swapped through TextureID at play time,
+-- since a mesh can't play a flipbook atlas.
+LayerBuilders.shell = function(ctx, key, layer)
+	local params: Params = ctx.params
+	local meshId = ctx.assets[layer.mesh]
+	if type(meshId) ~= "string" then
+		return
+	end
+	local found = ctx.existing[key]
+	local part: MeshPart
+	if found and found:IsA("MeshPart") and found:GetAttribute("VFX_MeshAsset") == meshId then
+		part = found :: MeshPart
+	else
+		if found then
+			found:Destroy()
+		end
+		local ok, made = pcall(function()
+			return game:GetService("AssetService"):CreateMeshPartAsync(meshId)
+		end)
+		if not ok or not made then
+			warn("[EasyVFX] Could not load mesh " .. meshId .. ": " .. tostring(made))
+			return
+		end
+		part = made :: MeshPart
+		part:SetAttribute(Builder.LAYER_ATTR, key)
+		part:SetAttribute("VFX_MeshAsset", meshId)
+		ctx.existing[key] = part
+	end
+	ctx.wanted[key] = true
+	part.Name = layer.name or "Shell"
+	part.Anchored = true
+	part.CanCollide = false
+	part.CanTouch = false
+	part.CanQuery = false
+	part.CastShadow = false
+	part.Transparency = 1
+	part.CFrame = ctx.root.CFrame
+	local frames = {}
+	for _, k in layer.frames or {} do
+		if ctx.assets[k] then
+			table.insert(frames, ctx.assets[k])
+		end
+	end
+	part.TextureID = frames[1] or ""
+	local attrs: { [string]: any } = table.clone(layer.attrs or {})
+	local timeScale = params.lifetime / math.max(0.05, params.speed)
+	for _, k in { "Size0", "Size1", "Offset" } do
+		if typeof(attrs[k]) == "Vector3" then
+			attrs[k] *= params.size
+		end
+	end
+	for _, k in { "Delay", "Duration" } do
+		if type(attrs[k]) == "number" then
+			attrs[k] *= timeScale
+		end
+	end
+	attrs.Color0 = resolveColor(layer.color0 or "w", params)
+	attrs.Color1 = resolveColor(layer.color1 or layer.color0 or "p", params)
+	attrs.Frames = table.concat(frames, ",")
+	attrs.VFX_Shell = true
+	for name, value in attrs do
+		part:SetAttribute(name, value)
+	end
+	if part.Parent ~= ctx.root then
+		part.Parent = ctx.root
+	end
+end
+
 LayerBuilders.trail = function(ctx, key, layer)
 	local params: Params = ctx.params
 	local size: Vector3 = ctx.root.Size
@@ -3710,7 +3831,7 @@ function Builder.hasHD(presetId: string): boolean
 		return false
 	end
 	for _, layer in preset.layers do
-		if layer.hd or layer.pack or layer.beamPack or layer.packTexture then
+		if layer.hd or layer.pack or layer.beamPack or layer.packTexture or layer.mesh then
 			return true
 		end
 	end
@@ -4954,6 +5075,20 @@ local function heroShards(at: any, count: number, speed: number, fields: { [stri
 		for k, v in fields do
 			layer[k] = v
 		end
+	end
+	return layer
+end
+
+-- a crescent shell carrying the slash ribbon's 16 frames (seq_slash_ribbon_00..15)
+local RIBBON = {}
+for k = 0, 15 do
+	table.insert(RIBBON, string.format("seq_slash_ribbon_%02d", k))
+end
+
+local function heroShell(mesh: string, fields: { [string]: any }): Layer
+	local layer: Layer = { type = "shell", hd = true, mesh = mesh, frames = RIBBON }
+	for k, v in fields do
+		layer[k] = v
 	end
 	return layer
 end
@@ -6836,6 +6971,26 @@ Presets.List = ({
 				color = { "p", "s" },
 				brightness = 0.8,
 			}),
+			-- a cone shell thrown up from the ground (tools/meshgen)
+			{
+				type = "shell",
+				hd = true,
+				name = "Cone",
+				mesh = "mesh_cone",
+				frames = { "strip_wind_stroke" },
+				attrs = {
+					Delay = 0.02,
+					Size0 = Vector3.new(5, 2, 5),
+					Size1 = Vector3.new(13, 5, 13),
+					Duration = 0.16,
+					SpinDeg = Vector3.new(0, 70, 0),
+					Offset = Vector3.new(0, -0.4, 0),
+					Transparency = 0.35,
+					FadeStart = 0.15,
+				},
+				color0 = "p",
+				color1 = "s",
+			},
 			v4("flip_shock_ring", "Burst", Vector3.new(0, -1.8, 0), {
 				name = "Ring",
 				delay = 0.02,
@@ -6914,34 +7069,36 @@ Presets.List = ({
 		placement = "air",
 		defaults = { color1 = rgb(255, 214, 64), color2 = rgb(255, 120, 20), trigger = "Loop", interval = 1.5 },
 		layers = {
-			-- MainSlash: flat additive crescents fired by count (reference H), eroding from the tail
-			v4("flip_slash_erode", "MainSlash", "center", {
+			-- MainSlash: crescent shells (tools/meshgen) carrying the ribbon that erodes from its tail
+			heroShell("mesh_crescent_wide", {
 				name = "Slash",
-				flipbook = "Grid4x4",
-				orientation = "VelocityPerpendicular",
-				direction = "Front",
-				speed = { 5, 5 },
-				size = { { 0, 6.5 }, { 1, 7.5 } },
-				lifetime = { 0.28, 0.28 },
-				rotation = { -6, 6 },
-				color = { "p", "s" },
-				brightness = 1.8,
-				zOffset = 1,
+				attrs = {
+					Size0 = Vector3.new(8, 1.2, 8),
+					Size1 = Vector3.new(9.5, 1.4, 9.5),
+					Duration = 0.3,
+					SpinDeg = Vector3.new(0, -50, 0),
+					Tilt = Vector3.new(0, 0, -18),
+					Offset = Vector3.new(0, 0.6, -1.5),
+					FadeStart = 0.6,
+				},
+				color0 = "w",
+				color1 = "p",
 			}),
-			v4("flip_slash_erode", "MainSlash", "center", {
+			heroShell("mesh_crescent_thin", {
 				name = "SlashEcho",
-				delay = 0.03,
-				burst = 2,
-				flipbook = "Grid4x4",
-				orientation = "VelocityPerpendicular",
-				direction = "Front",
-				speed = { 4, 6 },
-				size = { { 0, 7.5, 0.5 }, { 1, 8.5 } },
-				transparency = { { 0, 0.45 }, { 1, 1 } },
-				lifetime = { 0.32, 0.36 },
-				rotation = { -16, 16 },
-				color = { "p", "s" },
-				brightness = 1.2,
+				attrs = {
+					Delay = 0.03,
+					Size0 = Vector3.new(9.5, 0.8, 9.5),
+					Size1 = Vector3.new(11, 1, 11),
+					Duration = 0.32,
+					SpinDeg = Vector3.new(0, -65, 0),
+					Tilt = Vector3.new(0, 0, -24),
+					Offset = Vector3.new(0, 0.9, -1.5),
+					Transparency = 0.45,
+					FadeStart = 0.3,
+				},
+				color0 = "p",
+				color1 = "s",
 			}),
 			v4("art_brush_strokes", "MainSlash", "center", {
 				name = "Ink",

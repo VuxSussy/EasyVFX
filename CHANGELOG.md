@@ -4,6 +4,17 @@ All notable changes to EasyVFX are listed here. Versions follow [Semantic Versio
 
 ## [Unreleased]
 
+### The mesh set (`tools/meshgen`)
+- `tools/meshgen` writes six shells as OBJ in `pack/meshes`, not uploaded: crescent (wide and thin), cone, sphere,
+  torus and cylinder. Each is a recipe with knobs, and `check` and `selftest` run in `tools/check.sh`.
+  `docs/meshgen.md` explains it.
+- A `shell` layer builds a hidden template MeshPart through `AssetService:CreateMeshPartAsync`. The runtime clones it,
+  grows, turns and fades it, and swaps its `TextureID` through a sequence of frames.
+- texgen gains the `sequence` kind (frames saved as separate images, for meshes) and `seq/slash_ribbon`, 16 frames of
+  a slash that erodes from its tail.
+- `slash_v4` now sweeps on two crescent shells instead of flat particles; `ground_slam_v4` throws up a cone shell.
+- evfx draws pack meshes with their textures (a small rasterizer with perspective-correct UVs).
+
 ### Hero set, first pass (v4)
 - `impact_v4`, `ground_slam_v4` and `slash_v4` rebuild Hit Impact, Ground Slam and Crescent Slash on library v4 in
   Zenless Zone Zero's grammar: a 2-frame white core with a cross flare, god rays and a dark halo; a burst that peaks by

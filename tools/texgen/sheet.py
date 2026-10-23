@@ -10,7 +10,7 @@ TEXT = (225, 228, 235)
 FAIL = (255, 110, 100)
 CELL = 240
 LABEL = 34
-FAMILIES = [("shape", "Shapes"), ("flip", "Erosion flipbooks (4x4)"), ("sheet", "Spritesheets (variants)"),
+FAMILIES = [("shape", "Shapes"), ("flip", "Erosion flipbooks (4x4)"), ("seq", "Sequences (separate frames, for meshes)"), ("sheet", "Spritesheets (variants)"),
             ("strip", "Tiled strips (shown twice, end to end)"), ("art", "Art tier"), ("source", "Source maps (not uploaded)")]
 
 
@@ -105,6 +105,7 @@ def gif(rgba, grid, path, fps=20, scale=320, tint=(255, 255, 255), loops=2):
     for i in range(grid * grid):
         r, c = divmod(i, grid)
         cell = rgba[r * ch : (r + 1) * ch, c * cw : (c + 1) * cw]
-        frames.append(composite(cell, tint).resize((scale, scale), Image.LANCZOS))
-    frames += [composite(np.zeros_like(rgba[:ch, :cw])).resize((scale, scale))] * 4
+        size = (scale, max(1, scale * ch // cw))
+        frames.append(composite(cell, tint).resize(size, Image.LANCZOS))
+    frames += [composite(np.zeros_like(rgba[:ch, :cw])).resize(size)] * 4
     frames[0].save(path, save_all=True, append_images=frames[1:], duration=int(1000 / fps), loop=0, optimize=True)

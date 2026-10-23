@@ -126,7 +126,23 @@ def png_bytes(rgba):
     return buf.getvalue()
 
 
+def frame_names(tex_id, frames=16):
+    """A sequence's files, one per frame: <family>_<name>_00.png and on."""
+    stem = filename(tex_id)[:-4]
+    return [f"{stem}_{k:02d}" for k in range(frames)]
+
+
 def read(tex_id):
+    e = get(tex_id)
+    if e["kind"] == "sequence":
+        cells = []
+        for name in frame_names(tex_id):
+            path = os.path.join(OUT, name + ".png")
+            if not os.path.exists(path):
+                return None
+            cells.append(np.asarray(Image.open(path).convert("RGBA")))
+        g = int(e.get("grid", 4))
+        return np.concatenate([np.concatenate(cells[r * g : (r + 1) * g], 1) for r in range(g)], 0)
     path = os.path.join(OUT, filename(tex_id))
     if not os.path.exists(path):
         return None
@@ -141,11 +157,26 @@ def write(results):
         with open(MANIFEST, encoding="utf-8") as f:
             manifest = json.load(f)
     for rgba, meta in results:
+        e = get(meta["id"])
+        if e["kind"] == "sequence":
+            g = meta["grid"]
+            h, w = rgba.shape[0] // g, rgba.shape[1] // g
+            names = frame_names(meta["id"], meta["frames"])
+            for k, frame_name in enumerate(names):
+                r, c = divmod(k, g)
+                data = png_bytes(np.ascontiguousarray(rgba[r * h : (r + 1) * h, c * w : (c + 1) * w]))
+                with open(os.path.join(OUT, frame_name + ".png"), "wb") as f:
+                    f.write(data)
+                manifest["textures"][frame_name] = {
+                    "id": meta["id"], "kind": "frame", "frame": k, "size": [w, h], "grid": 1, "frames": 1,
+                    "role": e.get("role"), "upload": True, "rgb": "white",
+                    "sha256": hashlib.sha256(data).hexdigest(), "use": f"frame {k} of {meta['id']}",
+                }
+            continue
         data = png_bytes(rgba)
         name = filename(meta["id"])
         with open(os.path.join(OUT, name), "wb") as f:
             f.write(data)
-        e = get(meta["id"])
         manifest["textures"][name[:-4]] = {
             "id": meta["id"], "kind": meta["kind"], "size": meta["size"], "grid": meta["grid"],
             "frames": meta["frames"], "role": e.get("role"), "upload": e.get("upload", True),

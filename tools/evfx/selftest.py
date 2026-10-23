@@ -202,6 +202,24 @@ def a_glowing_particle_lights_the_screen_where_it_is():
     assert np.abs(lit[:20] - dark[:20]).max() < 0.08
 
 
+
+@check
+def a_mesh_draws_its_texture_where_it_is_and_only_once():
+    cam = core.Camera((0, 0, 10), (0, 0, 0), 70, (160, 120))
+    quad = np.array([[-2, -2, 0], [2, -2, 0], [2, 2, 0], [-2, 2, 0]], np.float64)
+    uvs = np.array([[0, 1], [1, 1], [1, 0], [0, 0]], np.float64)
+    tris = np.array([[0, 1, 2], [0, 2, 3]])
+    tex = np.zeros((8, 8), np.float32)
+    tex[:, 4:] = 1  # the right half of the texture
+    one = render.Canvas(cam)
+    render.draw_mesh(one, quad, uvs, tris, tex, (1, 1, 1), 1.0, 1.0)
+    two = render.Canvas(cam)
+    render.draw_mesh(two, quad, uvs, np.concatenate([tris, tris[:, ::-1]]), tex, (1, 1, 1), 1.0, 1.0)
+    assert one.glow[60, 90].max() > 0.9 and one.glow[60, 70].max() < 0.05, "texture lands on the wrong half"
+    assert np.allclose(one.glow, two.glow), "a two-sided shell lights twice"
+    assert one.glow[:20].max() == 0, "the mesh spills outside its quad"
+
+
 def run():
     failed = 0
     for fn in CHECKS:

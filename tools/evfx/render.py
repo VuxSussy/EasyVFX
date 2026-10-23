@@ -328,6 +328,84 @@ def _fill(canvas, quad, color, alpha, additive):
 GLOWING = ("Neon", "ForceField")
 
 
+_meshes = {}
+
+
+def mesh(name):
+    """A pack mesh (pack/meshes/<name>.obj, from tools/meshgen) as (verts, uvs, tris)."""
+    if name not in _meshes:
+        path = os.path.join(core.MESHES, name + ".obj")
+        verts, uvs, tris = [], [], []
+        if os.path.exists(path):
+            with open(path, encoding="utf-8") as f:
+                for line in f:
+                    q = line.split()
+                    if not q:
+                        continue
+                    if q[0] == "v":
+                        verts.append([float(x) for x in q[1:4]])
+                    elif q[0] == "vt":
+                        uvs.append([float(q[1]), 1 - float(q[2])])
+                    elif q[0] == "f":
+                        tris.append([int(x.split("/")[0]) - 1 for x in q[1:4]])
+        _meshes[name] = (np.array(verts, np.float64), np.array(uvs, np.float64), np.array(tris, np.int64)) if tris else None
+    return _meshes[name]
+
+
+def draw_mesh(canvas, world, uvs, tris, tex, color, alpha, additive):
+    """Rasterizes a textured mesh (world-space vertices) into the canvas. Coverage is
+    combined with max before blending once, so a two-sided shell isn't drawn twice."""
+    cam = canvas.cam
+    proj = [cam.project(tuple(p)) for p in world]
+    cover = np.zeros((canvas.h, canvas.w), np.float32)
+    th, tw = tex.shape
+    for a, b, c in tris:
+        pa, pb, pc = proj[a], proj[b], proj[c]
+        if pa is None or pb is None or pc is None:
+            continue
+        xs, ys = (pa[0], pb[0], pc[0]), (pa[1], pb[1], pc[1])
+        x0, x1 = max(0, int(math.floor(min(xs)))), min(canvas.w, int(math.ceil(max(xs))) + 1)
+        y0, y1 = max(0, int(math.floor(min(ys)))), min(canvas.h, int(math.ceil(max(ys))) + 1)
+        if x1 <= x0 or y1 <= y0:
+            continue
+        den = (pb[1] - pc[1]) * (pa[0] - pc[0]) + (pc[0] - pb[0]) * (pa[1] - pc[1])
+        if abs(den) < 1e-9:
+            continue
+        py, px = np.mgrid[y0:y1, x0:x1].astype(np.float32) + 0.5
+        w0 = ((pb[1] - pc[1]) * (px - pc[0]) + (pc[0] - pb[0]) * (py - pc[1])) / den
+        w1 = ((pc[1] - pa[1]) * (px - pc[0]) + (pa[0] - pc[0]) * (py - pc[1])) / den
+        w2 = 1 - w0 - w1
+        inside = (w0 >= -0.01) & (w1 >= -0.01) & (w2 >= -0.01)
+        if not inside.any():
+            continue
+        iz = np.array([1 / pa[2], 1 / pb[2], 1 / pc[2]], np.float32)
+        q = w0 * iz[0] + w1 * iz[1] + w2 * iz[2]
+        u = (w0 * uvs[a, 0] * iz[0] + w1 * uvs[b, 0] * iz[1] + w2 * uvs[c, 0] * iz[2]) / q
+        v = (w0 * uvs[a, 1] * iz[0] + w1 * uvs[b, 1] * iz[1] + w2 * uvs[c, 1] * iz[2]) / q
+        tx = np.clip((u * (tw - 1)).astype(int), 0, tw - 1)
+        ty = np.clip((v * (th - 1)).astype(int), 0, th - 1)
+        sample = np.where(inside, tex[ty, tx], 0)
+        region = cover[y0:y1, x0:x1]
+        np.maximum(region, sample, out=region)
+    if cover.any():
+        canvas.blend(0, 0, cover, color, alpha, additive)
+
+
+def _mesh_part(canvas, part):
+    found = mesh(part["meshId"][7:])
+    if not found:
+        return
+    verts, uvs, tris = found
+    extent = np.maximum(verts.max(0) - verts.min(0), 1e-6)
+    local = verts / extent * np.asarray(part["size"], np.float64)
+    cf = part["cframe"]
+    rot = np.array(cf[3:12], np.float64).reshape(3, 3)
+    world = local @ rot.T + np.asarray(cf[:3], np.float64)
+    tex = texture(part.get("textureId") or "") if part.get("textureId") else np.ones((4, 4), np.float32)
+    glowing = part["material"] in GLOWING
+    draw_mesh(canvas, world, uvs, tris, tex, part["color"], 1 - part["t"], 1.0 if glowing else 0.0)
+
+
 def _part(canvas, part):
     cam = canvas.cam
     cf = part["cframe"]
@@ -336,6 +414,9 @@ def _part(canvas, part):
     color = part["color"]
     glowing = part["material"] in GLOWING
     additive = 1.0 if glowing else 0.0
+    if part.get("className") == "MeshPart" and str(part.get("meshId", "")).startswith("pack://"):
+        _mesh_part(canvas, part)
+        return
     if part["shape"] == "Ball":
         pr = cam.project(center)
         if not pr:

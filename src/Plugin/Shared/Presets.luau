@@ -435,6 +435,20 @@ local function heroShards(at: any, count: number, speed: number, fields: { [stri
 	return layer
 end
 
+-- a crescent shell carrying the slash ribbon's 16 frames (seq_slash_ribbon_00..15)
+local RIBBON = {}
+for k = 0, 15 do
+	table.insert(RIBBON, string.format("seq_slash_ribbon_%02d", k))
+end
+
+local function heroShell(mesh: string, fields: { [string]: any }): Layer
+	local layer: Layer = { type = "shell", hd = true, mesh = mesh, frames = RIBBON }
+	for k, v in fields do
+		layer[k] = v
+	end
+	return layer
+end
+
 -- the tail: a few slow embers
 local function heroEmbers(at: any, count: number, delay: number?): Layer
 	return v4("sheet_embers", "Tail", at, {
@@ -2313,6 +2327,26 @@ Presets.List = ({
 				color = { "p", "s" },
 				brightness = 0.8,
 			}),
+			-- a cone shell thrown up from the ground (tools/meshgen)
+			{
+				type = "shell",
+				hd = true,
+				name = "Cone",
+				mesh = "mesh_cone",
+				frames = { "strip_wind_stroke" },
+				attrs = {
+					Delay = 0.02,
+					Size0 = Vector3.new(5, 2, 5),
+					Size1 = Vector3.new(13, 5, 13),
+					Duration = 0.16,
+					SpinDeg = Vector3.new(0, 70, 0),
+					Offset = Vector3.new(0, -0.4, 0),
+					Transparency = 0.35,
+					FadeStart = 0.15,
+				},
+				color0 = "p",
+				color1 = "s",
+			},
 			v4("flip_shock_ring", "Burst", Vector3.new(0, -1.8, 0), {
 				name = "Ring",
 				delay = 0.02,
@@ -2391,34 +2425,36 @@ Presets.List = ({
 		placement = "air",
 		defaults = { color1 = rgb(255, 214, 64), color2 = rgb(255, 120, 20), trigger = "Loop", interval = 1.5 },
 		layers = {
-			-- MainSlash: flat additive crescents fired by count (reference H), eroding from the tail
-			v4("flip_slash_erode", "MainSlash", "center", {
+			-- MainSlash: crescent shells (tools/meshgen) carrying the ribbon that erodes from its tail
+			heroShell("mesh_crescent_wide", {
 				name = "Slash",
-				flipbook = "Grid4x4",
-				orientation = "VelocityPerpendicular",
-				direction = "Front",
-				speed = { 5, 5 },
-				size = { { 0, 6.5 }, { 1, 7.5 } },
-				lifetime = { 0.28, 0.28 },
-				rotation = { -6, 6 },
-				color = { "p", "s" },
-				brightness = 1.8,
-				zOffset = 1,
+				attrs = {
+					Size0 = Vector3.new(8, 1.2, 8),
+					Size1 = Vector3.new(9.5, 1.4, 9.5),
+					Duration = 0.3,
+					SpinDeg = Vector3.new(0, -50, 0),
+					Tilt = Vector3.new(0, 0, -18),
+					Offset = Vector3.new(0, 0.6, -1.5),
+					FadeStart = 0.6,
+				},
+				color0 = "w",
+				color1 = "p",
 			}),
-			v4("flip_slash_erode", "MainSlash", "center", {
+			heroShell("mesh_crescent_thin", {
 				name = "SlashEcho",
-				delay = 0.03,
-				burst = 2,
-				flipbook = "Grid4x4",
-				orientation = "VelocityPerpendicular",
-				direction = "Front",
-				speed = { 4, 6 },
-				size = { { 0, 7.5, 0.5 }, { 1, 8.5 } },
-				transparency = { { 0, 0.45 }, { 1, 1 } },
-				lifetime = { 0.32, 0.36 },
-				rotation = { -16, 16 },
-				color = { "p", "s" },
-				brightness = 1.2,
+				attrs = {
+					Delay = 0.03,
+					Size0 = Vector3.new(9.5, 0.8, 9.5),
+					Size1 = Vector3.new(11, 1, 11),
+					Duration = 0.32,
+					SpinDeg = Vector3.new(0, -65, 0),
+					Tilt = Vector3.new(0, 0, -24),
+					Offset = Vector3.new(0, 0.9, -1.5),
+					Transparency = 0.45,
+					FadeStart = 0.3,
+				},
+				color0 = "p",
+				color1 = "s",
 			}),
 			v4("art_brush_strokes", "MainSlash", "center", {
 				name = "Ink",

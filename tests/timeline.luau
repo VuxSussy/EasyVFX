@@ -48,6 +48,13 @@ if mode == "hd" then
 			(assets :: any)[key] = "pack://" .. key
 		end
 	end
+	-- the mesh set (tools/meshgen), likewise drawn from pack/meshes
+	local meshes = "pack/meshes/manifest.json"
+	if fs.isFile(meshes) then
+		for key in serde.decode("json", fs.readFile(meshes)).meshes do
+			(assets :: any)[key] = "pack://" .. key
+		end
+	end
 end
 
 local steps: { [string]: (number) -> () } = {}
@@ -185,6 +192,8 @@ local function partInfo(d: BasePart)
 		color = c3(d.Color),
 		t = d.Transparency,
 		className = d.ClassName,
+		meshId = if d:IsA("MeshPart") then (d :: MeshPart).MeshId else nil,
+		textureId = if d:IsA("MeshPart") then (d :: MeshPart).TextureID else nil,
 	}
 end
 
