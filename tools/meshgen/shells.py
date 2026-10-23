@@ -154,3 +154,56 @@ def from_obj(text):
         elif parts[0] == "f":
             tris.append([int(q.split("/")[0]) - 1 for q in parts[1:4]])
     return np.array(verts, np.float64), np.array(uvs, np.float64), np.array(tris, np.int64)
+
+
+@recipe("dome", segments=32, rings=10)
+def dome(p):
+    """A hemisphere: the dome flash on the ground (Bloom Strike). Its base sits at the
+    bottom of the box. u goes around, v from the top down to the rim."""
+
+    def at(u, v):
+        a, b = 2 * math.pi * u, 0.5 * math.pi * v
+        return (math.sin(b) * math.cos(a), math.cos(b), math.sin(b) * math.sin(a))
+
+    verts, uvs, tris = grid(int(p["segments"]), int(p["rings"]), at)
+    return two_sided(fit(verts), uvs, tris)
+
+
+@recipe("lotus", inner=6, outer=8, along=8, across=4)
+def lotus(p):
+    """A lotus crown: two rings of curved petals around a common base, the inner ring
+    upright, the outer one leaning out. Each petal maps the whole texture (u across the
+    petal, v from the tip at the top to the base), so one cel petal image dresses them
+    all. Opened at play time by growing its height."""
+    verts, uvs, tris = [], [], []
+    rings = ((int(p["inner"]), 0.10, 0.18, 0.62, 0.36, 0.0), (int(p["outer"]), 0.16, 0.62, 0.55, 0.38, math.pi / int(p["outer"])))
+    na, nc = int(p["along"]), int(p["across"])
+    for count, base_r, tilt, length, half_w, phase in rings:
+        for k in range(count):
+            ang = phase + k * 2 * math.pi / count
+            dirx, dirz = math.cos(ang), math.sin(ang)
+            sx, sz = -dirz, dirx  # across the petal
+            start = len(verts)
+            for j in range(na + 1):
+                t = j / na
+                lean = tilt * t + 0.12 * t * t  # curls outward toward the tip
+                rad = base_r + length * math.sin(lean) * t
+                y = length * math.cos(lean * 0.6) * t
+                w = half_w * math.sin(math.pi * min(1.0, t * 0.95 + 0.05)) ** 0.7
+                for i in range(nc + 1):
+                    c = i / nc * 2 - 1
+                    cup = 0.45 * w * (1 - c * c)  # cupped across, the middle pushed inward
+                    x = dirx * (rad - cup) + sx * c * w
+                    z = dirz * (rad - cup) + sz * c * w
+                    verts.append((x, y, z))
+                    uvs.append((i / nc, 1 - t))
+            row = nc + 1
+            for j in range(na):
+                for i in range(nc):
+                    a = start + j * row + i
+                    b, cc, d = a + 1, a + row, a + row + 1
+                    tris += [(a, cc, b), (b, cc, d)]
+    verts, tris = np.array(verts, np.float64), np.array(tris, np.int64)
+    e1, e2 = verts[tris[:, 1]] - verts[tris[:, 0]], verts[tris[:, 2]] - verts[tris[:, 0]]
+    tris = tris[np.linalg.norm(np.cross(e1, e2), axis=1) > 1e-8]
+    return two_sided(fit(verts), np.array(uvs, np.float64), tris)

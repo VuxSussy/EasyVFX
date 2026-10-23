@@ -122,10 +122,10 @@ def aniso_shard(p, rng, size):
     return np.clip(np.maximum(body * fade, core), 0, 1) * lib.vignette(u, v, 0.9, 0.99)
 
 
-def _brush(u, v, size, pts, width, seed, attack=0.06, release=0.3, swell=0.25, dry=0.45, rough=0.025, density=0.45):
+def _brush(u, v, size, pts, width, seed, attack=0.06, release=0.3, swell=0.25, dry=0.45, rough=0.025, density=0.45, caps=False):
     """A calligraphic stroke: pressure along the path, a rough edge, bristle streaks that
     open into dry-brush gaps toward the tail, and ink density from the bristles."""
-    d, s, across = lib.stroke(u, v, pts, lambda t: width * lib.taper(t, attack, release, swell, 1.4) * (1.15 - 0.3 * t) + 1e-3, caps=False)
+    d, s, across = lib.stroke(u, v, pts, lambda t: width * lib.taper(t, attack, release, swell, 1.4) * (1.15 - 0.3 * t) + 1e-3, caps=caps)
     s = np.clip(s, 0, 1)
     edge = (lib.fbm(u.shape, 8, 4, seed=seed) - 0.5) * rough
     mask = lib.aa(d + edge, size)
@@ -823,3 +823,150 @@ def src_ridged(p, rng, size):
 @recipe("src_worley", cells=8)
 def src_worley(p, rng, size):
     return lib.worley((size, size), int(p["cells"]), seed=_seed(rng), second=True)
+
+
+# ================================================================== Bloom Strike set (docs/refs/lotus-layers.md)
+
+
+@recipe("star8", long=0.95, short=0.55, width=0.05, core=0.06)
+def star8(p, rng, size):
+    """An 8-point star: four long spikes, four shorter diagonals, a hot core. The flare
+    of a heavy hit (Lotus beat E)."""
+    u, v = lib.grid(size)
+    r = np.sqrt(u * u + v * v)
+
+    def spike(ang, length, width):
+        along = u * math.cos(ang) + v * math.sin(ang)
+        across = -u * math.sin(ang) + v * math.cos(ang)
+        t = np.clip(np.abs(along) / length, 0, 1)
+        w = width * (1 - t) ** 1.25 + 1e-4
+        return np.exp(-((across / w) ** 2)) * (1 - t) ** 1.6
+
+    out = np.zeros_like(u)
+    for k in range(2):
+        out = np.maximum(out, spike(k * math.pi / 2, p["long"], p["width"]))
+        out = np.maximum(out, spike(math.pi / 4 + k * math.pi / 2, p["short"], p["width"] * 0.75) * 0.85)
+    core = np.exp(-((r / p["core"]) ** 2)) + 0.35 * np.exp(-((r / (p["core"] * 3)) ** 2))
+    return np.clip(out + core, 0, 1) * lib.vignette(u, v, 0.9, 0.99)
+
+
+@recipe("hollow_ring", radius=0.6, line=0.07, glow=0.25)
+def hollow_ring(p, rng, size):
+    """A small hollow ring with a soft glow: orbit rings that scatter around a sigil."""
+    u, v = lib.grid(size)
+    r = np.sqrt(u * u + v * v)
+    d = np.abs(r - p["radius"])
+    ring = lib.aa(d - p["line"] * 0.5, size, 1.5)
+    glow = p["glow"] * np.exp(-((d / (p["line"] * 2.5)) ** 2))
+    return np.clip(ring + glow, 0, 1) * lib.vignette(u, v, 0.85, 0.97)
+
+
+@recipe("bokeh", rim=0.15)
+def bokeh(p, rng, size):
+    """A soft out-of-focus disc with a faint brighter rim: depth haze behind a sigil."""
+    u, v = lib.grid(size)
+    r = np.sqrt(u * u + v * v)
+    disc = 1 - lib.smooth(0.55, 0.8, r)
+    rim = p["rim"] * np.exp(-(((r - 0.65) / 0.08) ** 2))
+    return np.clip(disc * 0.55 + rim, 0, 1) * lib.vignette(u, v, 0.85, 0.97)
+
+
+@recipe("flower_sigil", petals=8, length=0.88, width=0.13, line=0.012)
+def flower_sigil(p, rng, size):
+    """A flower sigil of thin petal strokes: each petal a pointed lens drawn as a bright
+    outline over a faint fill, radiating from a small core (Lotus beat G)."""
+    u, v = lib.grid(size)
+    r, a = lib.polar(u, v)
+    n = int(p["petals"])
+    out = np.zeros_like(u)
+    for k in range(n):
+        ang = k * 2 * math.pi / n + rng.uniform(-0.06, 0.06)
+        length = p["length"] * rng.uniform(0.85, 1.0)
+        along = u * math.cos(ang) + v * math.sin(ang)
+        across = -u * math.sin(ang) + v * math.cos(ang)
+        t = np.clip(along / length, 0, 1)
+        half = p["width"] * np.clip(np.sin(np.pi * t), 0, 1) ** 0.8 * (along > 0)
+        d = np.abs(across) - half
+        edge = lib.aa(np.abs(d) - p["line"], size) * (along > 0) * (along < length)
+        fill = lib.aa(d, size) * 0.18
+        spine = lib.aa(np.abs(across) - p["line"] * 0.5, size) * (along > 0) * (1 - t) * 0.7
+        out = np.maximum.reduce([out, edge, fill, spine])
+    core = np.exp(-((r / 0.06) ** 2))
+    return np.clip(np.maximum(out, core), 0, 1) * lib.vignette(u, v, 0.92, 0.99)
+
+
+@recipe("brush_ring", radius=0.7, width=0.07, gap=0.7)
+def brush_ring(p, rng, size):
+    """A calligraphic ring: one brush stroke drawn around a circle, thick in the middle,
+    tapering at both ends with a dry, fibrous tail. Gold rings and ground swirls (beats
+    H and J)."""
+    u, v = lib.grid(size)
+    start = rng.uniform(0, 2 * math.pi)
+    sweep = 2 * math.pi * (1 - (1 - p["gap"]) * 0.25)
+    pts = lib.arc(0, 0, p["radius"], start, start + sweep, 160)
+    # round caps: a near-closed ring has no free ends for the square cut to work on
+    alpha, _, _ = _brush(u, v, size, pts, p["width"], _seed(rng), attack=0.08, release=0.55, swell=0.3, dry=0.6, density=0.3, caps=True)
+    return alpha * lib.vignette(u, v, 0.9, 0.99)
+
+
+@recipe("petal_single", outline=0.03)
+def petal_single(p, rng, size):
+    """One cel petal for the lotus mesh: a flat fill a step darker than a hard outline,
+    with a centre vein. The tip is at the top of the image, the base at the bottom."""
+    u, v = lib.grid(size)
+    o = p["outline"]
+    lens = np.maximum(lib.sd_circle(u - 0.55, v + 0.0, 0.78), lib.sd_circle(u + 0.55, v + 0.0, 0.78))
+    lens = np.maximum(lens, np.abs(v) - 0.93)
+    fill = lib.aa(lens, size) * (0.45 + 0.25 * lib.smooth(0.9, -0.6, v))
+    edge = lib.aa(np.abs(lens + o) - o, size)
+    vein = lib.aa(lib.sd_segment(u, v, 0, 0.85, 0, -0.55)[0] - o * 0.4, size) * 0.7
+    return np.clip(np.maximum.reduce([fill, edge, vein]), 0, 1) * lib.vignette(u, v, 0.94, 0.995)
+
+
+@recipe("pillar_streaks", streaks=26)
+def pillar_streaks(p, rng, size):
+    """Vertical light streaks for a pillar shell: u runs around the cylinder (so it tiles),
+    v up its height; streaks of uneven brightness, bright at the base, fading to the top."""
+    x, y, w, h = _strip_grid(size)
+    seed = _seed(rng)
+    cols = lib.noise1(w, int(p["streaks"]), seed, 2)[None, :]
+    fine = lib.noise1(w, int(p["streaks"]) * 3, seed + 1, 1)[None, :]
+    streak = lib.smooth(0.35, 0.75, cols * 0.7 + fine * 0.3)
+    # bright on the top row, which a cylinder shell maps to its base (its v starts at the
+    # bottom and the image's top row is v = 0), fading toward the pillar's top
+    fade = lib.smooth(0.0, 0.9, 1 - (y + 1) / 2) ** 1.3
+    return np.clip(streak * fade * 0.9 + 0.12 * fade, 0, 1) * (1 - lib.smooth(1 - 10.0 / h, 1 - 4.5 / h, np.abs(y)))
+
+
+@recipe("grass", count=16)
+def grass(p, rng, size):
+    """Grass blade clumps, one variant per frame: thin curved tapering blades from a
+    common base. Tinted dark green with normal blending, they are the dark accent near the
+    ground (Lotus beat I)."""
+    u, v = lib.grid(size)
+    cells = []
+    for _ in range(int(p["count"])):
+        alpha = np.zeros_like(u)
+        for _ in range(int(rng.integers(3, 7))):
+            base = np.array([rng.uniform(-0.25, 0.25), 0.9])
+            lean = rng.uniform(-0.55, 0.55)
+            height = rng.uniform(0.9, 1.65)
+            tip = base + np.array([lean, -height])
+            mid = (base + tip) / 2 + np.array([lean * 0.4, 0.0])
+            pts = lib.bezier([base, mid, tip], 24)
+            d, _, _ = lib.stroke(u, v, pts, lambda s: 0.045 * (1 - s) ** 0.8 + 0.004, caps=False)
+            alpha = np.maximum(alpha, lib.aa(d, size))
+        cells.append(alpha * lib.vignette(u, v, 0.9, 0.99))
+    return cells
+
+
+@recipe("dome_glow", grain=0.15)
+def dome_glow(p, rng, size):
+    """A glow for a dome shell: u runs around the dome (so it tiles), v from its top (top
+    row) to its rim; nearly solid at the top, fading toward the rim, with a faint grain."""
+    x, y, w, h = _strip_grid(size)
+    seed = _seed(rng)
+    down = (y + 1) / 2
+    grain = lib.normalize(lib.perlin((h, w), (4, 8), seed))
+    body = (1 - lib.smooth(0.55, 1.0, down)) * (1 - p["grain"] + p["grain"] * grain)
+    return np.clip(body, 0, 1) * (1 - lib.smooth(1 - 10.0 / h, 1 - 4.5 / h, np.abs(y)))
