@@ -49,3 +49,24 @@ A `shell` layer names a mesh and its texture frames:
 - **Before upload:** without uploaded IDs the layer is skipped.
 - **evfx:** draws `pack://` meshes from `pack/meshes`, with perspective-correct UVs and two-sided coverage counted
   once.
+
+## In Studio (2026-10-23, edit mode, no upload)
+
+`python3 tools/meshgen studio` writes a preview script in chunks: a setup chunk, then one per shot. Each shot builds
+its shell with `EditableMesh` and its frame with `EditableImage`, so nothing has to be uploaded. What it showed:
+
+- **`TextureID` alpha doesn't cut a MeshPart out.** The shells drew the full band in every frame, opaque and grey;
+  transparent texels let the part's `Color` show through instead.
+
+  ![TextureID](meshes/studio-texture-id.jpg)
+- **`SurfaceAppearance` with `AlphaMode = Transparency` does cut it out.** With the frame as `ColorMapContent` and
+  `EmissiveMaskContent`, `EmissiveStrength` 3 and `Color` and `EmissiveTint` set to the element colour, the shells
+  glow and the ribbon erodes frame by frame. Set `Transparency` to 0.02, not 0: at 0 the alpha is dithered.
+
+  ![SurfaceAppearance](meshes/studio-surface-appearance.jpg)
+  ![Frames 0, 4, 8, 12](meshes/studio-frames.jpg)
+- **Only a plugin can write the colour map.** `SurfaceAppearance.ColorMap` and `ColorMapContent` need
+  `PluginSecurity`. `AlphaMode`, `Color`, `EmissiveStrength` and `EmissiveTint` are writable at runtime. So the
+  builder (a plugin) has to bake one part per frame with its own `SurfaceAppearance`, and the runtime can only switch
+  which one is visible and drive its emissive. Swapping `TextureID` at runtime, as the `shell` layer does today, won't
+  show the erosion in the game.
