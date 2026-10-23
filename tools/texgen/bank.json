@@ -46,7 +46,7 @@
     "shape/bokeh": {"recipe": "bokeh", "kind": "shape", "size": 128, "seed": 73, "role": "volume", "use": "soft depth discs behind a sigil"},
     "art/flower_sigil": {"recipe": "flower_sigil", "kind": "shape", "size": 512, "seed": 74, "role": "base", "use": "flower sigil of petal strokes (Bloom Strike)"},
     "art/brush_ring": {"recipe": "brush_ring", "kind": "shape", "size": 512, "seed": 75, "role": "base", "use": "calligraphic gold ring, ground swirl"},
-    "art/petal_single": {"recipe": "petal_single", "kind": "shape", "size": 256, "seed": 76, "role": "base", "use": "one cel petal for mesh/lotus"},
+    "art/petal_single": {"recipe": "petal_single", "kind": "shape", "size": 256, "seed": 76, "upload": false, "role": "base", "use": "one cel petal for mesh/lotus"},
     "strip/pillar_streaks": {"recipe": "pillar_streaks", "kind": "strip", "size": 512, "seed": 77, "role": "base", "use": "vertical streaks for a pillar shell (u around, v up)"},
     "sheet/grass": {"recipe": "grass", "kind": "sheet", "size": 512, "grid": 4, "seed": 78, "role": "dark", "use": "dark grass blade clumps near the ground"},
     "strip/dome_glow": {"recipe": "dome_glow", "kind": "strip", "size": 256, "seed": 79, "role": "core", "use": "glow for mesh/dome (u around, v top to rim)"}

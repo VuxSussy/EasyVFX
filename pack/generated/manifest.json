@@ -147,7 +147,7 @@
       "grid": 1,
       "frames": 1,
       "role": "base",
-      "upload": true,
+      "upload": false,
       "rgb": "white",
       "sha256": "284479f9420da4ec60713b12c96075b0490e1d860249faa8cdefba1d67e2b7e8",
       "use": "one cel petal for mesh/lotus"

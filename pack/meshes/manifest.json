@@ -70,8 +70,8 @@
         1.0
       ],
       "sha256": "1cb4146b7eb789a6c0111a6501d2bf76223a398b0237240c6723bc7d9ff0b84b",
-      "upload": true,
-      "use": "a lotus crown of two petal rings, one petal texture for all"
+      "upload": false,
+      "use": "a lotus crown for the Bloom Strike study; learning only, not uploaded"
     },
     "mesh_sphere": {
       "id": "mesh/sphere",

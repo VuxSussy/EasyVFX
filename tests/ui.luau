@@ -264,7 +264,7 @@ print("== Library: categories, search, every card")
 -- presets that need a texture not uploaded yet (the v4 hero set) stay hidden
 local readyCount = 0
 for _, preset in Presets.List do
-	if (preset :: any).needs == nil then
+	if (preset :: any).needs == nil and not (preset :: any).study then
 		readyCount += 1
 	end
 end
@@ -272,6 +272,12 @@ local cards = findAll(app.grid, function(d)
 	return d:IsA("TextButton")
 end)
 check(#cards == readyCount, ("all %d cards shown (got %d)"):format(readyCount, #cards))
+local studies = 0
+for _, preset in Presets.List do
+	if (preset :: any).study then
+		studies += 1
+	end
+end
 run("v4 hero cards wait for their textures", function()
 	local saved = packAssets
 	packAssets = table.clone(H.require("Shared/DefaultAssets"))
@@ -279,7 +285,7 @@ run("v4 hero cards wait for their textures", function()
 	app:renderCards()
 	check(#findAll(app.grid, function(d)
 		return d:IsA("TextButton")
-	end) == #Presets.List, "with v4 IDs every card shows")
+	end) == #Presets.List - studies, "with v4 IDs every card shows but the studies")
 	packAssets = saved
 	app:renderCards()
 	check(#findAll(app.grid, function(d)

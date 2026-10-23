@@ -15,6 +15,11 @@ local Builder = {}
 
 Builder.TAG = "EasyVFX"
 Builder.LAYER_ATTR = "VFX_Layer"
+
+-- Studio previews of assets that aren't uploaded yet: Content (an EditableMesh or an
+-- EditableImage) by asset key, used only where an uploaded ID is missing. Set by the
+-- preview script of tools/meshgen; empty in the plugin and in games.
+Builder.previewContent = {} :: { [string]: any }
 Builder.MAX_RATE = 400
 
 export type Params = {
@@ -356,6 +361,13 @@ LayerBuilders.particles = function(ctx, key, layer)
 		packFlipbook = false
 	end
 	e.Texture = texture or Presets.Textures.Glow
+	local preview = layer.pack and not ctx.assets[layer.pack] and Builder.previewContent[layer.pack]
+	if preview then
+		-- a Studio preview of a texture not uploaded yet (see Builder.previewContent)
+		pcall(function()
+			(e :: any).TextureContent = preview
+		end)
+	end
 	e.FlipbookLayout = if packFlipbook
 		then Enum.ParticleFlipbookLayout.Grid4x4
 		else enumItem(Enum.ParticleFlipbookLayout, layer.flipbook, Enum.ParticleFlipbookLayout.None) :: any
@@ -536,11 +548,6 @@ end
 -- colour map (docs/meshgen.md), so the builder bakes one MeshPart per texture frame,
 -- each with its own SurfaceAppearance, under a hidden lead part. The runtime shows one
 -- frame at a time. A script can't set MeshId, so the mesh comes from AssetService.
--- Studio previews of assets that aren't uploaded yet: Content (an EditableMesh or an
--- EditableImage) by asset key, used only where an uploaded ID is missing. Set by the
--- preview script of tools/meshgen; empty in the plugin and in games.
-Builder.previewContent = {} :: { [string]: any }
-
 local function shellFrame(base: MeshPart, texture: string, index: number, preview: any?): MeshPart
 	local frame = base:Clone()
 	-- a frame belongs to its lead part, not to a layer of its own
@@ -776,7 +783,9 @@ function Builder.apply(root: BasePart, params: Params, assets: Assets?)
 	local custom = (preset :: any).custom
 	root:SetAttribute("VFX_CustomDef", if custom then Custom.encode(custom) else nil)
 	for i, layer in preset.layers do
-		local skip = (layer.hd and not ctx.hd) or (layer.basic and ctx.hd) or (layer.pack and not ctx.assets[layer.pack])
+		local skip = (layer.hd and not ctx.hd)
+			or (layer.basic and ctx.hd)
+			or (layer.pack and not ctx.assets[layer.pack] and not Builder.previewContent[layer.pack])
 		if skip then
 			continue
 		end

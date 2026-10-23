@@ -211,3 +211,46 @@ def ab_data(folder):
     with open(path, "w", encoding="utf-8") as f:
         json.dump(out, f)
     print(f"wrote {os.path.relpath(path)} ({os.path.getsize(path) // 1024} KB)")
+
+
+def preset_data(preset, folder):
+    """Everything a preset needs that isn't uploaded, for a Studio look through
+    Builder.previewContent: each texture as raw RGBA (<name>.rgba, one request each so no
+    response is huge) and each mesh as JSON, plus an index.json listing them."""
+    import json
+    import re
+
+    os.makedirs(folder, exist_ok=True)
+    src = open(os.path.join(ROOT, "src", "Plugin", "Shared", "Presets.luau"), encoding="utf-8").read()
+    start = src.index(f'id = "{preset}"')
+    body = src[start : src.index("\n\t},\n", start)]
+    keys = set(re.findall(r'v4\("([a-z0-9_]+)"', body)) | set(re.findall(r'pack = "([a-z0-9_]+)"', body))
+    keys |= set(re.findall(r'frames = \{ "([a-z0-9_]+)" \}', body))
+    meshes = set(re.findall(r'mesh = "([a-z0-9_]+)"', body)) | set(re.findall(r'heroShell\("([a-z0-9_]+)"', body))
+    if "heroShell(" in body:
+        keys |= {f"seq_slash_ribbon_{k:02d}" for k in range(0, 16, 2)}
+    if "heroShards(" in body:
+        keys.add("shape_aniso_shard")
+    if "heroEmbers(" in body:
+        keys.add("sheet_embers")
+    if "heroFlash(" in body:
+        keys |= {"shape_core_flash", "shape_cross_flare", "shape_godray_fan", "art_dark_halo"}
+    index = {"images": {}, "meshes": {}}
+    for k in sorted(keys):
+        path = os.path.join(GEN, k + ".png")
+        if not os.path.exists(path):
+            continue  # an uploaded pack texture: the builder already has its ID
+        img = Image.open(path).convert("RGBA")
+        if max(img.size) > 512:
+            img = img.resize((img.width // 2, img.height // 2), Image.LANCZOS)
+        with open(os.path.join(folder, k + ".rgba"), "wb") as f:
+            f.write(img.tobytes())
+        index["images"][k] = [img.width, img.height]
+    for m in sorted(meshes):
+        v, t, f_ = _mesh(m)
+        with open(os.path.join(folder, m + ".json"), "w", encoding="utf-8") as f:
+            json.dump({"v": v, "t": t, "f": f_}, f)
+        index["meshes"][m] = True
+    with open(os.path.join(folder, "index.json"), "w", encoding="utf-8") as f:
+        json.dump(index, f)
+    print(f"{preset}: {len(index['images'])} textures, {len(index['meshes'])} meshes -> {os.path.relpath(folder)}")

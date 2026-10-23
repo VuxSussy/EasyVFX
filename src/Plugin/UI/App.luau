@@ -1122,7 +1122,8 @@ function App:renderCards()
 		for i, preset in Presets.List do
 			local p = preset :: any
 			local styleOk = self.state.style == "all" or p.style == self.state.style
-			local ready = p.needs == nil or (assets :: any)[p.needs] ~= nil
+			-- studies (Bloom Strike) are for learning; the library never lists them
+			local ready = not p.study and (p.needs == nil or (assets :: any)[p.needs] ~= nil)
 			if p.category == cat.id and styleOk and ready and matches(p, self.state.search) then
 				table.insert(list, { preset = p, order = i })
 			end

@@ -2489,14 +2489,17 @@ Presets.List = ({
 			{ type = "light", brightness = 3, range = 14, color = "p", flash = 0.15 },
 		},
 	},
-	-- Bloom Strike: Lotus's layering (docs/refs/lotus-layers.md) on generated art. Every
+	-- Bloom Strike (study only): Lotus's layering (docs/refs/lotus-layers.md) on generated art. Every
 	-- beat stacks ground, back volume, main shape, line work and dust; the two flashes are
 	-- 2 frames; one palette per beat.
 	{
 		id = "bloom_strike",
+		-- a study of Lotus's layering (docs/refs/lotus-layers.md), for learning only: never
+		-- listed in the plugin, never exported to SE370, its art never uploaded
+		study = true,
 		needs = "shape_core_flash",
 		category = "impact",
-		name = { vi = "Liên hoa trảm (v4)", en = "Bloom Strike (v4)" },
+		name = { vi = "Liên hoa trảm (nghiên cứu)", en = "Bloom Strike (study)" },
 		desc = { vi = "Chém, chớp sao, quả cầu, ấn hoa, rồi hoa sen nở", en = "Slash, star flare, sphere, flower sigil, then a lotus blooms" },
 		kind = "burst",
 		placement = "air",
