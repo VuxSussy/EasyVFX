@@ -4864,6 +4864,119 @@ local function weight(heavy: number, at: Vector3?, delay: number?): { Layer }
 	}
 end
 
+-- Hero set (docs/plan-real-vfx.md, step 3) --------------------------------------
+-- Library v4 layers (tools/texgen, pack/generated) in Zenless Zone Zero's grammar: a
+-- 2-frame white core, a burst that peaks by frame 4, a short sparse tail. Emitters are
+-- named by role and grouped by beat (reference H). They sit beside the originals, which
+-- stay as they are, and `needs` hides them in the plugin until v4 has uploaded IDs.
+local function v4(pack: string, beat: string, at: any, fields: { [string]: any }): Layer
+	local layer: Layer = {
+		type = "particles",
+		hd = true,
+		pack = pack,
+		group = beat,
+		at = at,
+		burst = 1,
+		speed = { 0, 0 },
+		rotation = { 0, 360 },
+		color = { "w" },
+		lightEmission = 1,
+		lightInfluence = 0,
+		brightness = 2,
+	}
+	for k, v in fields do
+		layer[k] = v
+	end
+	return layer
+end
+
+-- the flash beat: a 2-frame core, a cross flare and god rays over a dark halo
+local function heroFlash(at: any, size: number, delay: number?): { Layer }
+	return {
+		v4("shape_core_flash", "Hit", at, {
+			name = "Core",
+			delay = delay,
+			size = { { 0, size * 0.85 }, { 1, size * 0.5 } },
+			transparency = { { 0, 0 }, { 0.6, 0 }, { 1, 1 } },
+			lifetime = { 0.067, 0.067 },
+			brightness = 4,
+			zOffset = 3,
+		}),
+		v4("shape_cross_flare", "Hit", at, {
+			name = "Flare",
+			delay = delay,
+			size = { { 0, size * 1.3 }, { 1, size * 1.6 } },
+			transparency = { { 0, 0 }, { 0.5, 0.1 }, { 1, 1 } },
+			lifetime = { 0.067, 0.067 },
+			rotation = { -8, 8 },
+			brightness = 3,
+			zOffset = 2.5,
+		}),
+		v4("shape_godray_fan", "Hit", at, {
+			name = "Rays",
+			delay = delay,
+			size = { { 0, size * 0.8 }, { 1, size * 1.4 } },
+			transparency = { { 0, 0 }, { 1, 1 } },
+			lifetime = { 0.067, 0.067 },
+			color = { "w", "p" },
+			zOffset = 2,
+		}),
+		v4("art_dark_halo", "Hit", at, {
+			name = "Halo",
+			delay = delay,
+			size = { { 0, size * 0.9 }, { 1, size * 1.4 } },
+			transparency = { { 0, 0.15 }, { 1, 1 } },
+			lifetime = { 0.15, 0.15 },
+			color = { "k" },
+			lightEmission = 0,
+			brightness = 1,
+			zOffset = -2,
+		}),
+	}
+end
+
+-- shards that explode and stop (high drag), with a per-keypoint size envelope
+local function heroShards(at: any, count: number, speed: number, fields: { [string]: any }?): Layer
+	local layer = v4("shape_aniso_shard", "Burst", at, {
+		name = "Shards",
+		burst = count,
+		orientation = "VelocityParallel",
+		speed = { speed * 0.55, speed },
+		spread = { 180, 180 },
+		drag = 9,
+		size = { { 0, 1.1, 0.35 }, { 0.6, 0.7, 0.2 }, { 1, 0 } },
+		squash = { { 0, -0.6 }, { 1, -0.2 } },
+		lifetime = { 0.22, 0.38 },
+		color = { "w", "p" },
+		zOffset = 1,
+	})
+	if fields then
+		for k, v in fields do
+			layer[k] = v
+		end
+	end
+	return layer
+end
+
+-- the tail: a few slow embers
+local function heroEmbers(at: any, count: number, delay: number?): Layer
+	return v4("sheet_embers", "Tail", at, {
+		name = "Embers",
+		delay = delay,
+		burst = count,
+		flipbook = "Grid4x4",
+		flipMode = "Loop",
+		flipRandom = true,
+		speed = { 3, 8 },
+		spread = { 180, 180 },
+		drag = 2.5,
+		accel = Vector3.new(0, 3, 0),
+		size = { { 0, 0.45, 0.15 }, { 1, 0 } },
+		lifetime = { 0.35, 0.5 },
+		color = { "w", "p" },
+	})
+end
+
 -- extra layers per preset (appended after the list below)
 local IMPACT_KIT: { [string]: { Layer } } = {}
 
@@ -6636,6 +6749,232 @@ Presets.List = ({
 			}),
 		},
 	},
+	-- Hero set: the v4 rebuilds, beside the originals above
+	{
+		id = "impact_v4",
+		needs = "shape_core_flash",
+		category = "impact",
+		name = { vi = "Va chạm (v4)", en = "Hit Impact (v4)" },
+		desc = { vi = "Bản dựng lại theo ngữ pháp ZZZ, thư viện v4", en = "Rebuilt in the ZZZ grammar on library v4" },
+		kind = "burst",
+		placement = "air",
+		defaults = { color1 = rgb(255, 235, 120), color2 = rgb(255, 140, 40), trigger = "Loop", interval = 1.2 },
+		layers = {
+			-- Hit: 2 frames
+			heroFlash("center", 7),
+			-- Burst: peaks by frame 4
+			v4("flip_burst_dissolve", "Burst", "center", {
+				name = "Base",
+				delay = 0.02,
+				flipbook = "Grid4x4",
+				size = { { 0, 7 }, { 1, 12 } },
+				lifetime = { 0.3, 0.3 },
+				color = { "p", "s" },
+				brightness = 1.2,
+				zOffset = 1,
+			}),
+			v4("flip_shock_ring", "Burst", "center", {
+				name = "Ring",
+				delay = 0.02,
+				tilt = Vector3.new(90, 0, 0),
+				flipbook = "Grid4x4",
+				orientation = "VelocityPerpendicular",
+				direction = "Top",
+				speed = { 0.01, 0.01 },
+				size = { { 0, 5 }, { 1, 20 } },
+				lifetime = { 0.32, 0.32 },
+				color = { "p", "s" },
+			}),
+			heroShards("center", 12, 75, { delay = 0.02 }),
+			heroShards("center", 6, 50, {
+				name = "LineBurst",
+				delay = 0.02,
+				direction = "Right",
+				speed = { -50, 50 },
+				spread = { 12, 12 },
+				shape = "Box",
+				shapeInOut = "InAndOut",
+			}),
+			v4("shape_ink_stroke", "Burst", "center", {
+				name = "Ink",
+				delay = 0.05,
+				size = { { 0, 8 }, { 1, 9 } },
+				transparency = { { 0, 0 }, { 0.6, 0.1 }, { 1, 1 } },
+				lifetime = { 0.13, 0.13 },
+				rotation = { -35, -20 },
+				color = { "k" },
+				lightEmission = 0,
+				brightness = 1,
+				zOffset = 1.5,
+			}),
+			-- Tail: sparse and calm
+			heroEmbers("center", 8, 0.08),
+			{ type = "light", brightness = 4, range = 14, color = "p", flash = 0.12 },
+		},
+	},
+	{
+		id = "ground_slam_v4",
+		needs = "shape_core_flash",
+		category = "impact",
+		name = { vi = "Đập đất (v4)", en = "Ground Slam (v4)" },
+		desc = { vi = "Bản dựng lại theo ngữ pháp ZZZ, thư viện v4", en = "Rebuilt in the ZZZ grammar on library v4" },
+		kind = "burst",
+		placement = "ground",
+		defaults = { color1 = rgb(255, 200, 60), color2 = rgb(255, 90, 20), trigger = "Loop", interval = 3.5 },
+		layers = {
+			-- Hit: 2 frames at the ground
+			heroFlash(Vector3.new(0, -1.2, 0), 8),
+			-- Burst: the ground answers (floor streaks, a ring, a dust ring, rocks, shards)
+			v4("art_floor_streaks", "Burst", Vector3.new(0, -1.9, 0), {
+				name = "Floor",
+				orientation = "VelocityPerpendicular",
+				direction = "Top",
+				speed = { 0.01, 0.01 },
+				size = { { 0, 15 }, { 0.12, 19 }, { 1, 19 } },
+				transparency = { { 0, 0.1 }, { 0.3, 0.45 }, { 1, 1 } },
+				lifetime = { 0.5, 0.5 },
+				color = { "p", "s" },
+				brightness = 0.8,
+			}),
+			v4("flip_shock_ring", "Burst", Vector3.new(0, -1.8, 0), {
+				name = "Ring",
+				delay = 0.02,
+				flipbook = "Grid4x4",
+				orientation = "VelocityPerpendicular",
+				direction = "Top",
+				speed = { 0.01, 0.01 },
+				size = { { 0, 8 }, { 1, 36 } },
+				lifetime = { 0.32, 0.32 },
+				color = { "p", "s" },
+			}),
+			v4("flip_dust_ring", "Burst", Vector3.new(0, -1.85, 0), {
+				name = "DustRing",
+				delay = 0.03,
+				flipbook = "Grid4x4",
+				orientation = "VelocityPerpendicular",
+				direction = "Top",
+				speed = { 0.01, 0.01 },
+				size = { { 0, 8 }, { 1, 21 } },
+				transparency = { { 0, 0.35 }, { 1, 1 } },
+				lifetime = { 0.5, 0.5 },
+				color = { "g" },
+				lightEmission = 0,
+				lightInfluence = 1,
+				brightness = 1,
+			}),
+			v4("sheet_rock_chunks", "Burst", Vector3.new(0, -1.5, 0), {
+				name = "Rocks",
+				burst = 12,
+				flipbook = "Grid4x4",
+				flipMode = "Loop",
+				flipRandom = true,
+				direction = "Top",
+				speed = { 26, 40 },
+				spread = { 40, 40 },
+				accel = Vector3.new(0, -80, 0),
+				size = { { 0, 1.1, 0.35 }, { 1, 0.85 } },
+				transparency = { { 0, 0 }, { 0.85, 0 }, { 1, 1 } },
+				lifetime = { 0.5, 0.65 },
+				rotSpeed = { -400, 400 },
+				color = { "d" },
+				lightEmission = 0,
+				lightInfluence = 1,
+				brightness = 1,
+			}),
+			heroShards(Vector3.new(0, -1.3, 0), 10, 80, { direction = "Top", spread = { 35, 35 } }),
+			v4("flip_smoke_puff", "Burst", Vector3.new(0, -1.6, 0), {
+				name = "Volume",
+				delay = 0.04,
+				burst = 6,
+				flipbook = "Grid4x4",
+				direction = "Top",
+				speed = { 8, 13 },
+				spread = { 85, 85 },
+				drag = 5,
+				size = { { 0, 2.5, 0.5 }, { 1, 5 } },
+				lifetime = { 0.5, 0.7 },
+				color = { "g" },
+				lightEmission = 0,
+				lightInfluence = 1,
+				brightness = 1,
+			}),
+			-- Tail
+			heroEmbers(Vector3.new(0, -1, 0), 10, 0.1),
+			{ type = "shape", kind = "Shake", attrs = { Magnitude = 1.6, Duration = 0.45, Roughness = 10 } },
+			{ type = "light", brightness = 3, range = 18, color = "p", flash = 0.1 },
+		},
+	},
+	{
+		id = "slash_v4",
+		needs = "shape_core_flash",
+		category = "slash",
+		name = { vi = "Chém lưỡi liềm (v4)", en = "Crescent Slash (v4)" },
+		desc = { vi = "Bản dựng lại theo ngữ pháp ZZZ, thư viện v4", en = "Rebuilt in the ZZZ grammar on library v4" },
+		kind = "burst",
+		placement = "air",
+		defaults = { color1 = rgb(255, 214, 64), color2 = rgb(255, 120, 20), trigger = "Loop", interval = 1.5 },
+		layers = {
+			-- MainSlash: flat additive crescents fired by count (reference H), eroding from the tail
+			v4("flip_slash_erode", "MainSlash", "center", {
+				name = "Slash",
+				flipbook = "Grid4x4",
+				orientation = "VelocityPerpendicular",
+				direction = "Front",
+				speed = { 5, 5 },
+				size = { { 0, 6.5 }, { 1, 7.5 } },
+				lifetime = { 0.28, 0.28 },
+				rotation = { -6, 6 },
+				color = { "p", "s" },
+				brightness = 1.8,
+				zOffset = 1,
+			}),
+			v4("flip_slash_erode", "MainSlash", "center", {
+				name = "SlashEcho",
+				delay = 0.03,
+				burst = 2,
+				flipbook = "Grid4x4",
+				orientation = "VelocityPerpendicular",
+				direction = "Front",
+				speed = { 4, 6 },
+				size = { { 0, 7.5, 0.5 }, { 1, 8.5 } },
+				transparency = { { 0, 0.45 }, { 1, 1 } },
+				lifetime = { 0.32, 0.36 },
+				rotation = { -16, 16 },
+				color = { "p", "s" },
+				brightness = 1.2,
+			}),
+			v4("art_brush_strokes", "MainSlash", "center", {
+				name = "Ink",
+				delay = 0.02,
+				flipbook = "Grid2x2",
+				flipMode = "Loop",
+				flipRandom = true,
+				size = { { 0, 6.5 }, { 1, 7 } },
+				transparency = { { 0, 0.1 }, { 0.5, 0.2 }, { 1, 1 } },
+				lifetime = { 0.14, 0.14 },
+				rotation = { -20, -10 },
+				color = { "k" },
+				lightEmission = 0,
+				brightness = 1,
+				zOffset = 1.5,
+			}),
+			-- Hit: where the blade lands
+			heroFlash(Vector3.new(0, 0, -4.5), 4, 0.06),
+			heroShards(Vector3.new(0, 0, -4.5), 8, 45, { delay = 0.06, group = "Hit" }),
+			heroShards(Vector3.new(0, 0, -4.5), 6, 50, {
+				name = "LineBurst",
+				delay = 0.06,
+				group = "Hit",
+				direction = "Right",
+				speed = { -50, 50 },
+				spread = { 12, 12 },
+				shape = "Box",
+				shapeInOut = "InAndOut",
+			}),
+			heroEmbers(Vector3.new(0, 0, -4.5), 6, 0.1),
+			{ type = "light", brightness = 3, range = 14, color = "p", flash = 0.15 },
+		},
+	},
 } :: any) :: { Preset }
 
 -- Helpers like hdSlash() return several layers; flatten them into the list.
@@ -6679,6 +7018,9 @@ kit("blood_burst", hitSpark("center", 9), weight(0.7))
 kit("soul_release", hitSpark("center", 10, 0.35), weight(0.8, nil, 0.35))
 kit("shockwave", { hardRing(Vector3.new(0, -1.8, 0), 30, 0.28) })
 kit("energy_blast", hitSpark("center", 8))
+kit("impact_v4", weight(0.6))
+kit("ground_slam_v4", weight(1))
+kit("slash_v4", weight(0.3, nil, 0.06))
 
 -- HD strokes for the reference-clip effects
 local BEAM_PACK = { Streak = "stroke_wind", Crackle = "arc_electric" }
@@ -8159,6 +8501,8 @@ function App:renderCards()
 		end
 	end
 	local shown = 0
+	-- presets that `need` a texture not uploaded yet (the v4 hero set) stay hidden
+	local assets = self.api.getAssets() or {}
 	for c, cat in Presets.Categories do
 		if cat.id == "all" or (self.state.category ~= "all" and self.state.category ~= cat.id) then
 			continue
@@ -8167,7 +8511,8 @@ function App:renderCards()
 		for i, preset in Presets.List do
 			local p = preset :: any
 			local styleOk = self.state.style == "all" or p.style == self.state.style
-			if p.category == cat.id and styleOk and matches(p, self.state.search) then
+			local ready = p.needs == nil or (assets :: any)[p.needs] ~= nil
+			if p.category == cat.id and styleOk and ready and matches(p, self.state.search) then
 				table.insert(list, { preset = p, order = i })
 			end
 		end

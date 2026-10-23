@@ -7,6 +7,7 @@
     python tools/evfx sheet [preset ...] [--view close|far]     every preset at its busiest moment
     python tools/evfx diff <preset>[@ref] <preset>[@ref]       strips and numbers, side by side
     python tools/evfx export <preset>                         per-frame census and the audit, as text
+    python tools/evfx phases <preset>[@ref] ...               flash, burst, tail, white core, hues (plan §4)
     python tools/evfx audit [preset ...] [--check | --update] [--no-scores]
     python tools/evfx selftest                                planted bad cases must fail
 
@@ -226,6 +227,26 @@ def cmd_export(args):
     print(base + ".txt")
 
 
+def _bar(v, top, width=24):
+    n = int(round(width * v / top)) if top > 0 else 0
+    return "#" * n + "." * (width - n)
+
+
+def cmd_phases(args):
+    for spec in args.presets:
+        timeline = _load(spec, args.mode, args.fresh)
+        summary, rows = measure.phases(timeline)
+        print(f"{spec}: flash {summary['flash_frames']} frames (target 1-2), burst peak frame {summary['burst_peak_frame']} "
+              f"(by 4), tail ends {summary['tail_end']:.2f}s (hit <= 0.6), core white {summary['core_white']:.2f} "
+              f"(>= 0.85), hues {summary['hues']} (<= 3), body buried at most {summary['buried_peak']:.2f} (<= 0.6)")
+        if args.frames:
+            top = max(r["coverage"] for r in rows) or 1
+            topl = max(r["lum"] for r in rows) or 1
+            print("      t  coverage                  brightness                buried")
+            for r in rows:
+                print(f"  {r['t']:5.2f}  {_bar(r['coverage'], top)}  {_bar(r['lum'], topl)}  {r['buried']:.2f}")
+
+
 def _compare(old, new):
     """Gates that passed in the baseline and fail now, and score changes."""
     worse, better = [], []
@@ -327,6 +348,11 @@ def main():
     p = sub.add_parser(parents=[common], name="export")
     p.add_argument("preset")
     p.set_defaults(run=cmd_export)
+
+    p = sub.add_parser(parents=[common], name="phases")
+    p.add_argument("presets", nargs="+")
+    p.add_argument("--frames", action="store_true", help="print the per-frame curve")
+    p.set_defaults(run=cmd_phases)
 
     p = sub.add_parser(parents=[common], name="audit")
     p.add_argument("presets", nargs="*")

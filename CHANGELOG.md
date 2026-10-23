@@ -4,6 +4,18 @@ All notable changes to EasyVFX are listed here. Versions follow [Semantic Versio
 
 ## [Unreleased]
 
+### Hero set, first pass (v4)
+- `impact_v4`, `ground_slam_v4` and `slash_v4` rebuild Hit Impact, Ground Slam and Crescent Slash on library v4 in
+  Zenless Zone Zero's grammar: a 2-frame white core with a cross flare, god rays and a dark halo; a burst that peaks by
+  frame 4; shards with high drag and a two-way line burst; an ink accent; a few slow embers. Emitters are named by role
+  and grouped by beat. The originals are unchanged, so both versions can be compared side by side.
+- Ground Slam v4 has no plain blocks and lasts 0.57 s instead of 3.23 s, and both of the original's failing gates
+  pass. The three v4 presets use no beams (56, 88 and 68 before).
+- A preset's `needs` names a texture it can't do without; the plugin hides the preset until that texture has an
+  uploaded ID, so the hero set stays out of the library until library v4 is uploaded.
+- `evfx phases` reads flash, burst, tail, white core, hues and body coverage frame by frame.
+- `flip/shock_ring`'s trail is thinner, so a flat ring reads hollow from early on.
+
 ### Texture generator and library v4 (`tools/texgen`)
 - `tools/texgen` draws VFX textures in Python (numpy and Pillow, no Blender): `list`, `build`, `sheet`, `gif`, `check`
   and `selftest`. Each texture is a recipe in `tools/texgen/bank.json`, rendered by id with knobs (size, seed, timing,

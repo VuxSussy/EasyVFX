@@ -162,7 +162,10 @@ for _, preset in Presets.List do
 	end
 	if preset.kind == "burst" then
 		check(okPlay and length > 0, preset.id .. " burst has a length")
-		check(emittedTotal > 0 or peak > 0, preset.id .. " burst produced something")
+		-- a preset that needs v4 is hidden in the plugin until its textures are uploaded
+		if (preset :: any).needs == nil then
+			check(emittedTotal > 0 or peak > 0, preset.id .. " burst produced something")
+		end
 	end
 	check(liveCount() == 0, preset.id .. " cleans up (" .. liveCount() .. " left)")
 	check(#H.warnings == 0, preset.id .. " no runtime warnings: " .. table.concat(H.warnings, " | "))
@@ -190,6 +193,11 @@ do
 		"glow_soft", "ring_wave", "flip_slash", "flip_impact", "flip_smoke", "flip_electric",
 	} do
 		assets[key] = "rbxassetid://" .. (1000 + #key)
+	end
+	-- library v4 (pack/generated) as if uploaded, so the hero set is built in full
+	local serde = require("@lune/serde")
+	for key in serde.decode("json", require("@lune/fs").readFile("pack/generated/manifest.json")).textures do
+		assets[key] = "rbxassetid://" .. (2000 + #key)
 	end
 	check(Builder.isHD(assets), "isHD with pack")
 	check(not Builder.isHD({}), "not HD without pack")
@@ -247,7 +255,9 @@ do
 		local okPlay, len = pcall(EasyVFX.PlayLocal, root)
 		check(okPlay, preset.id .. " HD play: " .. tostring(len))
 		waitForQuiet(400)
-		for _ = 1, 60 do -- let light flashes finish before removing the effect
+		-- let light flashes finish before removing the effect; particle-only presets
+		-- (the v4 hero set) have no pieces for waitForQuiet to wait on
+		for _ = 1, 240 do
 			task.wait()
 		end
 		check(#H.warnings == 0, preset.id .. " HD no warnings: " .. table.concat(H.warnings, " | "))
@@ -602,7 +612,8 @@ do
 		for _, layer in preset.layers do
 			local key = layer.pack or layer.beamPack
 			if key then
-				check(fs.isFile("pack/textures/" .. key .. ".png"), preset.id .. " texture file " .. key)
+				local file = key .. ".png"
+				check(fs.isFile("pack/textures/" .. file) or fs.isFile("pack/generated/" .. file), preset.id .. " texture file " .. key)
 				if not Defaults[key] then
 					pending[key] = true
 				end
@@ -630,6 +641,29 @@ do
 	end
 	local okOld, oldRoot = pcall(Builder.create, Builder.defaultParams("impact"), { cframe = roblox.CFrame.new(), size = roblox.Vector3.new(4, 4, 4), parent = holderP }, older)
 	check(okOld and not hasSpark(oldRoot), "packs without v3 skip the v3 layers")
+	-- the v4 hero set: its layers wait for v4 IDs; the originals don't change
+	local function names(r)
+		local found = {}
+		for _, d in r:GetDescendants() do
+			if d:IsA("ParticleEmitter") then
+				found[d.Name] = true
+			end
+		end
+		return found
+	end
+	local withV4 = table.clone(Defaults)
+	for _, key in { "shape_core_flash", "shape_cross_flare", "shape_godray_fan", "art_dark_halo", "flip_burst_dissolve" } do
+		withV4[key] = "rbxassetid://1"
+	end
+	for _, id in { "impact_v4", "ground_slam_v4", "slash_v4" } do
+		check((Presets.ById[id] :: any).needs == "shape_core_flash", id .. " is hidden until v4 has IDs")
+		local okNow, nowRoot = pcall(Builder.create, Builder.defaultParams(id), { cframe = roblox.CFrame.new(), size = roblox.Vector3.new(4, 4, 4), parent = holderP }, Defaults)
+		local okV4, v4Root = pcall(Builder.create, Builder.defaultParams(id), { cframe = roblox.CFrame.new(), size = roblox.Vector3.new(4, 4, 4), parent = holderP }, withV4)
+		check(okNow and not names(nowRoot).Core, id .. " skips its v4 layers without IDs")
+		check(okV4 and names(v4Root).Core, id .. " builds its v4 core with IDs")
+	end
+	local okImp, impRoot = pcall(Builder.create, Builder.defaultParams("impact"), { cframe = roblox.CFrame.new(), size = roblox.Vector3.new(4, 4, 4), parent = holderP }, withV4)
+	check(okImp and names(impRoot).HitStarHD and not names(impRoot).Core, "the original impact is unchanged by v4 IDs")
 	holderP:Destroy()
 	local list = {}
 	for k in pending do
