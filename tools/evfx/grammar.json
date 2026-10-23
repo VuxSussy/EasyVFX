@@ -1,0 +1,84 @@
+{
+ "_about": "The VFX grammar (tools/evfx/grammar.py, `evfx grammar`, docs/vfx-grammar.md). Roles are plan §4a's (core, glint, base, volume, dark) plus an additive glow, with its sparks split in three (shards: fast, then stopped; dust: small and calm; debris: heavy, falling) and the Lotus ground layer. Per role: its job, the range each measure should sit in ([low, high]), where the ranges came from, and `open`: the middle 70% of what openly published Roblox effects do (`evfx study`). Sizes and reach are in bodies (a character is 5 studs). Ranges from Phát's picks will win over the rest.",
+ "roles": {
+  "core": {
+   "job": "the white-hot centre of the hit, on for 2 to 6 frames, on top",
+   "ranges": {"life": [0.03, 0.1], "count": [1, 2], "size": [0.4, 1.6], "reach": [0, 0.1], "light": [1, 1]},
+   "source": "life from Lotus, Frigid (2-frame flashes) and Genshin (2-3 frame peaks); open effects hold their glows 0.2-0.9 s, which reads as a glow, not a core",
+   "open": {"n": 4, "life": [0.107, 0.786], "vary": [1.0, 1.33], "reach": [0.0, 0.735], "spread": [0.0, 360.0], "size": [0.276, 1.435], "fade": [0.45, 1.0], "solid": [0.966, 1.0], "light": [0.15, 0.617]}
+  },
+  "glint": {
+   "job": "a crisp flare, star or ray fan on the hit, or a telegraph before it",
+   "ranges": {"life": [0.03, 0.2], "count": [1, 3], "size": [0.5, 2.5], "reach": [0, 0.1], "light": [0.5, 1]},
+   "source": "plan §4a and the references; open star sprites linger 0.5-1.5 s and spread wide, which is the dust role here",
+   "open": {"n": 10, "life": [0.506, 1.487], "vary": [1.594, 4.752], "stop": [0.277, 0.475], "reach": [0.28, 6.326], "spread": [180.0, 360.0], "size": [0.101, 2.053], "fade": [0.35, 1.0], "solid": [0.604, 1.0], "light": [0.15, 1.0]}
+  },
+  "base": {
+   "job": "the one readable silhouette of the beat: a flipbook, a ring, a shell",
+   "ranges": {"count": [1, 4], "size": [1.0, 4.0], "life": [0.15, 2.0]},
+   "source": "open rings live 0.2-0.5 s; plan §4a",
+   "open": {"n": 7, "life": [0.195, 0.525], "vary": [1.0, 1.703], "reach": [0.001, 1.92], "spread": [0.0, 117.0], "size": [0.01, 3.659], "grow": [0.45, 1.0], "fade": [0.855, 1.0], "solid": [0.994, 1.0], "light": [0.0, 1.0]}
+  },
+  "volume": {
+   "job": "fullness behind the base: smoke, glow, a wider spread",
+   "ranges": {"count": [1, 8], "size": [0.3, 1.5], "life": [0.3, 3.5], "solid": [0.2, 0.8], "light": [0, 0.3], "vary": [1.2, 6]},
+   "source": "open smoke: 0.2-3.5 s, LightEmission 0-0.16, lifetimes vary up to 6x",
+   "open": {"n": 9, "life": [0.21, 3.5], "vary": [1.0, 6.0], "stop": [0.195, 0.195], "reach": [0.124, 7.259], "spread": [30.0, 360.0], "size": [0.139, 0.779], "grow": [0.992, 1.32], "fade": [0.0, 0.5], "solid": [0.551, 1.0], "light": [0.0, 0.16]}
+  },
+  "glow": {
+   "job": "an additive soft disc around the core or behind a shape: light, not mass",
+   "ranges": {"count": [1, 8], "size": [0.6, 3.0], "life": [0.06, 1.0], "light": [1, 1], "solid": [0.1, 0.8]},
+   "source": "Lotus's violet bloom and bokeh; open glows: LightEmission 1, 0.2-0.9 s, large",
+   "open": {"n": 3, "life": [0.2, 1.594], "vary": [1.0, 4.5], "reach": [0.0, 2.321], "spread": [0.0, 252.0], "size": [1.084, 3.43], "fade": [0.0, 0.7], "solid": [0.05, 0.715], "light": [0.405, 1.0]}
+  },
+  "dark": {
+   "job": "value contrast: a dark halo, ink, a shadow behind the bright layers",
+   "ranges": {"count": [1, 3], "size": [0.6, 2.5], "light": [0, 0.2], "solid": [0.3, 0.9]},
+   "source": "Lotus's dark halo; open 'Darkness' layers: 0.75-0.95 bodies, LightEmission under 0.15",
+   "open": {"n": 3, "life": [0.77, 0.944], "vary": [1.0, 1.42], "reach": [0.047, 0.327], "spread": [0.0, 252.0], "size": [0.752, 0.951], "fade": [0.0, 0.0], "solid": [0.335, 0.981], "light": [0.045, 0.15]}
+  },
+  "shards": {
+   "job": "direction and snap: stretched sparks that explode and stop",
+   "ranges": {"count": [6, 24], "size": [0.02, 0.3], "reach": [0.5, 2.5], "stop": [0.1, 0.8], "life": [0.15, 1.0], "light": [0.5, 1], "vary": [1.2, 3]},
+   "source": "plan §4a (8-16 shards, high Drag); open sparks: 0.2-1 s, reach 0.2-2 bodies",
+   "open": {"n": 19, "life": [0.2, 1.05], "vary": [1.0, 20.0], "stop": [0.28, 6.644], "reach": [0.219, 2.0], "spread": [22.0, 30.0], "size": [0.01, 1.007], "grow": [1.0, 1.0], "fade": [0.0, 0.95], "solid": [1.0, 1.0], "light": [0.0, 1.0]}
+  },
+  "dust": {
+   "job": "tiny points over everything for scale and sparkle; calm, lingering",
+   "ranges": {"count": [6, 40], "size": [0.01, 0.15], "life": [0.4, 2.5], "reach": [0.05, 1.0], "vary": [1.5, 4]},
+   "source": "Lotus's gold dust and petals linger; Genshin sparkles vary about 2x; open dots vary 1-4x",
+   "open": {"n": 15, "life": [0.182, 0.75], "vary": [1.0, 4.0], "stop": [0.332, 3.322], "reach": [0.008, 0.693], "spread": [0.0, 171.0], "size": [0.05, 0.633], "grow": [0.0, 3.055], "fade": [0.0, 0.683], "solid": [0.505, 1.0], "light": [0.0, 1.0]}
+  },
+  "debris": {
+   "job": "heavy chunks thrown by the hit: normal blend, gravity, they land",
+   "ranges": {"count": [4, 20], "size": [0.02, 0.3], "reach": [1, 7], "life": [0.3, 2.0], "light": [0, 0.3]},
+   "source": "open debris (ImpactVFX and others): 0.2-2 s, Acceleration about -200, LightEmission 0",
+   "open": {"n": 21, "life": [0.2, 2.0], "vary": [1.0, 3.0], "stop": [0.812, 1.661], "reach": [2.0, 2.0], "spread": [0.0, 30.0], "size": [0.02, 0.075], "grow": [1.0, 1.0], "fade": [0.0, 0.95], "solid": [1.0, 1.0], "light": [0.0, 0.0]}
+  },
+  "ground": {
+   "job": "ties the beat to the floor: rings, decals, dust rings",
+   "ranges": {"size": [1, 8], "grow": [1, 5], "life": [0.3, 2.0]},
+   "source": "Lotus's ground ring and swirl; Frigid's frost sigil",
+   "open": {}
+  }
+ },
+ "names": {"Core": "core", "SparkBall": "core", "Seed": "core", "Flare": "glint", "Rays": "glint", "Star8": "glint", "Cross4": "glint", "Twinkles": "dust", "Base": "base", "Ring": "base", "Crescents": "base", "FlowerSigil": "base", "RingStroke": "base", "Volume": "volume", "Bloom": "glow", "SlashSmoke": "volume", "Bokeh": "glow", "Halo": "dark", "DarkHalo": "dark", "Ink": "dark", "Grass": "dark", "Shards": "shards", "LineBurst": "shards", "MotionStreaks": "shards", "Tendrils": "shards", "BaseSparks": "shards", "Rocks": "debris", "Embers": "dust", "GoldDust": "dust", "Petals": "dust", "OrbitRings": "dust", "Floor": "ground", "DustRing": "ground", "GroundRing": "ground", "GroundSwirl": "ground"},
+ "structure": {
+  "depthOrder": ["dark", "volume", "glow", "base", "debris", "shards", "dust", "glint", "core"],
+  "beatLayers": [3, 6],
+  "_depthOrder": "ZOffset should not decrease along this list (dark lowest, the core on top); ground and shells are not ordered by ZOffset",
+  "_beatLayers": "layers one beat stacks (Lotus: 4 to 9 per beat; a short hit 3 to 6)"
+ },
+ "openSources": [
+  {"source": "Roblox official: Laser Tag tutorial (Roblox/resources)", "url": "https://github.com/Roblox/resources/tree/main/experiences/laser-tag-1A-tutorial/instances/ReplicatedStorage/LaserVFX", "licence": "MIT"},
+  {"source": "Roblox official: Endorsed Weapons Kit (via fork Aerodymier/roblox-endorsed-weapons-fork)", "url": "https://github.com/Aerodymier/roblox-endorsed-weapons-fork/tree/HEAD/src", "licence": "Roblox free model; fork has no licence file"},
+  {"source": "Roblox official: In-game Avatar Editor PFX (Roblox/avatar)", "url": "https://github.com/Roblox/avatar/tree/HEAD/Legacy/InGameAvatarEditor/src/ServerScriptService/AvatarEditorInGameSetup/AvatarEditorInGame/Assets", "licence": "Roblox Limited Use License"},
+  {"source": "ImpactVFX V1.0.0 (CCTVStudios)", "url": "https://devforum.roblox.com/t/impactvfx-v100/3091746", "licence": "DevForum community resource, 'you can use these'; no formal licence"},
+  {"source": "Free Firework + Achievement VFX System (guestw3334)", "url": "https://devforum.roblox.com/t/free-firework-achievement-vfx-system/4769438", "licence": "'Free to use, free to grab, open-source'; credit not required"},
+  {"source": "Eternal Empire game assets (evilbocchi)", "url": "https://github.com/evilbocchi/eternal-empire/tree/HEAD/gameassets", "licence": "CC BY-NC 4.0"},
+  {"source": "Bezier Debris 1.0 (UnseenFilm)", "url": "https://devforum.roblox.com/t/bezier-debris-10/4755754", "licence": "DevForum community resource; no formal licence"},
+  {"source": "'Punch' Rock Module inspired by TSB (Maplestorm_0)", "url": "https://devforum.roblox.com/t/punch-rock-module-inspired-by-tsb/3171422", "licence": "DevForum community resource; no formal licence"},
+  {"source": "Lightning Beams v1.1 (Quasiduck)", "url": "https://devforum.roblox.com/t/effect-v11-lightning-beams-seamless-smooth-and-procedurally-animated/843534", "licence": "DevForum community resource; no formal licence"},
+  {"source": "Super Nostalgia Zone classic explosion (MaximumADHD)", "url": "https://github.com/MaximumADHD/Super-Nostalgia-Zone/blob/HEAD/Client/Explosions/Particle.rbxmx", "licence": "MPL-2.0"}
+ ]
+}

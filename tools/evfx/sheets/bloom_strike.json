@@ -14,7 +14,7 @@
   {"name": "Seed", "from": 78, "to": 90, "shape": "gold seed", "palette": ["gold"],
    "layers": {"main": ["Seed", "RingStroke"]}, "ref": "lotus:seed"},
   {"name": "Dome", "from": 90, "to": 92, "flash": true, "shape": "white dome", "palette": [],
-   "layers": {"main": ["mesh_dome"]}, "ref": "lotus:dome"},
+   "layers": {"main": ["mesh_dome"]}, "roles": {"mesh_dome": "core"}, "ref": "lotus:dome"},
   {"name": "Bloom", "from": 92, "to": 162, "shape": "lotus in a pillar", "palette": ["magenta", "gold", "pink"],
    "layers": {"ground": ["GroundRing"], "back": ["Grass"], "main": ["mesh_lotus", "mesh_cylinder"], "line": ["FringeArc", "BaseSparks"], "dust": ["Petals", "GoldDust"]}, "ref": "lotus:lotus"},
   {"name": "Tail", "from": 160, "to": 240, "shape": "gold dust", "palette": ["gold", "pink", "green"],

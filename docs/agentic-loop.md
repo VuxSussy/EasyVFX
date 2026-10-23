@@ -128,6 +128,11 @@ from the clip in `.cache/refs` (never committed). Only the cut and the numbers a
 `tools/evfx/references/`. Each stat is a shape rather than a level, so a dark stage and our grey render compare:
 frames to the peak, rise, half-life, tenth-life, frames the flash holds, hue count and calm.
 
+## Grammar
+
+`python3 tools/evfx grammar <preset>` checks each layer's numbers against its role's ranges: lifetime, drag, reach,
+size, blend, depth. [The VFX grammar](vfx-grammar.md) has the roles, the measures and where the ranges come from.
+
 ## What it can't see yet
 
 - **Meshes** from `pack/meshes` (tools/meshgen) are drawn with their texture; other MeshParts are still drawn as boxes.

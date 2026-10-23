@@ -4,6 +4,15 @@ All notable changes to EasyVFX are listed here. Versions follow [Semantic Versio
 
 ## [Unreleased]
 
+### The VFX grammar
+- `evfx grammar` reads every layer of a played effect as a role (core, glint, glow, base, volume, dark, shards, dust,
+  debris, ground) plus its numbers: count, delay, lifetime and its spread, drag stop, reach, spread, size, growth,
+  fade, opacity, blend and z. Sizes are in character heights. It lists what falls outside the role's ranges
+  (`tools/evfx/grammar.json`, docs/vfx-grammar.md).
+- The ranges come from the references (Lotus, Frigid Rush, a new Genshin study in `docs/refs/genshin-vfx.md`) and
+  from `evfx study`, which reads the emitter numbers of 50 openly published Roblox effects. Only numbers are read; the
+  dataset stays in `.cache`.
+
 ### The beat judge
 - `evfx beats` judges an effect beat by beat against a beat sheet (`tools/evfx/sheets`) and prints what to fix first,
   with frames. It checks the sheet's beats, flashes, palettes and depths and compares each beat with a reference

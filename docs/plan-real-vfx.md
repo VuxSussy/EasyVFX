@@ -384,8 +384,9 @@ Phát uses it on his Mac. What carries over, most valuable first:
 
 **Built (2026-10-23):** `profile` + `critique` and `kit` as `evfx beats` ([the agentic loop](agentic-loop.md#beats)):
 references cut into beats and measured (`evfx ref`), a beat sheet per effect, and a fix-first list that judges each
-beat against its sheet, its reference beat and the SE370 move it plays on, timed by SE370's motion bible. Next on
-this list: `forge` (search the knobs against the judge) and `match` (image embeddings).
+beat against its sheet, its reference beat and the SE370 move it plays on, timed by SE370's motion bible. The layers' own numbers followed as `evfx grammar` ([the VFX grammar](vfx-grammar.md)): roles with ranges from
+the references and from 50 open Roblox effects (`evfx study`). Next on this list: `forge` (search the knobs against
+both judges) and calibration on Phát's picks.
 
 **For SE370's sound:** sounds are still stubs (sound-M4). earshot itself could be the sound side of this pipeline,
 paired with evfx: one cue list, both checked against the same animation markers.
