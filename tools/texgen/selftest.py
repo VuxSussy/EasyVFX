@@ -79,6 +79,10 @@ def planted():
     col[..., 0] = 200
     fails(shape, col, "not white", "coloured RGB")
     ok(checks.check({"kind": "shape", "rgb": "spectrum"}, col) == [], "coloured RGB allowed with rgb: spectrum")
+    grey = good.copy()
+    grey[..., :3] = 180
+    ok(checks.check({"kind": "shape", "rgb": "luma"}, grey) == [], "grey RGB allowed with rgb: luma")
+    fails({"kind": "shape", "rgb": "luma"}, col, "isn't grey", "rgb: luma with coloured RGB")
     edge = good.copy()
     edge[:, 0, 3] = 120
     fails(shape, edge, "border", "sprite touching its border")

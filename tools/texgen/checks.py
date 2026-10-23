@@ -3,7 +3,8 @@
     fails = checks.check(entry, rgba)    # [] when it passes, else one line per failure
 
 - power of two, at most 1024, on both sides;
-- white RGB (shape in alpha), unless the entry allows colour;
+- white RGB (shape in alpha), unless the entry allows colour ("spectrum") or grey detail
+  ("luma", for mesh frames whose alpha must stay near solid);
 - a flipbook or sheet divides by its grid, and a flipbook has grid x grid frames;
 - sprites (each frame of a flipbook or sheet, each shape and decal) fade to zero before
   their border, so nothing clips when the engine scales them;
@@ -53,8 +54,11 @@ def check(entry, rgba):
     if not (_pot(fw) and _pot(fh) and fw <= 1024 and fh <= 1024):
         what = "each frame" if kind == "sequence" else "size"
         fails.append(f"{what} {fw}x{fh}: both sides must be powers of two, at most 1024")
-    if entry.get("rgb") != "spectrum" and (rgba[..., :3] != 255).any():
+    rgb_kind = entry.get("rgb")
+    if rgb_kind not in ("spectrum", "luma") and (rgba[..., :3] != 255).any():
         fails.append("RGB is not white: the shape belongs in alpha")
+    if rgb_kind == "luma" and ((rgba[..., 0] != rgba[..., 1]) | (rgba[..., 1] != rgba[..., 2])).any():
+        fails.append("rgb is luma but the RGB isn't grey (R, G and B must match)")
     if alpha.max() < 0.25:
         fails.append(f"nearly empty: peak alpha {alpha.max():.2f}")
     if grid > 1 and (w % grid or h % grid):

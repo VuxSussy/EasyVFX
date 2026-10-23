@@ -98,11 +98,14 @@ def render(tex_id, seed=None, size=None, **edits):
         rgb, out = out.get("rgb"), out["alpha"]
     if isinstance(out, list):
         frames = len(out)
+        if isinstance(out[0], dict):
+            rgb = np.stack([_atlas([c["rgb"][..., k] for c in out], grid) for k in range(3)], -1)
+            out = [c["alpha"] for c in out]
         out = _atlas(out, grid)
     else:
         frames = 1
     alpha = np.clip(np.asarray(out, np.float32), 0, 1)
-    if rgb is None or e.get("rgb") != "spectrum":
+    if rgb is None or e.get("rgb") not in ("spectrum", "luma"):
         rgb = np.ones(alpha.shape + (3,), np.float32)
     rgba = np.concatenate([np.clip(rgb, 0, 1), alpha[..., None]], -1)
     rgba = np.round(rgba * 255).astype(np.uint8)

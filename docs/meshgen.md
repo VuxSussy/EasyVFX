@@ -92,3 +92,23 @@ session.
 ![start](meshes/studio-play-1-start.jpg)
 ![middle](meshes/studio-play-2-mid.jpg)
 ![end](meshes/studio-play-3-end.jpg)
+
+### The halftone on the yellow shells (2026-10-23, edit mode)
+
+Phát saw a halftone pattern on the yellow slash shells that the blue torus didn't have. An A/B in Studio settled it:
+
+![close: soft and solid both smooth](meshes/studio-close-ab.png)
+![far: columns 1-4 shimmer, column 5 smooth](meshes/studio-aliasing-ab.png)
+
+- **Close up, it's smooth.** The ribbon renders smooth with alpha in `soft` mode (detail in alpha) and in `solid`
+  mode (crisp alpha, detail in grey RGB), at `Transparency` 0.02 and 0.45 alike.
+- **At a distance it aliases.** Both modes shimmer into stripes, with a dotted inner edge. The same texture shrunk
+  to 64 × 16, the size a mipmap would pick there (column 5), is smooth.
+- **So the pattern is minification aliasing.** An `EditableImage` has no mipmaps, so a preview of a fine-striped
+  texture sparkles when it's small on screen. The blue strip's broad gradients barely alias.
+- **Uploaded images get mipmaps,** so the game should look like column 5. That can only be confirmed after an upload.
+- **`Transparency` 0 dithers on purpose.** A `SurfaceAppearance` at 0 is screen-door dithered, which is why the
+  runtime never goes below 0.02.
+
+The ribbon keeps its look (`alpha="soft"`). The `alpha` and `fibres` knobs stay for tuning, and so does the `"rgb":
+"luma"` check for grey mesh frames.

@@ -184,3 +184,30 @@ def play_data(folder):
     with open(path, "w", encoding="utf-8") as f:
         json.dump(out, f)
     print(f"wrote {os.path.relpath(path)} ({os.path.getsize(path) // 1024} KB)")
+
+
+def ab_data(folder):
+    """JSON for a Studio A/B of the slash ribbon's alpha modes: frames 0 and 6 drawn with
+    alpha="soft" (detail in alpha) and alpha="solid" (crisp alpha, detail in grey RGB)."""
+    import json
+    import sys
+
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "texgen"))
+    import bank
+
+    os.makedirs(folder, exist_ok=True)
+    v, t, f_ = _mesh("mesh_crescent_wide")
+    out = {"meshes": {"mesh_crescent_wide": {"v": v, "t": t, "f": f_}}, "images": {}}
+    for mode in ("soft", "solid"):
+        rgba, meta = bank.render("seq/slash_ribbon", alpha=mode)
+        g = meta["grid"]
+        h, w = rgba.shape[0] // g, rgba.shape[1] // g
+        for k in (0, 6):
+            r, c = divmod(k, g)
+            img = Image.fromarray(np.ascontiguousarray(rgba[r * h : (r + 1) * h, c * w : (c + 1) * w]), "RGBA")
+            img = img.resize((256, 64), Image.LANCZOS)
+            out["images"][f"{mode}_{k:02d}"] = {"w": 256, "h": 64, "data": base64.b64encode(img.tobytes()).decode()}
+    path = os.path.join(folder, "ribbon_ab.json")
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(out, f)
+    print(f"wrote {os.path.relpath(path)} ({os.path.getsize(path) // 1024} KB)")
