@@ -5,7 +5,7 @@ import math
 
 import numpy as np
 
-from . import beats, core, measure, refs, render
+from . import beats, core, grammar, measure, refs, render
 
 IDENTITY = [0, 2, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1]
 SEQ1 = [[0, 1, 0], [1, 1, 0]]
@@ -298,6 +298,33 @@ def beat_stats_read_rise_fall_and_flash():
     assert st["peak_at"] == 1 and st["rise"] == 1, st
     assert st["half"] == 4 and st["tenth"] == 6, st
     assert st["flash"] == 2 and st["top"] == ["red"], st
+
+
+# The VFX grammar (tools/evfx/grammar.py) ------------------------------------------
+
+
+@check
+def drag_travel_matches_the_half_life():
+    # Drag 1 halves speed every second: in 1 s a 10 stud/s particle covers 10 / (2 ln 2)
+    assert abs(grammar.travel(10, 1, 1) - 10 / (2 * math.log(2))) < 1e-6
+    assert grammar.travel(10, 0, 0.5) == 5
+    assert abs(grammar.stop_time(1) - math.log(10) / math.log(2)) < 1e-9
+
+
+@check
+def fade_point_reads_half_transparency():
+    assert abs(grammar.fade_point([[0, 0], [1, 1]]) - 0.5) < 1e-9
+    assert grammar.fade_point([[0, 0], [1, 0]]) == 1.0
+    assert grammar.fade_point([[0, 0.6], [1, 1]]) == 0
+
+
+@check
+def a_slow_soft_core_breaks_the_grammar():
+    tl = hit_timeline(life=12)
+    tl["bursts"].append(dict(tl["bursts"][0], name="Ring", lifetime=[0.3, 0.3], size=[[0, 6, 0], [1, 6, 0]], frame=1))
+    rows, _ = grammar.layers(tl)
+    rules = {f["rule"] for f in grammar.judge(rows)}
+    assert "core.life" in rules, rules
 
 
 def run():

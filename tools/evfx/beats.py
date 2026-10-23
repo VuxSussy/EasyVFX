@@ -182,19 +182,19 @@ def judge(spec, timeline, rules=None):
         st = refs.stats(own, a, z, b.get("flash", False))
         b["_stats"] = st
         bwhite = np.array(own["white"])
-        if np.array(own["coverage"])[a : z + 1].max(initial=0) <= rules["alive"]:
-            out.append(_finding(3, a, name, "present", f"nothing on screen in f{a}-{z}", "build the beat or move its layers' Delay into the window"))
-            continue
         firsts = []
         for layer in names:
             row = live.get(layer)
             if row is None:
                 out.append(_finding(2, a, name, "layers", f"layer {layer} is not in the effect", f"add {layer} or fix its name in the sheet"))
-            elif row["last"] < a - rules["onsetTolerance"] or row["first"] > z + rules["onsetTolerance"]:
-                out.append(_finding(2, row["first"], name, "layers", f"{layer} is live f{row['first']}-{row['last']}, outside the beat (f{a}-{z})", f"set {layer}'s Delay to {a / fps:.3f} s"))
+            elif row["last"] < b["from"] - rules["onsetTolerance"] or row["first"] > b["to"] + rules["onsetTolerance"]:
+                out.append(_finding(2, row["first"], name, "layers", f"{layer} is live f{row['first']}-{row['last']}, outside the beat (f{b['from']}-{b['to']})", f"set {layer}'s Delay to {a / fps:.3f} s"))
             elif layer not in listed:
                 firsts.append(row["first"])
         listed.update(names)
+        if np.array(own["coverage"])[a : z + 1].max(initial=0) <= rules["alive"]:
+            out.append(_finding(3, b["from"], name, "present", f"nothing on screen in f{b['from']}-{b['to']}", "build the beat or move its layers' Delay into the window"))
+            continue
         if firsts and abs(min(firsts) - b["from"]) > rules["onsetTolerance"]:
             late = min(firsts) - b["from"]
             out.append(_finding(2, min(firsts), name, "onset", f"starts f{min(firsts)}, {abs(late)} frames {'late' if late > 0 else 'early'} (sheet f{b['from']})", f"shift the beat's Delays by {-late / fps:+.3f} s"))

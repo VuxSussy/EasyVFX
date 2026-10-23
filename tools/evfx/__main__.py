@@ -11,6 +11,9 @@
     python tools/evfx beats [preset ...] [--png]               the beat judge: fix-first list against the beat
                                                               sheet, the references and the move (60 fps)
     python tools/evfx ref <name> [--build]                    a reference's beats and their stats
+    python tools/evfx grammar [preset ...]                     each layer's role and numbers against the
+                                                              VFX grammar (tools/evfx/grammar.json)
+    python tools/evfx study [--write]                          what open Roblox effects do, per role
     python tools/evfx audit [preset ...] [--check | --update] [--no-scores]
     python tools/evfx selftest                                planted bad cases must fail
 
@@ -27,7 +30,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from evfx import beats, core, measure, refs, render  # noqa: E402
+from evfx import beats, core, grammar, measure, refs, render  # noqa: E402
 
 import numpy as np  # noqa: E402
 from PIL import Image, ImageDraw  # noqa: E402
@@ -329,6 +332,34 @@ def cmd_beats(args):
             print(base + ".jpg")
 
 
+def cmd_grammar(args):
+    names = args.presets or beats.sheets()
+    g = grammar.load()
+    for name in names:
+        spec = beats.sheet(name) if name in beats.sheets() else None
+        timeline = core.load(name, args.mode, fresh=args.fresh, fps=60)
+        rows, _ = grammar.layers(timeline, grammar.roles_from_sheet(spec) if spec else None)
+        found = grammar.judge(rows, g, spec)
+        print(f"{name}: {len(rows)} layers, {len(found)} out of the grammar")
+        print(grammar.table(rows, found))
+        for f in found:
+            print(f"  {f['sev']}  {f['layer']:<20} {f['rule']:<14} {f['said']} (want {f['want']})")
+        print()
+
+
+def cmd_study(args):
+    from evfx import study
+
+    g = grammar.load()
+    sp = study.spreads(study.rows())
+    print(study.report(sp, g))
+    if args.write:
+        for name, role in g["roles"].items():
+            role["open"] = sp.get(name, {})
+        grammar.save(g)
+        print(f"open spreads written: {grammar.GRAMMAR}")
+
+
 def cmd_ref(args):
     ref = refs.build(args.name, args.clip) if args.build else refs.load(args.name)
     print(f"{ref['title']} ({ref['tier']}), {ref['source']}")
@@ -450,6 +481,14 @@ def main():
     p.add_argument("presets", nargs="*", help="presets with a sheet in tools/evfx/sheets (all when empty)")
     p.add_argument("--png", action="store_true", help="also draw the beats over the curves, and each beat")
     p.set_defaults(run=cmd_beats)
+
+    p = sub.add_parser(parents=[common], name="grammar")
+    p.add_argument("presets", nargs="*", help="presets (those with a beat sheet when empty)")
+    p.set_defaults(run=cmd_grammar)
+
+    p = sub.add_parser(parents=[common], name="study")
+    p.add_argument("--write", action="store_true", help="store the spreads in grammar.json")
+    p.set_defaults(run=cmd_study)
 
     p = sub.add_parser(parents=[common], name="ref")
     p.add_argument("name")
