@@ -20,6 +20,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 CACHE = os.path.join(ROOT, ".cache", "evfx")
 PACK = os.path.join(ROOT, "pack", "textures")
 GENERATED = os.path.join(ROOT, "pack", "generated")
+CC0 = os.path.join(ROOT, "pack", "cc0")
 MESHES = os.path.join(ROOT, "pack", "meshes")
 
 DIRS = {

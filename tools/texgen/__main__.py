@@ -7,6 +7,7 @@
     python tools/texgen sheet [-o path] [--tint #rrggbb]   the contact sheet (and the strips, tiled twice)
     python tools/texgen gif <id> [--fps 20]           a flipbook or sheet, frame by frame
     python tools/texgen selftest                      the primitives' maths and one planted bad case per rule
+    python tools/texgen cc0 [--dry]                   import the CC0 packs in .cache/cc0 into pack/cc0 (cc0.json)
 
 Ids are <family>/<name> (shape, flip, sheet, strip, art, source); a family name picks all
 of it. numpy and Pillow only (tools/evfx/requirements.txt). docs/texgen.md has the details.
@@ -151,6 +152,16 @@ def cmd_gif(args):
     return 0
 
 
+def cmd_cc0(args):
+    import cc0
+
+    m = cc0.run(dry=args.dry)
+    kinds = {}
+    for e in m["textures"].values():
+        kinds[e["kind"]] = kinds.get(e["kind"], 0) + 1
+    print(f"{len(m['textures'])} CC0 textures {'planned' if args.dry else 'written to pack/cc0'}: {kinds}")
+
+
 def cmd_selftest(args):
     import selftest
 
@@ -186,6 +197,9 @@ def main(argv=None):
     p.add_argument("--tint")
     p.add_argument("-o", "--out")
     p.set_defaults(fn=cmd_gif)
+    p = sub.add_parser("cc0")
+    p.add_argument("--dry", action="store_true", help="list what would be written")
+    p.set_defaults(fn=cmd_cc0)
     p = sub.add_parser("selftest")
     p.set_defaults(fn=cmd_selftest)
     args = ap.parse_args(argv)

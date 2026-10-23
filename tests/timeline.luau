@@ -48,6 +48,13 @@ if mode == "hd" then
 			(assets :: any)[key] = "pack://" .. key
 		end
 	end
+	-- the CC0 packs (tools/texgen/cc0.py), likewise drawn from pack/cc0
+	local cc0 = "pack/cc0/manifest.json"
+	if fs.isFile(cc0) then
+		for key in serde.decode("json", fs.readFile(cc0)).textures do
+			(assets :: any)[key] = "pack://" .. key
+		end
+	end
 	-- the mesh set (tools/meshgen), likewise drawn from pack/meshes
 	local meshes = "pack/meshes/manifest.json"
 	if fs.isFile(meshes) then

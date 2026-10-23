@@ -4,6 +4,12 @@ All notable changes to EasyVFX are listed here. Versions follow [Semantic Versio
 
 ## [Unreleased]
 
+### The CC0 library
+- `pack/cc0`: 327 CC0 textures from Kenney (particles, smoke, light masks, foliage), the Brackeys VFX Bundle (Thomas
+  Iché's flipbooks, CodeManu's hand-drawn sheets) and Picster, imported and normalized by `texgen cc0`
+  (`tools/texgen/cc0.json`). Each one keeps its source, author and licence in `pack/cc0/manifest.json`. Animations are
+  resampled to Roblox's 4, 16 or 64 frames. `evfx` draws them, and nothing is uploaded yet (docs/cc0-library.md).
+
 ### The beam showcase shapes
 - Nine texgen recipes drawn from the shape vocabulary of a paid plugin's palette in Twist VFX's beam tutorial
   (`docs/refs/twist-beam.md`; nothing of theirs is used): `shape/impact_spikes`, `shape/vortex_ring`, `shape/saw_ring`,
