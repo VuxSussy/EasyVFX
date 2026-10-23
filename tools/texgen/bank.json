@@ -49,6 +49,16 @@
     "art/petal_single": {"recipe": "petal_single", "kind": "shape", "size": 256, "seed": 76, "upload": false, "role": "base", "use": "one cel petal for mesh/lotus"},
     "strip/pillar_streaks": {"recipe": "pillar_streaks", "kind": "strip", "size": 512, "seed": 77, "role": "base", "use": "vertical streaks for a pillar shell (u around, v up)"},
     "sheet/grass": {"recipe": "grass", "kind": "sheet", "size": 512, "grid": 4, "seed": 78, "role": "dark", "use": "dark grass blade clumps near the ground"},
-    "strip/dome_glow": {"recipe": "dome_glow", "kind": "strip", "size": 256, "seed": 79, "role": "core", "use": "glow for mesh/dome (u around, v top to rim)"}
+    "strip/dome_glow": {"recipe": "dome_glow", "kind": "strip", "size": 256, "seed": 79, "role": "core", "use": "glow for mesh/dome (u around, v top to rim)"},
+
+    "shape/impact_spikes": {"recipe": "impact_spikes", "kind": "shape", "size": 512, "seed": 81, "role": "core", "use": "radial spike burst around a hollow centre: frame one of a hard hit"},
+    "shape/vortex_ring": {"recipe": "vortex_ring", "kind": "shape", "size": 512, "seed": 82, "role": "base", "use": "spiral vortex ring for a charge or suction (spin with RotSpeed)"},
+    "shape/saw_ring": {"recipe": "saw_ring", "kind": "shape", "size": 512, "seed": 83, "role": "base", "use": "ring of outward shards: a sharp circle impact"},
+    "shape/comic_burst": {"recipe": "comic_burst", "kind": "shape", "size": 512, "seed": 84, "role": "base", "use": "comic starburst splat with an outline (cel hits)"},
+    "shape/halftone_disc": {"recipe": "halftone_disc", "kind": "shape", "size": 512, "seed": 85, "role": "volume", "use": "halftone-dot glow, the printed anime look"},
+    "sheet/star_set": {"recipe": "star_set", "kind": "sheet", "size": 512, "grid": 4, "seed": 86, "role": "core", "use": "star and sparkle variants, one per particle"},
+    "strip/comb_fringe": {"recipe": "comb_fringe", "kind": "strip", "size": 1024, "seed": 87, "role": "sparks", "use": "hanging streak comb that frays a beam's edge (scroll it)"},
+    "strip/helix_strands": {"recipe": "helix_strands", "kind": "strip", "size": 1024, "seed": 88, "role": "sparks", "use": "strands twisting around a beam (scroll it)"},
+    "strip/pulse_bars": {"recipe": "pulse_bars", "kind": "strip", "size": 1024, "seed": 89, "role": "base", "use": "bars pulsing down a beam (scroll it fast)"}
   }
 }
