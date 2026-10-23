@@ -6,6 +6,7 @@
 
 local fs = require("@lune/fs")
 local luau = require("@lune/luau")
+local process = require("@lune/process")
 local roblox = require("@lune/roblox")
 
 local Harness = {}
@@ -19,8 +20,9 @@ Harness.frame = 0
 Harness.emitted = {} :: { [any]: number }
 Harness.onFrame = nil :: ((number) -> ())?
 
--- Virtual time: task.wait() returns a fixed frame time so tests run fast.
-local FRAME = 1 / 30
+-- Virtual time: task.wait() returns a fixed frame time so tests run fast. EVFX_FPS=60
+-- records a timeline at 60 frames a second for the beat judge (tools/evfx beats).
+local FRAME = 1 / (tonumber(process.env.EVFX_FPS) or 30)
 Harness.FRAME = FRAME
 local realTask = require("@lune/task")
 local pending = {}

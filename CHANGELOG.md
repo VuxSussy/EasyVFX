@@ -4,6 +4,18 @@ All notable changes to EasyVFX are listed here. Versions follow [Semantic Versio
 
 ## [Unreleased]
 
+### The beat judge
+- `evfx beats` judges an effect beat by beat against a beat sheet (`tools/evfx/sheets`) and prints what to fix first,
+  with frames. It checks the sheet's beats, flashes, palettes and depths and compares each beat with a reference
+  beat. When the sheet names an SE370 move, it also times the beats to that move by SE370's motion bible: the hit
+  frame, a quiet or telling wind-up, the burst in the follow-through, the tail against the recovery, and the style's
+  keywords. `--png` draws it.
+- `evfx ref` cuts Lotus and Frigid Rush into beats and measures their shape. Only the cut and the numbers are
+  committed (`tools/evfx/references`).
+- Timelines can be exported at 60 fps (`EVFX_FPS=60`); `phases` rows carry per-frame hue and motion.
+- Sheets for `slash_v4`, `impact_v4` and `ground_slam_v4` (drafts, on Chop, Barge and Cleave) and for the
+  `bloom_strike` study.
+
 ### Bloom Strike: Lotus's layering on generated art
 - `docs/refs/dissection-lotus-frigid.md` steps through Lotus and Frigid Rush at 60 fps: beats, frames, shapes,
   palettes. `docs/refs/lotus-layers.md` maps every Lotus beat's layers back to front, each with a role, blend and

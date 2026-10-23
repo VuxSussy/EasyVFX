@@ -1,0 +1,210 @@
+{
+ "title": "Hazaze, Frigid Rush (pass 1)",
+ "source": "https://youtu.be/2fwT64lFtao",
+ "clip": ".cache/refs/clip2/clip.mp4",
+ "tier": "good",
+ "fps": 60,
+ "beats": [
+  {
+   "name": "windup",
+   "from": 90,
+   "to": 120,
+   "shape": "wind arcs",
+   "stats": {
+    "length": 30,
+    "peak_at": 16,
+    "rise": 20,
+    "half": 45,
+    "tenth": 45,
+    "flash": 0,
+    "hues": 2,
+    "top": [
+     "cyan",
+     "azure"
+    ],
+    "calm": 0.142
+   }
+  },
+  {
+   "name": "needles",
+   "from": 125,
+   "to": 131,
+   "shape": "needle glints",
+   "stats": {
+    "length": 6,
+    "peak_at": 5,
+    "rise": 0,
+    "half": 32,
+    "tenth": 32,
+    "flash": 0,
+    "hues": 2,
+    "top": [
+     "cyan",
+     "azure"
+    ],
+    "calm": 0.065
+   }
+  },
+  {
+   "name": "contact",
+   "from": 133,
+   "to": 139,
+   "shape": "burst, fringed shell, beam",
+   "stats": {
+    "length": 6,
+    "peak_at": 3,
+    "rise": 7,
+    "half": 34,
+    "tenth": 34,
+    "flash": 0,
+    "hues": 2,
+    "top": [
+     "cyan",
+     "azure"
+    ],
+    "calm": 0.187
+   }
+  },
+  {
+   "name": "shell",
+   "from": 139,
+   "to": 155,
+   "shape": "wind shell",
+   "stats": {
+    "length": 16,
+    "peak_at": 0,
+    "rise": 1,
+    "half": 47,
+    "tenth": 47,
+    "flash": 0,
+    "hues": 2,
+    "top": [
+     "cyan",
+     "azure"
+    ],
+    "calm": 0.11
+   }
+  },
+  {
+   "name": "crescents",
+   "from": 155,
+   "to": 171,
+   "shape": "hard crescents",
+   "stats": {
+    "length": 16,
+    "peak_at": 0,
+    "rise": 0,
+    "half": 47,
+    "tenth": 47,
+    "flash": 0,
+    "hues": 2,
+    "top": [
+     "cyan",
+     "azure"
+    ],
+    "calm": 0.047
+   }
+  },
+  {
+   "name": "quiet",
+   "from": 180,
+   "to": 400,
+   "shape": "near nothing",
+   "stats": {
+    "length": 220,
+    "peak_at": 51,
+    "rise": 57,
+    "half": 349,
+    "tenth": 350,
+    "flash": 0,
+    "hues": 2,
+    "top": [
+     "cyan",
+     "azure"
+    ],
+    "calm": 0.046
+   }
+  },
+  {
+   "name": "flash",
+   "from": 408,
+   "to": 410,
+   "flash": true,
+   "shape": "full-screen flash",
+   "stats": {
+    "length": 2,
+    "peak_at": 0,
+    "rise": 6,
+    "half": 31,
+    "tenth": 33,
+    "flash": 1,
+    "hues": 2,
+    "top": [
+     "cyan",
+     "azure"
+    ],
+    "calm": 0.462
+   }
+  },
+  {
+   "name": "reveal",
+   "from": 412,
+   "to": 418,
+   "shape": "frost sigil reveal",
+   "stats": {
+    "length": 6,
+    "peak_at": 5,
+    "rise": 2,
+    "half": 27,
+    "tenth": 32,
+    "flash": 0,
+    "hues": 2,
+    "top": [
+     "cyan",
+     "azure"
+    ],
+    "calm": 0.096
+   }
+  },
+  {
+   "name": "sigil",
+   "from": 420,
+   "to": 434,
+   "shape": "sigil holds",
+   "stats": {
+    "length": 14,
+    "peak_at": 0,
+    "rise": 0,
+    "half": 25,
+    "tenth": 45,
+    "flash": 0,
+    "hues": 2,
+    "top": [
+     "cyan",
+     "azure"
+    ],
+    "calm": 0.074
+   }
+  },
+  {
+   "name": "fade",
+   "from": 434,
+   "to": 462,
+   "shape": "sigil fades",
+   "stats": {
+    "length": 28,
+    "peak_at": 0,
+    "rise": 0,
+    "half": 23,
+    "tenth": 59,
+    "flash": 0,
+    "hues": 2,
+    "top": [
+     "cyan",
+     "azure"
+    ],
+    "calm": 0.048
+   }
+  }
+ ]
+}

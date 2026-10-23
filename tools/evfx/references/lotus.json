@@ -1,0 +1,249 @@
+{
+ "title": "Plebarae, Roblox VFX: Lotus (pass 1)",
+ "source": "https://youtu.be/0aWTYOV8VtA",
+ "clip": ".cache/refs/clip1/clip.mp4",
+ "tier": "target",
+ "fps": 60,
+ "beats": [
+  {
+   "name": "swirl",
+   "from": 0,
+   "to": 60,
+   "shape": "flat water swirl",
+   "stats": {
+    "length": 60,
+    "peak_at": 13,
+    "rise": 9,
+    "half": 9,
+    "tenth": 30,
+    "flash": 0,
+    "hues": 3,
+    "top": [
+     "azure",
+     "blue"
+    ],
+    "calm": 0.248
+   }
+  },
+  {
+   "name": "ornaments",
+   "from": 75,
+   "to": 160,
+   "shape": "gold sigil coins",
+   "stats": {
+    "length": 85,
+    "peak_at": 50,
+    "rise": 47,
+    "half": 71,
+    "tenth": 121,
+    "flash": 0,
+    "hues": 1,
+    "top": [
+     "gold"
+    ],
+    "calm": 0.242
+   }
+  },
+  {
+   "name": "slash",
+   "from": 162,
+   "to": 176,
+   "shape": "crescents",
+   "stats": {
+    "length": 14,
+    "peak_at": 2,
+    "rise": 5,
+    "half": 22,
+    "tenth": 43,
+    "flash": 0,
+    "hues": 4,
+    "top": [
+     "gold",
+     "blue",
+     "violet",
+     "azure"
+    ],
+    "calm": 0.199
+   }
+  },
+  {
+   "name": "comet",
+   "from": 176,
+   "to": 188,
+   "shape": "comet",
+   "stats": {
+    "length": 12,
+    "peak_at": 0,
+    "rise": 0,
+    "half": 12,
+    "tenth": 43,
+    "flash": 0,
+    "hues": 2,
+    "top": [
+     "azure",
+     "blue"
+    ],
+    "calm": 0.279
+   }
+  },
+  {
+   "name": "flare",
+   "from": 190,
+   "to": 192,
+   "flash": true,
+   "shape": "8-point star",
+   "stats": {
+    "length": 2,
+    "peak_at": 0,
+    "rise": 5,
+    "half": 3,
+    "tenth": 6,
+    "flash": 2,
+    "hues": 2,
+    "top": [
+     "violet",
+     "blue"
+    ],
+    "calm": 0.12
+   }
+  },
+  {
+   "name": "sphere",
+   "from": 194,
+   "to": 222,
+   "shape": "spark, then sphere",
+   "stats": {
+    "length": 28,
+    "peak_at": 20,
+    "rise": 1,
+    "half": 14,
+    "tenth": 39,
+    "flash": 0,
+    "hues": 4,
+    "top": [
+     "azure",
+     "gold"
+    ],
+    "calm": 0.202
+   }
+  },
+  {
+   "name": "sigil",
+   "from": 224,
+   "to": 240,
+   "shape": "flower sigil",
+   "stats": {
+    "length": 16,
+    "peak_at": 0,
+    "rise": 0,
+    "half": 16,
+    "tenth": 47,
+    "flash": 0,
+    "hues": 3,
+    "top": [
+     "azure",
+     "blue"
+    ],
+    "calm": 0.228
+   }
+  },
+  {
+   "name": "seed",
+   "from": 270,
+   "to": 341,
+   "shape": "gold seed",
+   "stats": {
+    "length": 71,
+    "peak_at": 8,
+    "rise": 12,
+    "half": 12,
+    "tenth": 33,
+    "flash": 0,
+    "hues": 1,
+    "top": [
+     "gold"
+    ],
+    "calm": 0.273
+   }
+  },
+  {
+   "name": "dome",
+   "from": 343,
+   "to": 345,
+   "flash": true,
+   "shape": "white dome",
+   "stats": {
+    "length": 2,
+    "peak_at": 0,
+    "rise": 0,
+    "half": 33,
+    "tenth": 33,
+    "flash": 2,
+    "hues": 2,
+    "top": [
+     "gold"
+    ],
+    "calm": 0.087
+   }
+  },
+  {
+   "name": "pillar",
+   "from": 347,
+   "to": 365,
+   "shape": "pillar, fringe",
+   "stats": {
+    "length": 18,
+    "peak_at": 18,
+    "rise": 0,
+    "half": 31,
+    "tenth": 31,
+    "flash": 0,
+    "hues": 3,
+    "top": [
+     "gold",
+     "magenta"
+    ],
+    "calm": 0.114
+   }
+  },
+  {
+   "name": "lotus",
+   "from": 355,
+   "to": 480,
+   "shape": "lotus mesh",
+   "stats": {
+    "length": 125,
+    "peak_at": 11,
+    "rise": 4,
+    "half": 110,
+    "tenth": 197,
+    "flash": 0,
+    "hues": 2,
+    "top": [
+     "magenta",
+     "gold"
+    ],
+    "calm": 0.092
+   }
+  },
+  {
+   "name": "tail",
+   "from": 480,
+   "to": 600,
+   "shape": "gold dust",
+   "stats": {
+    "length": 120,
+    "peak_at": 3,
+    "rise": 0,
+    "half": 61,
+    "tenth": 96,
+    "flash": 0,
+    "hues": 2,
+    "top": [
+     "gold"
+    ],
+    "calm": 0.202
+   }
+  }
+ ]
+}

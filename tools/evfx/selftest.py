@@ -5,7 +5,7 @@ import math
 
 import numpy as np
 
-from . import core, measure, render
+from . import beats, core, measure, refs, render
 
 IDENTITY = [0, 2, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1]
 SEQ1 = [[0, 1, 0], [1, 1, 0]]
@@ -230,6 +230,74 @@ def a_mesh_draws_its_texture_where_it_is_and_only_once():
     assert one.glow[60, 90].max() > 0.9 and one.glow[60, 70].max() < 0.05, "texture lands on the wrong half"
     assert np.allclose(one.glow, two.glow), "a two-sided shell lights twice"
     assert one.glow[:20].max() == 0, "the mesh spills outside its quad"
+
+
+# The beat judge (tools/evfx/beats.py) --------------------------------------------
+
+
+def hit_timeline(frame_at=0, life=1.5, frames=40):
+    """60 fps: one white flash named Core, `life` frames long, fired at `frame_at`. A
+    particle shows on every frame its age is within its lifetime, so 1.5 frames shows 2."""
+    burst = dict(emitter(name="Core", speed=[0, 0], size=[[0, 3, 0], [1, 3, 0]], lifetime=[life / 60] * 2),
+                 count=1, frame=frame_at, cframe=IDENTITY, volume=[0, 0, 0])
+    tl = timeline(id="planted_hit", frameTime=1 / 60, bursts=[burst])
+    tl["frames"] = [frame(k / 60) for k in range(frames)]
+    return tl
+
+
+def hit_sheet(**move):
+    spec = {"preset": "planted_hit", "beats": [
+        {"name": "Hit", "from": 0, "to": 2, "flash": True, "hit": True, "palette": [], "layers": {"main": ["Core"]}},
+    ]}
+    if move:
+        spec["move"] = {"windup": 0.1, "active": 0.08, "recovery": 0.3, "style": "Duelist", "fire": 0, **move}
+    return spec
+
+
+def rules_of(found):
+    return {f["rule"] for f in found}
+
+
+@check
+def a_two_frame_flash_on_the_hit_passes():
+    found = beats.judge(hit_sheet(keywords=["snappy"]), hit_timeline())
+    assert not rules_of(found) & {"flash", "hit", "present", "layers", "snappy"}, found
+
+
+@check
+def a_held_flash_fails():
+    found = beats.judge(hit_sheet(), hit_timeline(life=7))
+    assert any(f["rule"] == "flash" and f["sev"] >= 2 for f in found), found
+
+
+@check
+def a_late_hit_fails():
+    found = beats.judge(hit_sheet(keywords=[]), hit_timeline(frame_at=5))
+    assert any(f["rule"] == "hit" and f["sev"] == 3 for f in found), found
+
+
+@check
+def a_missing_layer_fails():
+    spec = hit_sheet()
+    spec["beats"][0]["layers"]["line"] = ["Ghost"]
+    assert any(f["rule"] == "layers" and "Ghost" in f["said"] for f in beats.judge(spec, hit_timeline())), "Ghost not reported"
+
+
+@check
+def heavy_with_no_wind_up_tell_fails():
+    found = beats.judge(hit_sheet(keywords=["heavy"]), hit_timeline())
+    assert "windup" in rules_of(found), found
+
+
+@check
+def beat_stats_read_rise_fall_and_flash():
+    lum = [0, 0, 0, 0.5, 1, 1, 0.8, 0.6, 0.4, 0.2, 0.05, 0, 0, 0, 0, 0]
+    white = [0, 0, 0, 0, 1, 1, 0.3, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    curves = {"lum": lum, "white": white, "motion": [0.1] * 16, "hue": [[1] + [0] * 11] * 16}
+    st = refs.stats(curves, 3, 9, flash=True)
+    assert st["peak_at"] == 1 and st["rise"] == 1, st
+    assert st["half"] == 4 and st["tenth"] == 6, st
+    assert st["flash"] == 2 and st["top"] == ["red"], st
 
 
 def run():
