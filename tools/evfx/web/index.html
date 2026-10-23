@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EasyVFX Studio</title>
+<style>
+:root {
+  --stage: #0b0c10; --panel: #14161d; --line: #262a35; --ink: #e8e9ee; --dim: #9aa0ae; --gold: #ffcf5a;
+  --display: "Chakra Petch", "Arial Narrow", system-ui, sans-serif;
+  --body: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--stage); color: var(--ink); font: 15px/1.5 var(--body); padding: 32px max(16px, 4vw); }
+main { max-width: 900px; margin: 0 auto; display: grid; gap: 24px; }
+h1 { font: 600 32px var(--display); margin: 0; }
+h1 span { color: var(--gold); }
+p { color: var(--dim); max-width: 68ch; margin: 0; }
+ul { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+a.fx { display: block; padding: 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--ink); text-decoration: none; font: 600 17px var(--display); }
+a.fx:hover, a.fx:focus-visible { border-color: var(--gold); outline: none; }
+a.fx small { display: block; font: 12px var(--mono); color: var(--dim); margin-top: 4px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>EasyVFX <span>Studio</span></h1>
+  <p>Pick an effect to see it loop, read its layers in the VFX grammar's numbers, and tune its knobs. Keep or drop what you render: picks are saved in <code>tools/evfx/picks</code> and set the grammar's ranges.</p>
+  <ul id="list"></ul>
+</main>
+<script>
+const DATA = /*DATA*/null;
+const list = document.getElementById("list");
+for (const name of DATA.effects) {
+  const li = document.createElement("li");
+  const a = document.createElement("a");
+  a.className = "fx"; a.href = "/fx/" + name; a.textContent = name;
+  const s = document.createElement("small"); s.textContent = "beat sheet, grammar, knobs";
+  a.append(s); li.append(a); list.append(li);
+}
+</script>
+</body>
+</html>

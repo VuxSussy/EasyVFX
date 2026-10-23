@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EasyVFX Studio</title>
+<style>
+/* A dark viewing stage: the effect as built beside the variant you render, the knobs under them, then the layers in the grammar's numbers. */
+:root {
+  --stage: #0b0c10; --panel: #14161d; --line: #262a35; --ink: #e8e9ee; --dim: #9aa0ae;
+  --gold: #ffcf5a; --keep: #63d39a; --drop: #ff7a6b; --warn: #ffb454;
+  --display: "Chakra Petch", "Arial Narrow", system-ui, sans-serif;
+  --body: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--stage); color: var(--ink); font: 15px/1.5 var(--body); padding: 24px max(16px, 3vw) 48px; }
+main { max-width: 1240px; margin: 0 auto; display: grid; gap: 22px; }
+a { color: var(--gold); }
+header { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: baseline; }
+h1 { font: 600 28px var(--display); margin: 0; }
+.sub { color: var(--dim); font-size: 14px; }
+h2 { font: 600 13px var(--display); text-transform: uppercase; letter-spacing: 0.08em; color: var(--gold); margin: 0 0 8px; }
+.stages { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+figure { margin: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; min-width: 0; }
+figure img { display: block; width: 100%; aspect-ratio: 3 / 2; object-fit: cover; background: #000; }
+figcaption { padding: 10px 12px; display: flex; justify-content: space-between; gap: 8px; font-size: 14px; }
+figcaption span { font: 12px var(--mono); color: var(--dim); }
+.empty { display: grid; place-items: center; aspect-ratio: 3 / 2; color: var(--dim); font-size: 14px; padding: 16px; text-align: center; }
+.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.seg button { font: 500 13px var(--body); background: transparent; color: var(--dim); border: 0; padding: 7px 14px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--panel); color: var(--ink); }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; display: grid; gap: 14px; min-width: 0; }
+.knobs { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px 20px; }
+.knob { display: grid; gap: 4px; }
+.knob label { display: flex; justify-content: space-between; gap: 8px; font-size: 13.5px; }
+.knob output { font: 13px var(--mono); color: var(--gold); font-variant-numeric: tabular-nums; }
+.knob .off { color: var(--dim); }
+input[type="range"] { width: 100%; accent-color: var(--gold); }
+.presets button, .act { font: 600 12.5px var(--display); letter-spacing: 0.05em; text-transform: uppercase; padding: 7px 12px; border-radius: 6px; border: 1px solid var(--line); background: transparent; color: var(--ink); cursor: pointer; }
+.presets button:hover, .act:hover { border-color: var(--dim); }
+.act.render { background: var(--gold); border-color: var(--gold); color: #1a1405; }
+.act.keep { border-color: var(--keep); color: var(--keep); }
+.act.drop { border-color: var(--drop); color: var(--drop); }
+.act:disabled { opacity: 0.4; cursor: default; }
+.note { flex: 1; min-width: 200px; font: 14px var(--body); color: var(--ink); background: var(--stage); border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; }
+.status { font: 13px var(--mono); color: var(--dim); }
+.table { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
+table { border-collapse: collapse; width: 100%; font: 12.5px var(--mono); font-variant-numeric: tabular-nums; }
+th, td { padding: 6px 8px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th:first-child, td:first-child, th:nth-child(2), td:nth-child(2) { text-align: left; }
+th { color: var(--dim); font-weight: 500; position: sticky; top: 0; background: var(--panel); }
+td.bad { color: var(--warn); }
+td.chg { background: color-mix(in srgb, var(--gold) 14%, transparent); }
+ul.found { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 13.5px; }
+ul.found li { display: grid; grid-template-columns: auto 1fr; gap: 10px; }
+ul.found b { font: 600 11px var(--mono); padding: 1px 6px; border-radius: 4px; background: color-mix(in srgb, var(--warn) 22%, transparent); color: var(--warn); height: fit-content; }
+ul.found b.s1 { background: color-mix(in srgb, var(--dim) 22%, transparent); color: var(--dim); }
+.cols { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 16px; }
+@media (max-width: 860px) { .cols { grid-template-columns: 1fr; } }
+ul.picks { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 13px; }
+ul.picks .k { color: var(--keep); } ul.picks .d { color: var(--drop); }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1 id="title"></h1>
+    <span class="sub" id="move"></span>
+    <a href="/" class="sub">All effects</a>
+  </header>
+
+  <section class="stages">
+    <figure>
+      <img id="img-base" alt="The effect as built, looping">
+      <figcaption>As built <span id="cap-base"></span></figcaption>
+    </figure>
+    <figure>
+      <div class="empty" id="var-empty">Move a knob or pick a preset, then Render.</div>
+      <img id="img-var" alt="The variant, looping" hidden>
+      <figcaption>Variant <span id="cap-var">none yet</span></figcaption>
+    </figure>
+  </section>
+
+  <section class="panel" aria-label="Knobs">
+    <div class="row">
+      <div class="seg" role="group" aria-label="Playback speed">
+        <button id="sp-real" aria-pressed="true">Real speed</button>
+        <button id="sp-slow" aria-pressed="false">4× slower</button>
+      </div>
+      <div class="row presets" id="presets"></div>
+    </div>
+    <div class="knobs" id="knobs"></div>
+    <div class="row">
+      <button class="act render" id="render">Render</button>
+      <button class="act" id="reset">Reset knobs</button>
+      <button class="act keep" id="keep" disabled>Keep</button>
+      <button class="act drop" id="drop" disabled>Drop</button>
+      <input class="note" id="note" placeholder="A word on why (optional)">
+      <span class="status" id="status" role="status"></span>
+    </div>
+  </section>
+
+  <section class="cols">
+    <div>
+      <h2 id="layers-title">Layers as built</h2>
+      <div class="table"><table id="layers"></table></div>
+    </div>
+    <div class="panel">
+      <div><h2>Out of the grammar</h2><ul class="found" id="found"></ul></div>
+      <div><h2>Your picks</h2><ul class="picks" id="picks"></ul></div>
+    </div>
+  </section>
+</main>
+
+<script>
+const DATA = /*DATA*/null;
+const base = DATA.effect;
+const COLS = ["role", "count", "delay", "life", "vary", "stop", "reach", "size", "grow", "solid", "light", "z", "exit", "tail", "leave", "pop", "end"];
+let speed = "real";
+let current = null;
+const knobState = {};
+
+document.getElementById("title").textContent = base.preset;
+const m = base.move;
+document.getElementById("move").textContent = m ? `on ${m.from} (${m.style}): wind-up ${m.windup} s, active ${m.active} s, recovery ${m.recovery} s` : "a study, on no move";
+
+function show() {
+  document.getElementById("img-base").src = base.loops[speed];
+  document.getElementById("cap-base").textContent = `${base.seconds} s, ${base.found.length} out of the grammar`;
+  const img = document.getElementById("img-var");
+  if (current) {
+    img.src = current.loops[speed]; img.hidden = false;
+    document.getElementById("var-empty").hidden = true;
+    document.getElementById("cap-var").textContent = `${current.seconds} s, ${current.found.length} out of the grammar`;
+  }
+  const fx = current || base;
+  document.getElementById("layers-title").textContent = current ? "Layers in the variant" : "Layers as built";
+  table(fx);
+  findings(fx.found);
+}
+
+function table(fx) {
+  const t = document.getElementById("layers");
+  t.textContent = "";
+  const head = t.insertRow();
+  for (const c of ["layer", ...COLS]) { const th = document.createElement("th"); th.textContent = c; head.append(th); }
+  const bad = new Set(fx.found.map((f) => f.layer + "|" + f.rule.split(".").pop()));
+  for (const r of fx.layers) {
+    const tr = t.insertRow();
+    tr.insertCell().textContent = r.name;
+    for (const c of COLS) {
+      const td = tr.insertCell();
+      const v = r[c];
+      td.textContent = v === null || v === undefined ? "-" : typeof v === "number" ? +v.toFixed(3) : v;
+      if (bad.has(r.name + "|" + c)) td.className = "bad";
+      if (fx.moved && fx.moved[r.name] && c in fx.moved[r.name]) td.classList.add("chg");
+    }
+  }
+}
+
+function findings(found) {
+  const ul = document.getElementById("found");
+  ul.textContent = "";
+  if (!found.length) { const li = document.createElement("li"); li.textContent = "Nothing: every layer sits inside its role's ranges."; ul.append(li); return; }
+  for (const f of found) {
+    const li = document.createElement("li");
+    const b = document.createElement("b"); b.textContent = f.sev; if (f.sev < 2) b.className = "s1";
+    const s = document.createElement("span"); s.textContent = `${f.layer}: ${f.said}, want ${f.want}`;
+    li.append(b, s); ul.append(li);
+  }
+}
+
+function knobs() {
+  const box = document.getElementById("knobs");
+  box.textContent = "";
+  for (const [name, k] of Object.entries(DATA.knobs)) {
+    const wrap = document.createElement("div"); wrap.className = "knob";
+    const label = document.createElement("label"); label.htmlFor = "k-" + name;
+    const text = document.createElement("span"); text.textContent = `${name}: ${k.label}`;
+    const out = document.createElement("output");
+    const input = document.createElement("input");
+    input.type = "range"; input.id = "k-" + name; input.min = k.min; input.max = k.max; input.step = k.step;
+    const off = k.neutral === null || k.neutral === undefined ? k.min : k.neutral;
+    const v = knobState[name] ?? off;
+    input.value = v;
+    const paint = () => {
+      const val = +input.value;
+      const neutral = (k.neutral === null || k.neutral === undefined) ? null : k.neutral;
+      const isOff = neutral === null ? !(name in knobState) : Math.abs(val - neutral) < 1e-9;
+      out.textContent = isOff ? "off" : val.toFixed(2);
+      out.className = isOff ? "off" : "";
+    };
+    input.addEventListener("input", () => { knobState[name] = +input.value; paint(); });
+    paint();
+    label.append(text, out); wrap.append(label, input); box.append(wrap);
+  }
+}
+
+function presets() {
+  const box = document.getElementById("presets");
+  for (const [key, label, knob] of DATA.plan) {
+    const b = document.createElement("button");
+    b.textContent = key; b.title = label;
+    b.addEventListener("click", () => { for (const k in knobState) delete knobState[k]; knobState[knob[0]] = knob[1]; knobs(); render(); });
+    box.append(b);
+  }
+}
+
+async function render() {
+  const status = document.getElementById("status");
+  const send = {};
+  for (const [k, v] of Object.entries(knobState)) send[k] = v;
+  if (!Object.keys(send).length) { status.textContent = "Move a knob first."; return; }
+  status.textContent = "Rendering…";
+  document.getElementById("render").disabled = true;
+  try {
+    const r = await fetch(`/api/render/${base.preset}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ knobs: send }) });
+    const body = await r.json();
+    if (!r.ok) throw new Error(body.error || r.status);
+    current = body;
+    status.textContent = Object.keys(body.knobs).length ? "Rendered: " + Object.entries(body.knobs).map(([k, v]) => `${k} ${v}`).join(", ") : "Every knob is at its neutral value.";
+    document.getElementById("keep").disabled = document.getElementById("drop").disabled = !Object.keys(body.knobs).length;
+    show();
+  } catch (e) {
+    status.textContent = "Render failed: " + e.message;
+  } finally {
+    document.getElementById("render").disabled = false;
+  }
+}
+
+async function choose(verdict) {
+  if (!current) return;
+  const status = document.getElementById("status");
+  try {
+    const r = await fetch(`/api/pick/${base.preset}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ verdict, knobs: current.knobs, note: document.getElementById("note").value.trim() }) });
+    const body = await r.json();
+    if (!r.ok) throw new Error(body.error || r.status);
+    status.textContent = `Saved as ${verdict} (${body.saved} picks in ${body.path}).`;
+    DATA.picks.push({ verdict, knobs: current.knobs, note: document.getElementById("note").value.trim(), at: "now" });
+    document.getElementById("note").value = "";
+    pickList();
+  } catch (e) {
+    status.textContent = "Couldn't save the pick: " + e.message;
+  }
+}
+
+function pickList() {
+  const ul = document.getElementById("picks");
+  ul.textContent = "";
+  if (!DATA.picks.length) { const li = document.createElement("li"); li.textContent = "None yet."; ul.append(li); return; }
+  for (const p of DATA.picks.slice().reverse()) {
+    const li = document.createElement("li");
+    const v = document.createElement("span"); v.className = p.verdict === "keep" ? "k" : "d"; v.textContent = p.verdict;
+    li.append(v, document.createTextNode(" " + Object.entries(p.knobs).map(([k, x]) => `${k} ${x}`).join(", ") + (p.note ? ` — ${p.note}` : "")));
+    ul.append(li);
+  }
+}
+
+function setSpeed(s) {
+  speed = s;
+  document.getElementById("sp-real").setAttribute("aria-pressed", String(s === "real"));
+  document.getElementById("sp-slow").setAttribute("aria-pressed", String(s === "slow"));
+  show();
+}
+document.getElementById("sp-real").addEventListener("click", () => setSpeed("real"));
+document.getElementById("sp-slow").addEventListener("click", () => setSpeed("slow"));
+document.getElementById("render").addEventListener("click", render);
+document.getElementById("reset").addEventListener("click", () => { for (const k in knobState) delete knobState[k]; knobs(); });
+document.getElementById("keep").addEventListener("click", () => choose("keep"));
+document.getElementById("drop").addEventListener("click", () => choose("drop"));
+
+knobs(); presets(); pickList(); show();
+</script>
+</body>
+</html>

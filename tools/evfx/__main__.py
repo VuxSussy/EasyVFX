@@ -15,6 +15,7 @@
                                                               VFX grammar (tools/evfx/grammar.json)
     python tools/evfx study [--write]                          what open Roblox effects do, per role
     python tools/evfx variants <preset>                        one loop per grammar knob, for keep-or-drop picks
+    python tools/evfx serve [--port 8765]                      the local studio: loops, layers, knobs, picks
     python tools/evfx audit [preset ...] [--check | --update] [--no-scores]
     python tools/evfx selftest                                planted bad cases must fail
 
@@ -369,12 +370,12 @@ def cmd_variants(args):
     folder = args.out or os.path.join(core.CACHE, "variants", args.preset)
     os.makedirs(folder, exist_ok=True)
     cams = core.views(timeline, (480, 320))
-    span = core.duration(timeline)
     blank = render.to_image(render.draw({**timeline, "frames": [], "bursts": [], "emitters": []}, 0, cams["close"])[0])
     meta = []
     for key, label, knob, tl, moved, _ in variants.make(timeline, grammar.roles_from_sheet(spec) if spec else None):
         if knob and knob[0] == "depth":
             continue  # the headless renderer ignores ZOffset: judge depth in Studio
+        span = variants.span(tl)
         for tag, step, hold in (("real", 1 / 30, 14), ("slow", 1 / 120, 20)):
             frames = [render.to_image(render.draw(tl, k * step, cams["close"])[0]) for k in range(int(span / step) + 1)]
             frames += [blank] * hold
@@ -384,6 +385,12 @@ def cmd_variants(args):
     with open(os.path.join(folder, "variants.json"), "w", encoding="utf-8") as f:
         json.dump(meta, f, indent=1)
     print(folder)
+
+
+def cmd_serve(args):
+    from evfx import serve
+
+    serve.run(args.port)
 
 
 def cmd_ref(args):
@@ -515,6 +522,10 @@ def main():
     p = sub.add_parser(parents=[common], name="study")
     p.add_argument("--write", action="store_true", help="store the spreads in grammar.json")
     p.set_defaults(run=cmd_study)
+
+    p = sub.add_parser(name="serve", parents=[common])
+    p.add_argument("--port", type=int, default=8765)
+    p.set_defaults(run=cmd_serve)
 
     p = sub.add_parser(name="variants", parents=[common])
     p.add_argument("preset")

@@ -9,6 +9,10 @@ All notable changes to EasyVFX are listed here. Versions follow [Semantic Versio
   debris, ground) plus its numbers: count, delay, lifetime and its spread, drag stop, reach, spread, size, growth,
   fade, opacity, blend and z. Sizes are in character heights. It lists what falls outside the role's ranges
   (`tools/evfx/grammar.json`, docs/vfx-grammar.md).
+- Exits: each layer's exit type (cut, fade, shrink, dissolve, disperse), how long it takes to leave, what is still
+  visible at its last frame, and when it ends, with per-role rules, so a flash leaves fast and smoke disperses slowly.
+- `evfx serve`, a local studio (`tools/evfx/web`): loops, the layers in the grammar's numbers, knobs (`vary`, `drag`,
+  `size`, `life`, `count`, `exits`), Render, and Keep or Drop into `tools/evfx/picks`.
 - The ranges come from the references (Lotus, Frigid Rush, a new Genshin study in `docs/refs/genshin-vfx.md`) and
   from `evfx study`, which reads the emitter numbers of 50 openly published Roblox effects. Only numbers are read; the
   dataset stays in `.cache`.
