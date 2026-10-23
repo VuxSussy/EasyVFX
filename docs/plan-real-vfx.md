@@ -1,6 +1,6 @@
 # Plan: real VFX art for EasyVFX and SE370
 
-Status: planned, calls made (2026-10-23, §7). Nothing here is built; next: step 1, texgen and library v4. Read with [the agentic loop](agentic-loop.md) (PR #8), which is
+Status: calls made (2026-10-23, §7). Built: step 1, `tools/texgen` and library v4 ([texgen](texgen.md)), not uploaded yet. Next: Phát reviews the contact sheet, then step 2. Read with [the agentic loop](agentic-loop.md) (PR #8), which is
 how every step below is judged.
 
 **The gap.** The 45 presets are geometry and a 19-texture pack: crisp, but they read as Roblox. Seen against the
@@ -111,6 +111,22 @@ risks:
   anisotropic sparks.
 - **One motif across every move:** flowers, gold ornaments, sparkles.
 
+**Video H:** Ampro, [*Roblox VFX Tutorial Part 2*](https://www.youtube.com/watch?v=JXoGT2PoOhs) (2024): a slash and a
+hit, built in Studio. His texture ids are public in the description, but they are his art: references only (call 4).
+
+- **Layers named by role, grouped by beat.** One part with an attachment; a `MainSlash` group (`Slash`, the core
+  blade; `SlashWind` ×2; `Wind1`–`3`, streaks) and a `Hit` group (`Flash`, `Dots`, `Shards`, `Shards1`, `Shards2`).
+  The same roles as §4a.
+- **The slash is flat additive crescents:** `VelocityPerpendicular`, `LightEmission` 1, `LightInfluence` 0, rotation
+  −360..360, speed 5, spread 0, fired by count (`Emit` 4), not by rate.
+- **Hit dots:** `FacingCamera`, with a `Squash` curve whose keypoints carry an envelope of 0.15, so every particle's
+  shape differs.
+- **Shards:** lifetime 1–1.2, rotation 90, speed −50..50, spread 12×12, `Shape` Box, `ShapeInOut` InAndOut, `Emit` 12.
+  A speed range from negative to positive fires shards both ways along one axis: a cheap line burst.
+- **His workflow:** an emit panel (count, delay, duration, an Emit button, a toggle) on the `EmitCount` / `EmitDelay`
+  attributes EasyVFX already reads, and a curve editor with linear, in and out presets for size, transparency and
+  squash.
+
 ## 2. What Roblox can do (October 2026)
 
 Roblox has no custom shaders. Community "shaders" (Penumbra, RoShader) run on the CPU or are bundles of effects; no
@@ -146,8 +162,7 @@ Hard limits to design around:
 
 ## 3. Asset pipeline
 
-1. **`tools/texgen`, pure Python** (numpy and Pillow; `tools/texgen/lib.py` is drafted and parked on
-   `feat/texture-generator`).
+1. **`tools/texgen`, pure Python** (numpy and Pillow; built, see [texgen](texgen.md)).
    - **Primitives:**
      - tileable Perlin fBm, ridged and Worley noise;
      - domain warp;
@@ -224,13 +239,27 @@ Most of an effect is `ParticleEmitter`s, so they get their own grammar.
   sparse tail.
 - **Hit-stop:** the runtime sets `TimeScale` 0 on its emitters while a hit-stop holds. Today they keep moving.
 - **Quality:** the core and base must read with sparks and volume culled (low graphics quality).
+- **Name by role, group by beat** (H). A preset names each emitter by its role (`Core`, `Base`, `Shards`, `Dots`) and
+  groups them by beat (`MainSlash`, `Hit`), so the timeline can key a whole group at once.
+- **Fire by count:** hits and slashes `Emit` a count (H's slash emits 4); rate is for streams.
+- **Variety from envelopes** (H). Size, squash and transparency keypoints carry an envelope (H's dots use 0.15), so
+  each particle's shape differs without more emitters. Presets store a per-keypoint envelope.
+- **The line burst** (H): a speed range from negative to positive (−50..50) with a narrow spread fires shards both
+  ways along one axis, cheaper than two emitters.
+- **The flat slash** (H). Crescent Slash in the hero set starts as a flat `VelocityPerpendicular` additive flipbook
+  particle (`LightInfluence` 0, random rotation, `Emit` 4) carrying the slash-erodes-from-its-tail texture. A 3D mesh
+  variant comes later, with segment bones for the sweep and the tail erosion, and its erosion frames saved as separate
+  images, since a mesh can't play an atlas.
+- **Emit and preview in Studio** (H). EasyVFX's Create and Customize tabs get an "Emit and preview" button, mirroring
+  H's emit panel on the `EmitCount` / `EmitDelay` attributes, for people working in Studio. `evfx` stays the agents'
+  loop.
 - **SE370:** its effect rows need a keyed particle layer (rate, size and colour following Eclipse keys), not only a
   runtime `Emit` kind, before the exporter (step 5) can carry these presets.
 
 **evfx gaps to close first** (they block judging the rock spritesheet and the charge-up):
 
 - emitter `Shape`, `ShapeStyle`, `ShapeInOut` and `ShapePartial`;
-- the random envelope on keypoints;
+- the random envelope on keypoints (H's dots depend on it; evfx ignores it today);
 - `FlipbookStartRandom`;
 - `VelocityInheritance` and `LockedToPart`;
 - `TimeScale` and `ZOffset`.

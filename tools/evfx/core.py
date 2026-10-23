@@ -19,6 +19,7 @@ import zlib
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 CACHE = os.path.join(ROOT, ".cache", "evfx")
 PACK = os.path.join(ROOT, "pack", "textures")
+GENERATED = os.path.join(ROOT, "pack", "generated")
 
 DIRS = {
     "Top": (0, 1, 0),

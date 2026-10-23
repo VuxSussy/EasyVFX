@@ -41,6 +41,13 @@ if mode == "hd" then
 	for key in DefaultAssets do
 		(assets :: any)[key] = "pack://" .. key
 	end
+	-- Library v4 (tools/texgen) isn't uploaded yet; evfx draws it from pack/generated.
+	local manifest = "pack/generated/manifest.json"
+	if fs.isFile(manifest) then
+		for key in serde.decode("json", fs.readFile(manifest)).textures do
+			(assets :: any)[key] = "pack://" .. key
+		end
+	end
 end
 
 local steps: { [string]: (number) -> () } = {}

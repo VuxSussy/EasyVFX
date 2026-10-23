@@ -1,8 +1,8 @@
 """Building blocks for VFX textures: tileable noise, signed-distance shapes, polar
 warps and erosion. Everything works on float32 arrays in 0..1.
 
-The techniques follow the references in docs/texture-generator.md: an effect texture is
-grayscale and tinted by the engine; noise and erosion maps drive how a shape breaks
+The techniques follow the references in docs/plan-real-vfx.md (§1, §3): an effect texture is
+white and tinted by the engine, with its shape in alpha; noise and erosion maps drive how a shape breaks
 up; a dissolve erodes a shape by a noise threshold instead of fading it evenly; tiled
 textures repeat seamlessly so beams and trails can scroll them.
 """
@@ -261,3 +261,123 @@ def rng_angles(seed, n, jitter=0.35):
     rng = np.random.default_rng(seed)
     base = np.linspace(0, 2 * math.pi, n, endpoint=False)
     return base + rng.uniform(-jitter, jitter, n) * (2 * math.pi / n), rng
+
+
+# ------------------------------------------------------------------ strokes and curves
+
+
+def aa(d, size, px=1.25):
+    """A hard mask from a signed distance, anti-aliased over about `px` pixels of a
+    `size`-pixel texture (u and v span 2 across it)."""
+    return np.clip(0.5 - d / (px * 2.0 / size), 0, 1)
+
+
+def ease_out(t, power=2.0):
+    return 1 - (1 - np.clip(t, 0, 1)) ** power
+
+
+def ease_in(t, power=2.0):
+    return np.clip(t, 0, 1) ** power
+
+
+def bezier(ctrl, n=64):
+    """Points along a Bezier curve of any degree, as an (n, 2) array."""
+    p = np.asarray(ctrl, np.float64)
+    k = len(p) - 1
+    t = np.linspace(0, 1, n)[:, None]
+    out = np.zeros((n, 2))
+    for i in range(k + 1):
+        out += math.comb(k, i) * (1 - t) ** (k - i) * t**i * p[i]
+    return out.astype(np.float32)
+
+
+def arc(cx, cy, r, a0, a1, n=64):
+    """Points along a circular arc from angle a0 to a1 (radians)."""
+    a = np.linspace(a0, a1, n)
+    return np.stack([cx + r * np.cos(a), cy + r * np.sin(a)], -1).astype(np.float32)
+
+
+def stroke(u, v, pts, widths, caps=True):
+    """A polyline whose half-width changes per vertex. Returns the signed distance
+    (negative inside), where along it each pixel's nearest point lies (s, 0 at the first
+    point to 1 at the last) and how far across it (-1 on one edge to 1 on the other).
+    caps=False cuts both ends square instead of rounding them, so a taper to zero width
+    ends in a point and nothing wraps around the end."""
+    pts = np.asarray(pts, np.float32)
+    seg = pts[1:] - pts[:-1]
+    lens = np.sqrt((seg**2).sum(1))
+    cum = np.concatenate([[0.0], np.cumsum(lens)])
+    total = max(float(cum[-1]), 1e-6)
+    if callable(widths):
+        widths = widths(cum / total)
+    widths = np.atleast_1d(np.asarray(widths, np.float32))
+    if len(widths) != len(pts):
+        widths = np.interp(cum / total, np.linspace(0, 1, len(widths)), widths)
+    widths = widths.astype(np.float32)
+    best = np.full(u.shape, 1e9, np.float32)
+    s = np.zeros(u.shape, np.float32)
+    across = np.zeros(u.shape, np.float32)
+    last = len(seg) - 1
+    for i in range(len(seg)):
+        bx, by = seg[i]
+        ll = bx * bx + by * by
+        if ll < 1e-12:
+            continue
+        pax, pay = u - pts[i, 0], v - pts[i, 1]
+        raw = (pax * bx + pay * by) / ll
+        h = np.clip(raw, 0, 1)
+        dx, dy = pax - bx * h, pay - by * h
+        dist = np.sqrt(dx * dx + dy * dy)
+        w = widths[i] + (widths[i + 1] - widths[i]) * h
+        d = dist - w
+        better = d < best
+        best = np.where(better, d, best)
+        s = np.where(better, (cum[i] + h * lens[i]) / total, s)
+        side = np.sign(bx * pay - by * pax)
+        across = np.where(better, side * dist / np.maximum(w, 1e-4), across)
+    if not caps:
+        t0 = seg[0] / max(lens[0], 1e-6)
+        t1 = seg[last] / max(lens[last], 1e-6)
+        before = -((u - pts[0, 0]) * t0[0] + (v - pts[0, 1]) * t0[1])
+        after = (u - pts[-1, 0]) * t1[0] + (v - pts[-1, 1]) * t1[1]
+        best = np.maximum(best, np.maximum(before, after))
+    return best, s, np.clip(across, -1, 1)
+
+
+def taper(s, attack=0.08, release=0.7, swell=0.0, power=1.0):
+    """A brush's pressure along a stroke: a quick rise over `attack`, an optional swell,
+    then a taper to zero from `release` to the end."""
+    s = np.asarray(s, np.float32)
+    rise = smooth(0, attack, s) if attack > 0 else np.ones_like(s)
+    fall = 1 - smooth(release, 1.0, s)
+    body = 1 + swell * np.sin(np.clip(s, 0, 1) * np.pi)
+    return (rise * fall**power * body).astype(np.float32)
+
+
+def noise1(n, period, seed=0, octaves=3):
+    """A 1D noise line of n samples that tiles over `period` cells, in 0..1."""
+    total = np.zeros(n, np.float32)
+    amp = 1.0
+    for o in range(octaves):
+        total += amp * perlin((2, n), (1, period * 2**o), seed + o * 17)[0]
+        amp *= 0.5
+    return normalize(total)
+
+
+def fibres(s, across, seed=0, count=28, length=3, size=256):
+    """Bristle streaks for a brush stroke: noise that runs along the stroke (s) and
+    changes fast across it, so it reads as hair marks, not mottling. 0..1."""
+    field = perlin((size, size), (count, length), seed) * 0.65 + perlin((size, size), (count * 2, length * 2), seed + 7) * 0.35
+    field = normalize(field)
+    x = (np.asarray(s) % 1.0) * size
+    y = (np.asarray(across) * 0.5 + 0.5) * (size - 1)
+    return sample(field, x, y)
+
+
+def spectrum(t):
+    """A rainbow over t in 0..1 (red, yellow, green, cyan, blue, violet), as RGB 0..1."""
+    h = np.clip(np.asarray(t, np.float32), 0, 1) * 0.78 * 6
+    r = np.clip(np.abs(h - 3) - 1, 0, 1)
+    g = np.clip(2 - np.abs(h - 2), 0, 1)
+    b = np.clip(2 - np.abs(h - 4), 0, 1)
+    return np.stack([r, g, b], -1).astype(np.float32)

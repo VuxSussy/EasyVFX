@@ -1,0 +1,43 @@
+{
+  "bank": 1,
+  "name": "library-v4",
+  "note": "Every texture as a recipe rendered by id with its knobs (tools/texgen/recipes.py). size is the image's width in pixels; grid splits it into grid x grid frames. Kinds: shape (one sprite), flipbook (a sequence), sheet (variants), strip (tiles along its length), decal (a ground sprite seen from above), source (a tiling noise map, never uploaded).",
+  "entries": {
+    "shape/core_flash": {"recipe": "core_flash", "kind": "shape", "size": 512, "seed": 1, "role": "core", "use": "the 1-2 frame white-hot centre of a hit (additive)"},
+    "shape/cross_flare": {"recipe": "cross_flare", "kind": "shape", "size": 512, "seed": 2, "role": "glint", "use": "glint before a hit, or the lens-flare cross at impact (additive, FacingCamera)"},
+    "shape/godray_fan": {"recipe": "godray_fan", "kind": "shape", "size": 1024, "seed": 3, "role": "core", "use": "frame-one radial spikes of a heavy hit (additive)"},
+    "shape/aniso_shard": {"recipe": "aniso_shard", "kind": "shape", "size": 256, "seed": 4, "role": "sparks", "use": "long shards with VelocityParallel and Squash; top follows the velocity"},
+    "shape/ink_stroke": {"recipe": "ink_stroke", "kind": "shape", "size": 1024, "seed": 5, "role": "dark", "use": "the black ink slash accent (normal blend, tinted black)"},
+
+    "flip/burst_dissolve": {"recipe": "burst_dissolve", "kind": "flipbook", "size": 1024, "grid": 4, "seed": 11, "dissolve": true, "role": "base", "use": "the burst of a hit: bursts out, hollows, breaks up (OneShot)"},
+    "flip/smoke_puff": {"recipe": "smoke_puff", "kind": "flipbook", "size": 1024, "grid": 4, "seed": 12, "dissolve": true, "role": "volume", "use": "domain-warped smoke, normal blend (OneShot)"},
+    "flip/flame_tongue": {"recipe": "flame_tongue", "kind": "flipbook", "size": 1024, "grid": 4, "seed": 13, "loop": true, "role": "base", "use": "a looping flame tongue (Loop)"},
+    "flip/shock_ring": {"recipe": "shock_ring", "kind": "flipbook", "size": 1024, "grid": 4, "seed": 14, "dissolve": true, "role": "base", "use": "a shock ring that thins and breaks into arcs (OneShot, flat)"},
+    "flip/slash_erode": {"recipe": "slash_erode", "kind": "flipbook", "size": 1024, "grid": 4, "seed": 15, "dissolve": true, "role": "base", "use": "a crescent slash eroding from its tail (OneShot, VelocityPerpendicular, Emit 4)"},
+    "flip/dust_ring": {"recipe": "dust_ring", "kind": "flipbook", "size": 1024, "grid": 4, "seed": 16, "dissolve": true, "role": "volume", "use": "a ground dust ring from above (OneShot, flat, normal blend)"},
+
+    "sheet/rock_chunks": {"recipe": "rock_chunks", "kind": "sheet", "size": 1024, "grid": 4, "seed": 21, "role": "base", "use": "flat rock debris instead of plain blocks (FlipbookStartRandom, framerate 0)"},
+    "sheet/embers": {"recipe": "embers", "kind": "sheet", "size": 512, "grid": 4, "seed": 22, "role": "sparks", "use": "hot fragments, one random variant per particle"},
+    "sheet/bolt_variants": {"recipe": "bolt_variants", "kind": "sheet", "size": 1024, "grid": 4, "seed": 23, "role": "sparks", "use": "lightning bolts, one random variant per particle"},
+
+    "strip/energy_streak": {"recipe": "energy_streak", "kind": "strip", "size": 1024, "seed": 31, "role": "base", "use": "beams and trails that scroll (Wrap, TextureSpeed)"},
+    "strip/fire_band": {"recipe": "fire_band", "kind": "strip", "size": 1024, "seed": 32, "role": "base", "use": "fire beams and trails that scroll"},
+    "strip/lightning_fringe": {"recipe": "lightning_fringe", "kind": "strip", "size": 1024, "seed": 33, "role": "sparks", "use": "electric fringe on a dash streak"},
+    "strip/wind_stroke": {"recipe": "wind_stroke", "kind": "strip", "size": 1024, "seed": 34, "role": "sparks", "use": "wind and dash strokes"},
+
+    "art/brush_strokes": {"recipe": "brush_sheet", "kind": "sheet", "size": 1024, "grid": 2, "seed": 41, "role": "dark", "use": "calligraphic strokes: ink accents and afterimage arcs"},
+    "art/sigil_ornate": {"recipe": "sigil_ornate", "kind": "shape", "size": 1024, "seed": 42, "role": "base", "use": "an ornate sigil coin (G's gold coins)"},
+    "art/sigil_runes": {"recipe": "sigil_runes", "kind": "shape", "size": 1024, "seed": 43, "role": "base", "use": "a magic circle with rune glyphs"},
+    "art/petals_cel": {"recipe": "petals_cel", "kind": "sheet", "size": 1024, "grid": 2, "seed": 44, "role": "sparks", "use": "cel-style outlined petals and shards"},
+    "art/fringe_ring": {"recipe": "fringe_ring", "kind": "shape", "size": 512, "seed": 45, "rgb": "spectrum", "role": "core", "use": "a rainbow-fringe ring, the world-space chromatic fake (keep its colour: white tint)"},
+    "art/ground_frost": {"recipe": "ground_frost", "kind": "decal", "size": 1024, "seed": 46, "role": "base", "use": "frost ground sigil (decal or flat particle)"},
+    "art/ground_flame": {"recipe": "ground_flame", "kind": "decal", "size": 1024, "seed": 47, "role": "base", "use": "flame ground sigil"},
+    "art/ground_storm": {"recipe": "ground_storm", "kind": "decal", "size": 1024, "seed": 48, "role": "base", "use": "storm ground sigil"},
+    "art/floor_streaks": {"recipe": "floor_streaks", "kind": "decal", "size": 1024, "seed": 49, "role": "base", "use": "radial streaks scored into the floor at a ground hit"},
+    "art/dark_halo": {"recipe": "dark_halo", "kind": "shape", "size": 256, "seed": 50, "role": "dark", "use": "negative space behind a flare (tinted black, normal blend)"},
+
+    "source/fbm": {"recipe": "src_fbm", "kind": "source", "size": 512, "seed": 61, "upload": false, "use": "tiling fBm for painting and erosion"},
+    "source/ridged": {"recipe": "src_ridged", "kind": "source", "size": 512, "seed": 62, "upload": false, "use": "tiling ridged noise: veins, cracks"},
+    "source/worley": {"recipe": "src_worley", "kind": "source", "size": 512, "seed": 63, "upload": false, "use": "tiling Worley edges: cracked ground, ice"}
+  }
+}

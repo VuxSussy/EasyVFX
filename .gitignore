@@ -2,3 +2,4 @@ sourcemap.json
 __pycache__/
 globalTypes.d.luau
 .cache/
+.venv/

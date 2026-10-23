@@ -61,13 +61,16 @@ BUILT_IN = {
 
 
 def texture(name):
-    """The texture's mask (0..1 floats). Pack images are read from disk; Roblox's
-    built-in ones are stood in for by simple shapes."""
+    """The texture's mask (0..1 floats). Pack images are read from disk (uploaded ones in
+    pack/textures, library v4 in pack/generated); Roblox's built-in ones are stood in
+    for by simple shapes."""
     if name in _textures:
         return _textures[name]
     mask = None
     if name.startswith("pack://"):
         path = os.path.join(core.PACK, name[7:] + ".png")
+        if not os.path.exists(path):
+            path = os.path.join(core.GENERATED, name[7:] + ".png")
         if os.path.exists(path):
             img = Image.open(path).convert("RGBA")
             rgba = np.asarray(img, np.float32) / 255.0
