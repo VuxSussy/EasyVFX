@@ -14,6 +14,7 @@
     python tools/evfx grammar [preset ...]                     each layer's role and numbers against the
                                                               VFX grammar (tools/evfx/grammar.json)
     python tools/evfx study [--write]                          what open Roblox effects do, per role
+    python tools/evfx variants <preset>                        one loop per grammar knob, for keep-or-drop picks
     python tools/evfx audit [preset ...] [--check | --update] [--no-scores]
     python tools/evfx selftest                                planted bad cases must fail
 
@@ -360,6 +361,31 @@ def cmd_study(args):
         print(f"open spreads written: {grammar.GRAMMAR}")
 
 
+def cmd_variants(args):
+    from evfx import variants
+
+    timeline = core.load(args.preset, args.mode, fresh=args.fresh, fps=60)
+    spec = beats.sheet(args.preset) if args.preset in beats.sheets() else None
+    folder = args.out or os.path.join(core.CACHE, "variants", args.preset)
+    os.makedirs(folder, exist_ok=True)
+    cams = core.views(timeline, (480, 320))
+    span = core.duration(timeline)
+    blank = render.to_image(render.draw({**timeline, "frames": [], "bursts": [], "emitters": []}, 0, cams["close"])[0])
+    meta = []
+    for key, label, knob, tl, moved, _ in variants.make(timeline, grammar.roles_from_sheet(spec) if spec else None):
+        if knob and knob[0] == "depth":
+            continue  # the headless renderer ignores ZOffset: judge depth in Studio
+        for tag, step, hold in (("real", 1 / 30, 14), ("slow", 1 / 120, 20)):
+            frames = [render.to_image(render.draw(tl, k * step, cams["close"])[0]) for k in range(int(span / step) + 1)]
+            frames += [blank] * hold
+            frames[0].save(os.path.join(folder, f"{key}.{tag}.gif"), save_all=True, append_images=frames[1:], duration=33, loop=0, optimize=True)
+        meta.append({"key": key, "label": label, "knob": knob, "moved": moved})
+        print(f"{key:<6} {label}")
+    with open(os.path.join(folder, "variants.json"), "w", encoding="utf-8") as f:
+        json.dump(meta, f, indent=1)
+    print(folder)
+
+
 def cmd_ref(args):
     ref = refs.build(args.name, args.clip) if args.build else refs.load(args.name)
     print(f"{ref['title']} ({ref['tier']}), {ref['source']}")
@@ -489,6 +515,10 @@ def main():
     p = sub.add_parser(parents=[common], name="study")
     p.add_argument("--write", action="store_true", help="store the spreads in grammar.json")
     p.set_defaults(run=cmd_study)
+
+    p = sub.add_parser(name="variants", parents=[common])
+    p.add_argument("preset")
+    p.set_defaults(run=cmd_variants)
 
     p = sub.add_parser(parents=[common], name="ref")
     p.add_argument("name")
