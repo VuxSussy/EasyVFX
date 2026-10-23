@@ -329,3 +329,29 @@ the heavy-hit screen burst of call 1, all behind a "Reduce screen effects" setti
    `AGENTS.md` gets an exception for VFX images and meshes, and Phát sees the contact sheet before any upload.
 6. **First hero set: Hit Impact, Ground Slam, Crescent Slash.** Crescent Slash is built in EasyVFX now and wired to
    SE370 after the starter sword's reanimation (vfx-5).
+
+## 8. Patterns from earshot
+
+[earshot](https://github.com/Leonxlnx/earshot) gives coding agents ears for sound, the same job evfx does for effects;
+Phát uses it on his Mac. What carries over, most valuable first:
+
+| earshot | evfx equivalent | Why |
+|---|---|---|
+| `match` / `rank`: how well a description fits, as a z-score against a vocabulary, with a strong / plausible / weak verdict | a local image-embedding model (CLIP-style, CPU) scores frames against phrases ("hard white flash", "soft round smoke blob", "thick neon tube") | "matches the brief" as a number; picks the best of a line-up; names anti-patterns |
+| `profile` + `critique`: a profile built from admired work, then a scorecard with "fix first" | profiles from G, E and C (flash length, palette, luminance curve, tail motion, coverage); `evfx critique` with fixes at timestamps | limits come from references, not hand-set `rules.json` values |
+| `forge`: make in code, improve by listening | texgen recipe or preset → render → score against a reference set → adjust the knobs | the loop runs without a person until KEEP/DROP |
+| `sfx` bank as code, rendered by id with knobs (`--dur`, `--apex`, `--pitch`), audited | library v4 as recipes with knobs (size, timing, hue), each audited | variants without new files |
+| `kit` with measured sync points | effects measured against the animation's markers (the flash lands on the active frame) | timing to the move |
+| `describe`: what it sounds like, in words | what a frame looks like, in words: tags plus the closest alternative readings | an agent can read a strip in text |
+| `find`: the best moments in a long recording | the peak moments in a reference capture | builds reference sets from videos automatically |
+| `timeline`: a listening transcript | a viewing transcript: per frame, events, phases, peaks, coverage | the effect's story as text |
+| `sheet`: an annotated PNG for agents that read images | strips annotated with phases, census curves and the reference envelope | one image carries the numbers |
+| `ab` / `compare`: differences in words | `evfx diff` that says what changed ("flash 3 frames longer, palette +1 hue") | before/after without guessing |
+| `measure`: objective numbers, no models | the census and gates (exist) | stays the fast, model-free layer |
+| `realness`: real recording or code-synthesized | a "reads as procedural / cheap" detector, trained on references against bad examples (F) | catches the generic look |
+| `fit`: a recording into a code recipe with knobs | a reference texture or flipbook fitted to a texgen recipe | turns an admired shape into something we can vary |
+| calibration: held-out evidence behind every verdict | each score validated on held-out reference and bad clips | the verdicts can be trusted |
+| MCP server | `evfx` as an MCP server | agents call it the way they call earshot |
+
+**For SE370's sound:** sounds are still stubs (sound-M4). earshot itself could be the sound side of this pipeline,
+paired with evfx: one cue list, both checked against the same animation markers.
