@@ -162,6 +162,22 @@ The motion bible's victim shake ("decaying over the freeze") is then `fadeOut` e
 | path visualization | `evfx` already draws particle paths headless; add path layers when they exist |
 | `emit` returns `Finished` | `EasyVFX.PlayLocal` returns a handle with `finished` (for chaining beats) |
 
+## What a user's review asks for
+
+A VFX Forge user's review (pasted by Phát, 2026-10-24) makes four points that match this plan:
+- **One system for meshes, beams and particles** is the strength. The grammar already reads all three as layers, and
+  this vocabulary keeps them under one set of names.
+- **Deeper documentation, and particles that are easier to put in code.** This is the point of one vocabulary and of
+  `docs/vfx-grammar.md`. The building blocks the hero set already uses (`heroFlash`, `heroShards`, `heroEmbers`,
+  `heroShell`) become public **layer kits**, each documented with its role, knobs and exit preset. Code then composes
+  an effect from kits instead of copying emitter tables.
+- **Loading curves back** into the editor. Ours is `evfx grammar`, which reads any layer's curves back as a named ease
+  and exit.
+- **One primary part.** Put a root part at the HumanoidRootPart with everything else welded to it, then clone it, set
+  its CFrame and emit. `Builder.create` already builds one root part (`VFX_<Name>`, with `placement.weldTo`), and
+  `EasyVFX.PlayLocal(target, at)` plays a copy at a CFrame. The proposal makes this the documented contract: every
+  effect is one rig, so playing one is clone, place and emit.
+
 ## Order
 
 1. Named-ease curves with `hold`, and the exit presets: they fix the abrupt endings, and the grammar can name a
