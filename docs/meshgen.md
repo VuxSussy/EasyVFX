@@ -75,3 +75,20 @@ its shell with `EditableMesh` and its frame with `EditableImage`, so nothing has
   `PluginSecurity`. `AlphaMode`, `Color`, `EmissiveStrength` and `EmissiveTint` are writable at runtime. So the
   builder (a plugin) has to bake one part per frame with its own `SurfaceAppearance`, and the runtime can only switch
   which one is visible and drive its emissive. The `shell` layer works that way now.
+
+### The runtime path in Studio (2026-10-23, edit mode, no upload)
+
+`python3 tools/meshgen studio --play` writes the data for `slash_v4`'s two crescent shells and every other ribbon
+frame. In an edit Studio:
+
+1. The data is turned into `EditableMesh` and `EditableImage` content and handed to `Builder.previewContent`.
+2. The real `Builder.create` baked each shell: a lead plus 8 frame MeshParts, each with its own `SurfaceAppearance`.
+3. The runtime's `PlayLocal` played it at 1/20 speed.
+
+One frame showed at a time, stepping from Frame02 to Frame05 to Frame07. The arc turned and its tint shifted, the tail
+eroded, and the shell faded. It ran in edit mode because an `EditableImage` doesn't survive the copy into a Play
+session.
+
+![start](meshes/studio-play-1-start.jpg)
+![middle](meshes/studio-play-2-mid.jpg)
+![end](meshes/studio-play-3-end.jpg)

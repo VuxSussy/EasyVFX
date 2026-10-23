@@ -164,3 +164,23 @@ def main(folder=None):
             f.write(text)
         print(f"wrote {os.path.relpath(path)} ({len(text) // 1024} KB)")
     return 0
+
+
+def play_data(folder):
+    """JSON the play preview fetches: the slash_v4 shells' meshes and every other ribbon
+    frame, keyed by the asset names the presets use (Builder.previewContent)."""
+    import json
+
+    os.makedirs(folder, exist_ok=True)
+    out = {"meshes": {}, "images": {}}
+    for m in ("mesh_crescent_wide", "mesh_crescent_thin"):
+        v, t, f_ = _mesh(m)
+        out["meshes"][m] = {"v": v, "t": t, "f": f_}
+    for k in range(0, 16, 2):
+        name = f"seq_slash_ribbon_{k:02d}"
+        w, h, b = _image(name)
+        out["images"][name] = {"w": w, "h": h, "data": b}
+    path = os.path.join(folder, "slash_v4.json")
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(out, f)
+    print(f"wrote {os.path.relpath(path)} ({os.path.getsize(path) // 1024} KB)")

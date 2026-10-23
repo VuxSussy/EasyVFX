@@ -178,6 +178,8 @@ def cmd_selftest(args):
 def cmd_studio(args):
     import studio
 
+    if args.play:
+        return studio.play_data(args.out or os.path.join(ROOT, ".cache", "meshgen", "play")) or 0
     return studio.main(args.out)
 
 
@@ -193,6 +195,7 @@ def main():
     sub.add_parser("selftest").set_defaults(fn=cmd_selftest)
     p = sub.add_parser("studio")
     p.add_argument("-o", "--out")
+    p.add_argument("--play", action="store_true", help="data for baking slash_v4 with the real builder in Studio")
     p.set_defaults(fn=cmd_studio)
     args = ap.parse_args()
     return args.fn(args) or 0

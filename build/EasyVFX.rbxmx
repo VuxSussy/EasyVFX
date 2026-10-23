@@ -3683,7 +3683,12 @@ end
 -- colour map (docs/meshgen.md), so the builder bakes one MeshPart per texture frame,
 -- each with its own SurfaceAppearance, under a hidden lead part. The runtime shows one
 -- frame at a time. A script can't set MeshId, so the mesh comes from AssetService.
-local function shellFrame(base: MeshPart, texture: string, index: number): MeshPart
+-- Studio previews of assets that aren't uploaded yet: Content (an EditableMesh or an
+-- EditableImage) by asset key, used only where an uploaded ID is missing. Set by the
+-- preview script of tools/meshgen; empty in the plugin and in games.
+Builder.previewContent = {} :: { [string]: any }
+
+local function shellFrame(base: MeshPart, texture: string, index: number, preview: any?): MeshPart
 	local frame = base:Clone()
 	-- a frame belongs to its lead part, not to a layer of its own
 	frame:SetAttribute(Builder.LAYER_ATTR, nil)
@@ -3696,30 +3701,39 @@ local function shellFrame(base: MeshPart, texture: string, index: number): MeshP
 	local sa = Instance.new("SurfaceAppearance")
 	sa.AlphaMode = Enum.AlphaMode.Transparency
 	-- plugin-only properties; the Content ones first, the older ContentId one as a fallback
-	if not pcall(function()
+	if preview then
+		sa.ColorMapContent = preview
+		sa.EmissiveMaskContent = preview
+	elseif not pcall(function()
 		sa.ColorMapContent = Content.fromUri(texture)
 	end) then
 		pcall(function()
 			(sa :: any).ColorMap = texture
 		end)
 	end
-	pcall(function()
-		sa.EmissiveMaskContent = Content.fromUri(texture)
-	end)
+	if not preview then
+		pcall(function()
+			sa.EmissiveMaskContent = Content.fromUri(texture)
+		end)
+	end
 	sa.Parent = frame
 	return frame
 end
 
 LayerBuilders.shell = function(ctx, key, layer)
 	local params: Params = ctx.params
-	local meshId = ctx.assets[layer.mesh]
+	local preview = Builder.previewContent
+	local meshId = ctx.assets[layer.mesh] or (if preview[layer.mesh] then "preview:" .. layer.mesh else nil)
 	if type(meshId) ~= "string" then
 		return
 	end
-	local frames = {}
+	local frames, previews = {}, {}
 	for _, k in layer.frames or {} do
 		if ctx.assets[k] then
 			table.insert(frames, ctx.assets[k])
+		elseif preview[k] then
+			table.insert(frames, "preview:" .. k)
+			previews[#frames] = preview[k]
 		end
 	end
 	local signature = meshId .. "|" .. table.concat(frames, ",")
@@ -3732,7 +3746,7 @@ LayerBuilders.shell = function(ctx, key, layer)
 			found:Destroy()
 		end
 		local ok, made = pcall(function()
-			return game:GetService("AssetService"):CreateMeshPartAsync(meshId)
+			return game:GetService("AssetService"):CreateMeshPartAsync(if ctx.assets[layer.mesh] then meshId else preview[layer.mesh])
 		end)
 		if not ok or not made then
 			warn("[EasyVFX] Could not load mesh " .. meshId .. ": " .. tostring(made))
@@ -3742,7 +3756,7 @@ LayerBuilders.shell = function(ctx, key, layer)
 		part:SetAttribute(Builder.LAYER_ATTR, key)
 		part:SetAttribute("VFX_MeshAsset", signature)
 		for i, texture in frames do
-			shellFrame(part, texture, i).Parent = part
+			shellFrame(part, texture, i, previews[i]).Parent = part
 		end
 		ctx.existing[key] = part
 	end

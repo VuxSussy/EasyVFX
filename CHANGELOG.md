@@ -12,6 +12,9 @@ All notable changes to EasyVFX are listed here. Versions follow [Semantic Versio
 - `meshgen studio` writes a chunked Luau preview that builds the shells with `EditableMesh` and `EditableImage`, so
   they can be seen in Studio without an upload. `docs/meshgen.md` has the Studio shots.
 - evfx draws an emissive shell frame as glowing, and doesn't count it as a plain block.
+- `Builder.previewContent` lets a Studio preview hand the builder `EditableMesh` and `EditableImage` content for assets
+  not uploaded yet (empty in the plugin and in games). `meshgen studio --play` writes the data to bake `slash_v4` with
+  the real builder and play it with the runtime in an edit Studio.
 
 ### The mesh set (`tools/meshgen`)
 - `tools/meshgen` writes six shells as OBJ in `pack/meshes`, not uploaded: crescent (wide and thin), cone, sphere,
