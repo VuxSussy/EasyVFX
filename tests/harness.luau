@@ -17,19 +17,32 @@ Harness.emitLog = {} :: { any }
 Harness.recordEmits = false
 Harness.frame = 0
 Harness.emitted = {} :: { [any]: number }
+Harness.onFrame = nil :: ((number) -> ())?
 
 -- Virtual time: task.wait() returns a fixed frame time so tests run fast.
 local FRAME = 1 / 30
 Harness.FRAME = FRAME
 local realTask = require("@lune/task")
 local pending = {}
+local parked: { thread } = {}
+
+-- Lockstep mode (tests/timeline.luau): waiting coroutines park, and Harness.tick()
+-- advances one frame and resumes them in order, so a play is the same every run.
+Harness.lockstep = false
 local fakeTask = {
 	spawn = realTask.spawn,
 	defer = realTask.defer,
 	cancel = realTask.cancel,
 	wait = function(_t: number?)
+		if Harness.lockstep then
+			table.insert(parked, coroutine.running())
+			return coroutine.yield()
+		end
 		realTask.wait()
 		Harness.frame += 1
+		if Harness.onFrame then
+			Harness.onFrame(Harness.frame)
+		end
 		local now = Harness.frame * FRAME
 		local due = {}
 		for i = #pending, 1, -1 do
@@ -45,7 +58,7 @@ local fakeTask = {
 	-- virtual-time delay: fires when enough fake frames have passed
 	delay = function(t: number, f, ...)
 		table.insert(pending, { at = Harness.frame * FRAME + t, f = f, args = { ... } })
-		if #pending == 1 then
+		if #pending == 1 and not Harness.lockstep then
 			-- keep virtual time moving even when no animation is running
 			realTask.spawn(function()
 				while #pending > 0 do
@@ -56,6 +69,30 @@ local fakeTask = {
 	end,
 }
 Harness.task = fakeTask
+
+function Harness.tick()
+	Harness.frame += 1
+	if Harness.onFrame then
+		Harness.onFrame(Harness.frame)
+	end
+	local now = Harness.frame * FRAME
+	local due = {}
+	for i = #pending, 1, -1 do
+		if pending[i].at <= now then
+			table.insert(due, table.remove(pending, i))
+		end
+	end
+	for i = #due, 1, -1 do
+		realTask.spawn(due[i].f, table.unpack(due[i].args))
+	end
+	local waiting = parked
+	parked = {}
+	for _, co in waiting do
+		if coroutine.status(co) == "suspended" then
+			realTask.spawn(co, FRAME)
+		end
+	end
+end
 
 -- Random datatype (not provided by Lune).
 local RandomMeta = {}
@@ -183,7 +220,14 @@ local function requireFake(target)
 	return result
 end
 
+local virtualOs = setmetatable({
+	clock = function()
+		return if Harness.lockstep then Harness.frame * FRAME else os.clock()
+	end,
+}, { __index = os })
+
 env = setmetatable({
+	os = virtualOs,
 	game = game,
 	workspace = workspace,
 	Instance = roblox.Instance,

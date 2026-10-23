@@ -1,0 +1,2595 @@
+{
+ "mode": "hd",
+ "presets": {
+  "ash_embers": {
+   "gates": [
+    {
+     "name": "budget.particles",
+     "ok": true,
+     "reason": "peak 153 (cap 400)"
+    },
+    {
+     "name": "budget.beams",
+     "ok": true,
+     "reason": "peak 0 (cap 96)"
+    },
+    {
+     "name": "budget.pieces",
+     "ok": true,
+     "reason": "peak 0 (cap 64)"
+    },
+    {
+     "name": "budget.lights",
+     "ok": true,
+     "reason": "peak 0 (cap 4)"
+    },
+    {
+     "name": "flash.frames",
+     "ok": true,
+     "reason": "longest screen flash 0 frames (cap 3)"
+    },
+    {
+     "name": "flash.rate",
+     "ok": true,
+     "reason": "0 screen flashes in 2.00 s (cap 3/s)"
+    },
+    {
+     "name": "plain_pieces",
+     "ok": true,
+     "reason": "peak 0 plain blocks (cap 0)"
+    }
+   ],
+   "id": "ash_embers",
+   "kind": "loop",
+   "peak": {
+    "beams": 0,
+    "lights": 0,
+    "particles": 153,
+    "pieces": 0,
+    "plain": 0,
+    "screens": 0
+   },
+   "scores": {
+    "body_buried": 0.0044,
+    "coverage_far": 0.0006,
+    "crisp": 0.3672
+   },
+   "seconds": 2
+  },
+  "blood_burst": {
+   "gates": [
+    {
+     "name": "budget.particles",
+     "ok": true,
+     "reason": "peak 42 (cap 400)"
+    },
+    {
+     "name": "budget.beams",
+     "ok": true,
+     "reason": "peak 80 (cap 96)"
+    },
+    {
+     "name": "budget.pieces",
+     "ok": true,
+     "reason": "peak 1 (cap 64)"
+    },
+    {
+     "name": "budget.lights",
+     "ok": true,
+     "reason": "peak 0 (cap 4)"
+    },
+    {
+     "name": "ends_clean",
+     "ok": true,
+     "reason": "lasts 0.70 s (cap 3.0), 0 left behind"
+    },
+    {
+     "name": "flash.frames",
+     "ok": false,
+     "reason": "longest screen flash 4 frames (cap 3)"
+    },
+    {
+     "name": "flash.rate",
+     "ok": true,
+     "reason": "1 screen flashes in 0.70 s (cap 3/s)"
+    },
+    {
+     "name": "plain_pieces",
+     "ok": false,
+     "reason": "peak 1 plain blocks (cap 0)"
+    }
+   ],
+   "id": "blood_burst",
+   "kind": "burst",
+   "peak": {
+    "beams": 80,
+    "lights": 0,
+    "particles": 42,
+    "pieces": 1,
+    "plain": 1,
+    "screens": 1
+   },
+   "scores": {
+    "body_buried": 0.6524,
+    "coverage_far": 0.0752,
+    "crisp": 0.3507
+   },
+   "seconds": 0.7
+  },
+  "bubbles": {
+   "gates": [
+    {
+     "name": "budget.particles",
+     "ok": true,
+     "reason": "peak 24 (cap 400)"
+    },
+    {
+     "name": "budget.beams",
+     "ok": true,
+     "reason": "peak 0 (cap 96)"
+    },
+    {
+     "name": "budget.pieces",
+     "ok": true,
+     "reason": "peak 0 (cap 64)"
+    },
+    {
+     "name": "budget.lights",
+     "ok": true,
+     "reason": "peak 0 (cap 4)"
+    },
+    {
+     "name": "flash.frames",
+     "ok": true,
+     "reason": "longest screen flash 0 frames (cap 3)"
+    },
+    {
+     "name": "flash.rate",
+     "ok": true,
+     "reason": "0 screen flashes in 2.00 s (cap 3/s)"
+    },
+    {
+     "name": "plain_pieces",
+     "ok": true,
+     "reason": "peak 0 plain blocks (cap 0)"
+    }
+   ],
+   "id": "bubbles",
+   "kind": "loop",
+   "peak": {
+    "beams": 0,
+    "lights": 0,
+    "particles": 24,
+    "pieces": 0,
+    "plain": 0,
+    "screens": 0
+   },
+   "scores": {
+    "body_buried": 0.0497,
+    "coverage_far": 0.0007,
+    "crisp": 0.3096
+   },
+   "seconds": 2
+  },
+  "charge_up": {
+   "gates": [
+    {
+     "name": "budget.particles",
+     "ok": true,
+     "reason": "peak 0 (cap 400)"
+    },
+    {
+     "name": "budget.beams",
+     "ok": false,
+     "reason": "peak 148 (cap 96)"
+    },
+    {
+     "name": "budget.pieces",
+     "ok": true,
+     "reason": "peak 1 (cap 64)"
+    },
+    {
+     "name": "budget.lights",
+     "ok": true,
+     "reason": "peak 1 (cap 4)"
+    },
+    {
+     "name": "ends_clean",
+     "ok": true,
+     "reason": "lasts 1.20 s (cap 3.0), 0 left behind"
+    },
+    {
+     "name": "flash.frames",
+     "ok": true,
+     "reason": "longest screen flash 0 frames (cap 3)"
+    },
+    {
+     "name": "flash.rate",
+     "ok": true,
+     "reason": "0 screen flashes in 1.20 s (cap 3/s)"
+    },
+    {
+     "name": "plain_pieces",
+     "ok": true,
+     "reason": "peak 0 plain blocks (cap 0)"
+    }
+   ],
+   "id": "charge_up",
+   "kind": "burst",
+   "peak": {
+    "beams": 148,
+    "lights": 1,
+    "particles": 0,
+    "pieces": 1,
+    "plain": 0,
+    "screens": 0
+   },
+   "scores": {
+    "body_buried": 0.3252,
+    "coverage_far": 0.0513,
+    "crisp": 0.1446
+   },
+   "seconds": 1.2
+  },
+  "confetti": {
+   "gates": [
+    {
+     "name": "budget.particles",
+     "ok": true,
+     "reason": "peak 60 (cap 400)"
+    },
+    {
+     "name": "budget.beams",
+     "ok": true,
+     "reason": "peak 0 (cap 96)"
+    },
+    {
+     "name": "budget.pieces",
+     "ok": true,
+     "reason": "peak 0 (cap 64)"
+    },
+    {
+     "name": "budget.lights",
+     "ok": true,
+     "reason": "peak 0 (cap 4)"
+    },
+    {
+     "name": "ends_clean",
+     "ok": true,
+     "reason": "lasts 0.20 s (cap 3.0), 0 left behind"
+    },
+    {
+     "name": "flash.frames",
+     "ok": true,
+     "reason": "longest screen flash 0 frames (cap 3)"
+    },
+    {
+     "name": "flash.rate",
+     "ok": true,
+     "reason": "0 screen flashes in 0.20 s (cap 3/s)"
+    },
+    {
+     "name": "plain_pieces",
+     "ok": true,
+     "reason": "peak 0 plain blocks (cap 0)"
+    }
+   ],
+   "id": "confetti",
+   "kind": "burst",
+   "peak": {
+    "beams": 0,
+    "lights": 0,
+    "particles": 60,
+    "pieces": 0,
+    "plain": 0,
+    "screens": 0
+   },
+   "scores": {
+    "body_buried": 0.1844,
+    "coverage_far": 0.0027,
+    "crisp": 0.1229
+   },
+   "seconds": 0.2
+  },
+  "cursed_sigil": {
+   "gates": [
+    {
+     "name": "budget.particles",
+     "ok": true,
+     "reason": "peak 26 (cap 400)"
+    },
+    {
+     "name": "budget.beams",
+     "ok": true,
+     "reason": "peak 48 (cap 96)"
+    },
+    {
+     "name": "budget.pieces",
+     "ok": true,
+     "reason": "peak 0 (cap 64)"
+    },
+    {
+     "name": "budget.lights",
+     "ok": true,
+     "reason": "peak 1 (cap 4)"
+    },
+    {
+     "name": "ends_clean",
+     "ok": true,
+     "reason": "lasts 2.10 s (cap 3.0), 0 left behind"
+    },
+    {
+     "name": "flash.frames",
+     "ok": true,
+     "reason": "longest screen flash 0 frames (cap 3)"
+    },
+    {
+     "name": "flash.rate",
+     "ok": true,
+     "reason": "0 screen flashes in 2.10 s (cap 3/s)"
+    },
+    {
+     "name": "plain_pieces",
+     "ok": true,
+     "reason": "peak 0 plain blocks (cap 0)"
+    }
+   ],
+   "id": "cursed_sigil",
+   "kind": "burst",
+   "peak": {
+    "beams": 48,
+    "lights": 1,
+    "particles": 26,
+    "pieces": 0,
+    "plain": 0,
+    "screens": 0
+   },
+   "scores": {
+    "body_buried": 0.0972,
+    "coverage_far": 0.0432,
+    "crisp": 0.1337
+   },
+   "seconds": 2.1
+  },
+  "energy_blast": {
+   "gates": [
+    {
+     "name": "budget.particles",
+     "ok": true,
+     "reason": "peak 22 (cap 400)"
+    },
+    {
+     "name": "budget.beams",
+     "ok": false,
+     "reason": "peak 136 (cap 96)"
+    },
+    {
+     "name": "budget.pieces",
+     "ok": true,
+     "reason": "peak 1 (cap 64)"
+    },
+    {
+     "name": "budget.lights",
+     "ok": true,
+     "reason": "peak 1 (cap 4)"
+    },
+    {
+     "name": "ends_clean",
+     "ok": true,
+     "reason": "lasts 0.87 s (cap 3.0), 0 left behind"
+    },
+    {
+     "name": "flash.frames",
+     "ok": true,
+     "reason": "longest screen flash 0 frames (cap 3)"
+    },
+    {
+     "name": "flash.rate",
+     "ok": true,
+     "reason": "0 screen flashes in 0.87 s (cap 3/s)"
+    },
+    {
+     "name": "plain_pieces",
+     "ok": true,
+     "reason": "peak 0 plain blocks (cap 0)"
+    }
+   ],
+   "id": "energy_blast",
+   "kind": "burst",
+   "peak": {
+    "beams": 136,
+    "lights": 1,
+    "particles": 22,
+    "pieces": 1,
+    "plain": 0,
+    "screens": 0
+   },
+   "scores": {
+    "body_buried": 0.9252,
+    "coverage_far": 0.098,
+    "crisp": 0.4055
+   },
+   "seconds": 0.867
+  },
+  "energy_orb": {
+   "gates": [
+    {
+     "name": "budget.particles",
+     "ok": true,
+     "reason": "peak 9 (cap 400)"
+    },
+    {
+     "name": "budget.beams",
+     "ok": true,
+     "reason": "peak 16 (cap 96)"
+    },
+    {
+     "name": "budget.pieces",
+     "ok": true,
+     "reason": "peak 1 (cap 64)"
+    },
+    {
+     "name": "budget.lights",
+     "ok": true,
+     "reason": "peak 1 (cap 4)"
+    },
+    {
+     "name": "flash.frames",
+     "ok": true,
+     "reason": "longest screen flash 0 frames (cap 3)"
+    },
+    {
+     "name": "flash.rate",
+     "ok": true,
+     "reason": "0 screen flashes in 2.00 s (cap 3/s)"
+    },
+    {
+     "name": "plain_pieces",
+     "ok": true,
+     "reason": "peak 0 plain blocks (cap 0)"
+    }
+   ],
+   "id": "energy_orb",
+   "kind": "loop",
+   "peak": {
+    "beams": 16,
+    "lights": 1,
+    "particles": 9,
+    "pieces": 1,
+    "plain": 0,
+    "screens": 0
+   },
+   "scores": {
+    "body_buried": 0.5077,
+    "coverage_far": 0.0252,
+    "crisp": 0.026
+   },
+   "seconds": 2
+  },
+  "explosion": {
+   "gates": [
+    {
+     "name": "budget.particles",
+     "ok": true,
+     "reason": "peak 57 (cap 400)"
+    },
+    {
+     "name": "budget.beams",
+     "ok": true,
+     "reason": "peak 8 (cap 96)"
+    },
+    {
+     "name": "budget.pieces",
+     "ok": true,
+     "reason": "peak 11 (cap 64)"
+    },
+    {
+     "name": "budget.lights",
+     "ok": true,
+     "reason": "peak 1 (cap 4)"
+    },
+    {
+     "name": "ends_clean",
+     "ok": true,
+     "reason": "lasts 2.47 s (cap 3.0), 0 left behind"
+    },
+    {
+     "name": "flash.frames",
+     "ok": true,
+     "reason": "longest screen flash 0 frames (cap 3)"
+    },
+    {
+     "name": "flash.rate",
+     "ok": true,
+     "reason": "0 screen flashes in 2.47 s (cap 3/s)"
+    },
+    {
+     "name": "plain_pieces",
+     "ok": false,
+     "reason": "peak 10 plain blocks (cap 0)"
+    }
+   ],
+   "id": "explosion",
+   "kind": "burst",
+   "peak": {
+    "beams": 8,
+    "lights": 1,
+    "particles": 57,
+    "pieces": 11,
+    "plain": 10,
+    "screens": 0
+   },
+   "scores": {
+    "body_buried": 1.0,
+    "coverage_far": 0.2637,
+    "crisp": 0.2509
+   },
+   "seconds": 2.467
+  },
+  "fire": {
+   "gates": [
+    {
+     "name": "budget.particles",
+     "ok": true,
+     "reason": "peak 100 (cap 400)"
+    },
+    {
+     "name": "budget.beams",
+     "ok": true,
+     "reason": "peak 0 (cap 96)"
+    },
+    {
+     "name": "budget.pieces",
+     "ok": true,
+     "reason": "peak 0 (cap 64)"
+    },
+    {
+     "name": "budget.lights",
+     "ok": true,
+     "reason": "peak 1 (cap 4)"
+    },
+    {
+     "name": "flash.frames",
+     "ok": true,
+     "reason": "longest screen flash 0 frames (cap 3)"
+    },
+    {
+     "name": "flash.rate",
+     "ok": true,
+     "reason": "0 screen flashes in 2.00 s (cap 3/s)"
+    },
+    {
+     "name": "plain_pieces",
+     "ok": true,
+     "reason": "peak 0 plain blocks (cap 0)"
+    }
+   ],
+   "id": "fire",
+   "kind": "loop",
+   "peak": {
+    "beams": 0,
+    "lights": 1,
+    "particles": 100,
+    "pieces": 0,
+    "plain": 0,
+    "screens": 0
+   },
+   "scores": {
+    "body_buried": 0.5565,
+    "coverage_far": 0.0241,
+    "crisp": 0.0296
+   },
+   "seconds": 2
+  },
+  "fireball": {
+   "gates": [
+    {
+     "name": "budget.particles",
+     "ok": true,
+     "reason": "peak 18 (cap 400)"
+    },
+    {
+     "name": "budget.beams",
+     "ok": true,
+     "reason": "peak 76 (cap 96)"
+    },
+    {
+     "name": "budget.pieces",
+     "ok": true,
+     "reason": "peak 2 (cap 64)"
+    },
+    {
+     "name": "budget.lights",
+     "ok": true,
+     "reason": "peak 0 (cap 4)"
+    },
+    {
+     "name": "ends_clean",
+     "ok": true,
+     "reason": "lasts 1.20 s (cap 3.0), 0 left behind"
+    },
+    {
+     "name": "flash.frames",
+     "ok": false,
+     "reason": "longest screen flash 4 frames (cap 3)"
+    },
+    {
+     "name": "flash.rate",
+     "ok": true,
+     "reason": "1 screen flashes in 1.20 s (cap 3/s)"
+    },
+    {
+     "name": "plain_pieces",
+     "ok": true,
+     "reason": "peak 0 plain blocks (cap 0)"
+    }
+   ],
+   "id": "fireball",
+   "kind": "burst",
+   "peak": {
+    "beams": 76,
+    "lights": 0,
+    "particles": 18,
+    "pieces": 2,
+    "plain": 0,
+    "screens": 1
+   },
+   "scores": {
+    "body_buried": 0.0316,
+    "coverage_far": 1.0,
+    "crisp": 0.3109
+   },
+   "seconds": 1.2
+  },
+  "fireflies": {
+   "gates": [
+    {
+     "name": "budget.particles",
+     "ok": true,
+     "reason": "peak 24 (cap 400)"
+    },
+    {
+     "name": "budget.beams",
+     "ok": true,
+     "reason": "peak 0 (cap 96)"
+    },
+    {
+     "name": "budget.pieces",
+     "ok": true,
+     "reason": "peak 0 (cap 64)"
+    },
+    {
+     "name": "budget.lights",
+     "ok": true,
+     "reason": "peak 0 (cap 4)"
+    },
+    {
+     "name": "flash.frames",
+     "ok": true,
+     "reason": "longest screen flash 0 frames (cap 3)"
+    },
+    {
+     "name": "flash.rate",
+     "ok": true,
+     "reason": "0 screen flashes in 2.00 s (cap 3/s)"
+    },
+    {
+     "name": "plain_pieces",
+     "ok": true,
+     "reason": "peak 0 plain blocks (cap 0)"
+    }
+   ],
+   "id": "fireflies",
+   "kind": "loop",
+   "peak": {
+    "beams": 0,
+    "lights": 0,
+    "particles": 24,
+    "pieces": 0,
+    "plain": 0,
+    "screens": 0
+   },
+   "scores": {
+    "body_buried": 0.0038,
+    "coverage_far": 0.0002,
+    "crisp": 0.2002
+   },
+   "seconds": 2
+  },
+  "flash_step": {
+   "gates": [
+    {
+     "name": "budget.particles",
+     "ok": true,
+     "reason": "peak 18 (cap 400)"
+    },
+    {
+     "name": "budget.beams",
+     "ok": true,
+     "reason": "peak 62 (cap 96)"
+    },
+    {
+     "name": "budget.pieces",
+     "ok": true,
+     "reason": "peak 0 (cap 64)"
+    },
+    {
+     "name": "budget.lights",
+     "ok": true,
+     "reason": "peak 0 (cap 4)"
+    },
+    {
+     "name": "ends_clean",
+     "ok": true,
+     "reason": "lasts 0.60 s (cap 3.0), 0 left behind"
+    },
+    {
+     "name": "flash.frames",
+     "ok": true,
+     "reason": "longest screen flash 0 frames (cap 3)"
+    },
+    {
+     "name": "flash.rate",
+     "ok": true,
+     "reason": "0 screen flashes in 0.60 s (cap 3/s)"
+    },
+    {
+     "name": "plain_pieces",
+     "ok": true,
+     "reason": "peak 0 plain blocks (cap 0)"
+    }
+   ],
+   "id": "flash_step",
+   "kind": "burst",
+   "peak": {
+    "beams": 62,
+    "lights": 0,
+    "particles": 18,
+    "pieces": 0,
+    "plain": 0,
+    "screens": 0
+   },
+   "scores": {
+    "body_buried": 0.0,
+    "coverage_far": 0.0237,
+    "crisp": 0.2241
+   },
+   "seconds": 0.6
+  },
+  "fog": {
+   "gates": [
+    {
+     "name": "budget.particles",
+     "ok": true,
+     "reason": "peak 12 (cap 400)"
+    },
+    {
+     "name": "budget.beams",
+     "ok": true,
+     "reason": "peak 0 (cap 96)"
+    },
+    {
+     "name": "budget.pieces",
+     "ok": true,
+     "reason": "peak 0 (cap 64)"
+    },
+    {
+     "name": "budget.lights",
+     "ok": true,
+     "reason": "peak 0 (cap 4)"
+    },
+    {
+     "name": "flash.frames",
+     "ok": true,
+     "reason": "longest screen flash 0 frames (cap 3)"
+    },
+    {
+     "name": "flash.rate",
+     "ok": true,
+     "reason": "0 screen flashes in 2.00 s (cap 3/s)"
+    },
+    {
+     "name": "plain_pieces",
+     "ok": true,
+     "reason": "peak 0 plain blocks (cap 0)"
+    }
+   ],
+   "id": "fog",
+   "kind": "loop",
+   "peak": {
+    "beams": 0,
+    "lights": 0,
+    "particles": 12,
+    "pieces": 0,
+    "plain": 0,
+    "screens": 0
+   },
+   "scores": {
+    "body_buried": 0.0,
+    "coverage_far": 0.0252,
+    "crisp": 0.0296
+   },
+   "seconds": 2
+  },
+  "fountain": {
+   "gates": [
+    {
+     "name": "budget.particles",
+     "ok": true,
+     "reason": "peak 267 (cap 400)"
+    },
+    {
+     "name": "budget.beams",
+     "ok": true,
+     "reason": "peak 0 (cap 96)"
+    },
+    {
+     "name": "budget.pieces",
+     "ok": true,
+     "reason": "peak 0 (cap 64)"
+    },
+    {
+     "name": "budget.lights",
+     "ok": true,
+     "reason": "peak 0 (cap 4)"
+    },
+    {
+     "name": "flash.frames",
+     "ok": true,
+     "reason": "longest screen flash 0 frames (cap 3)"
+    },
+    {
+     "name": "flash.rate",
+     "ok": true,
+     "reason": "0 screen flashes in 2.00 s (cap 3/s)"
+    },
+    {
+     "name": "plain_pieces",
+     "ok": true,
+     "reason": "peak 0 plain blocks (cap 0)"
+    }
+   ],
+   "id": "fountain",
+   "kind": "loop",
+   "peak": {
+    "beams": 0,
+    "lights": 0,
+    "particles": 267,
+    "pieces": 0,
+    "plain": 0,
+    "screens": 0
+   },
+   "scores": {
+    "body_buried": 0.0306,
+    "coverage_far": 0.0028,
+    "crisp": 0.3003
+   },
+   "seconds": 2
+  },
+  "frost": {
+   "gates": [
+    {
+     "name": "budget.particles",
+     "ok": true,
+     "reason": "peak 51 (cap 400)"
+    },
+    {
+     "name": "budget.beams",
+     "ok": true,
+     "reason": "peak 0 (cap 96)"
+    },
+    {
+     "name": "budget.pieces",
+     "ok": true,
+     "reason": "peak 0 (cap 64)"
+    },
+    {
+     "name": "budget.lights",
+     "ok": true,
+     "reason": "peak 0 (cap 4)"
+    },
+    {
+     "name": "flash.frames",
+     "ok": true,
+     "reason": "longest screen flash 0 frames (cap 3)"
+    },
+    {
+     "name": "flash.rate",
+     "ok": true,
+     "reason": "0 screen flashes in 2.00 s (cap 3/s)"
+    },
+    {
+     "name": "plain_pieces",
+     "ok": true,
+     "reason": "peak 0 plain blocks (cap 0)"
+    }
+   ],
+   "id": "frost",
+   "kind": "loop",
+   "peak": {
+    "beams": 0,
+    "lights": 0,
+    "particles": 51,
+    "pieces": 0,
+    "plain": 0,
+    "screens": 0
+   },
+   "scores": {
+    "body_buried": 0.0039,
+    "coverage_far": 0.0048,
+    "crisp": 0.0481
+   },
+   "seconds": 2
+  },
+  "glow": {
+   "gates": [
+    {
+     "name": "budget.particles",
+     "ok": true,
+     "reason": "peak 12 (cap 400)"
+    },
+    {
+     "name": "budget.beams",
+     "ok": true,
+     "reason": "peak 0 (cap 96)"
+    },
+    {
+     "name": "budget.pieces",
+     "ok": true,
+     "reason": "peak 0 (cap 64)"
+    },
+    {
+     "name": "budget.lights",
+     "ok": true,
+     "reason": "peak 1 (cap 4)"
+    },
+    {
+     "name": "flash.frames",
+     "ok": true,
+     "reason": "longest screen flash 0 frames (cap 3)"
+    },
+    {
+     "name": "flash.rate",
+     "ok": true,
+     "reason": "0 screen flashes in 2.00 s (cap 3/s)"
+    },
+    {
+     "name": "plain_pieces",
+     "ok": true,
+     "reason": "peak 0 plain blocks (cap 0)"
+    }
+   ],
+   "id": "glow",
+   "kind": "loop",
+   "peak": {
+    "beams": 0,
+    "lights": 1,
+    "particles": 12,
+    "pieces": 0,
+    "plain": 0,
+    "screens": 0
+   },
+   "scores": {
+    "body_buried": 0.7962,
+    "coverage_far": 0.0318,
+    "crisp": 0.015
+   },
+   "seconds": 2
+  },
+  "ground_slam": {
+   "gates": [
+    {
+     "name": "budget.particles",
+     "ok": true,
+     "reason": "peak 17 (cap 400)"
+    },
+    {
+     "name": "budget.beams",
+     "ok": true,
+     "reason": "peak 88 (cap 96)"
+    },
+    {
+     "name": "budget.pieces",
+     "ok": true,
+     "reason": "peak 28 (cap 64)"
+    },
+    {
+     "name": "budget.lights",
+     "ok": true,
+     "reason": "peak 1 (cap 4)"
+    },
+    {
+     "name": "ends_clean",
+     "ok": false,
+     "reason": "lasts 3.23 s (cap 3.0), 0 left behind"
+    },
+    {
+     "name": "flash.frames",
+     "ok": true,
+     "reason": "longest screen flash 0 frames (cap 3)"
+    },
+    {
+     "name": "flash.rate",
+     "ok": true,
+     "reason": "0 screen flashes in 3.23 s (cap 3/s)"
+    },
+    {
+     "name": "plain_pieces",
+     "ok": false,
+     "reason": "peak 28 plain blocks (cap 0)"
+    }
+   ],
+   "id": "ground_slam",
+   "kind": "burst",
+   "peak": {
+    "beams": 88,
+    "lights": 1,
+    "particles": 17,
+    "pieces": 28,
+    "plain": 28,
+    "screens": 0
+   },
+   "scores": {
+    "body_buried": 0.4855,
+    "coverage_far": 0.2386,
+    "crisp": 0.0942
+   },
+   "seconds": 3.233
+  },
+  "heal": {
+   "gates": [
+    {
+     "name": "budget.particles",
+     "ok": true,
+     "reason": "peak 24 (cap 400)"
+    },
+    {
+     "name": "budget.beams",
+     "ok": true,
+     "reason": "peak 64 (cap 96)"
+    },
+    {
+     "name": "budget.pieces",
+     "ok": true,
+     "reason": "peak 0 (cap 64)"
+    },
+    {
+     "name": "budget.lights",
+     "ok": true,
+     "reason": "peak 1 (cap 4)"
+    },
+    {
+     "name": "ends_clean",
+     "ok": true,
+     "reason": "lasts 1.30 s (cap 3.0), 0 left behind"
+    },
+    {
+     "name": "flash.frames",
+     "ok": true,
+     "reason": "longest screen flash 0 frames (cap 3)"
+    },
+    {
+     "name": "flash.rate",
+     "ok": true,
+     "reason": "0 screen flashes in 1.30 s (cap 3/s)"
+    },
+    {
+     "name": "plain_pieces",
+     "ok": true,
+     "reason": "peak 0 plain blocks (cap 0)"
+    }
+   ],
+   "id": "heal",
+   "kind": "burst",
+   "peak": {
+    "beams": 64,
+    "lights": 1,
+    "particles": 24,
+    "pieces": 0,
+    "plain": 0,
+    "screens": 0
+   },
+   "scores": {
+    "body_buried": 0.4487,
+    "coverage_far": 0.0433,
+    "crisp": 0.3113
+   },
+   "seconds": 1.3
+  },
+  "impact": {
+   "gates": [
+    {
+     "name": "budget.particles",
+     "ok": true,
+     "reason": "peak 21 (cap 400)"
+    },
+    {
+     "name": "budget.beams",
+     "ok": true,
+     "reason": "peak 56 (cap 96)"
+    },
+    {
+     "name": "budget.pieces",
+     "ok": true,
+     "reason": "peak 1 (cap 64)"
+    },
+    {
+     "name": "budget.lights",
+     "ok": true,
+     "reason": "peak 1 (cap 4)"
+    },
+    {
+     "name": "ends_clean",
+     "ok": true,
+     "reason": "lasts 0.57 s (cap 3.0), 0 left behind"
+    },
+    {
+     "name": "flash.frames",
+     "ok": true,
+     "reason": "longest screen flash 0 frames (cap 3)"
+    },
+    {
+     "name": "flash.rate",
+     "ok": true,
+     "reason": "0 screen flashes in 0.57 s (cap 3/s)"
+    },
+    {
+     "name": "plain_pieces",
+     "ok": true,
+     "reason": "peak 0 plain blocks (cap 0)"
+    }
+   ],
+   "id": "impact",
+   "kind": "burst",
+   "peak": {
+    "beams": 56,
+    "lights": 1,
+    "particles": 21,
+    "pieces": 1,
+    "plain": 0,
+    "screens": 0
+   },
+   "scores": {
+    "body_buried": 1.0,
+    "coverage_far": 0.0793,
+    "crisp": 0.2169
+   },
+   "seconds": 0.567
+  },
+  "impact_frame": {
+   "gates": [
+    {
+     "name": "budget.particles",
+     "ok": true,
+     "reason": "peak 26 (cap 400)"
+    },
+    {
+     "name": "budget.beams",
+     "ok": false,
+     "reason": "peak 104 (cap 96)"
+    },
+    {
+     "name": "budget.pieces",
+     "ok": true,
+     "reason": "peak 1 (cap 64)"
+    },
+    {
+     "name": "budget.lights",
+     "ok": true,
+     "reason": "peak 0 (cap 4)"
+    },
+    {
+     "name": "ends_clean",
+     "ok": true,
+     "reason": "lasts 0.63 s (cap 3.0), 0 left behind"
+    },
+    {
+     "name": "flash.frames",
+     "ok": false,
+     "reason": "longest screen flash 8 frames (cap 3)"
+    },
+    {
+     "name": "flash.rate",
+     "ok": true,
+     "reason": "1 screen flashes in 0.63 s (cap 3/s)"
+    },
+    {
+     "name": "plain_pieces",
+     "ok": true,
+     "reason": "peak 0 plain blocks (cap 0)"
+    }
+   ],
+   "id": "impact_frame",
+   "kind": "burst",
+   "peak": {
+    "beams": 104,
+    "lights": 0,
+    "particles": 26,
+    "pieces": 1,
+    "plain": 0,
+    "screens": 1
+   },
+   "scores": {
+    "body_buried": 1.0,
+    "coverage_far": 0.9999,
+    "crisp": 0.3407
+   },
+   "seconds": 0.633
+  },
+  "laser": {
+   "gates": [
+    {
+     "name": "budget.particles",
+     "ok": true,
+     "reason": "peak 29 (cap 400)"
+    },
+    {
+     "name": "budget.beams",
+     "ok": true,
+     "reason": "peak 3 (cap 96)"
+    },
+    {
+     "name": "budget.pieces",
+     "ok": true,
+     "reason": "peak 0 (cap 64)"
+    },
+    {
+     "name": "budget.lights",
+     "ok": true,
+     "reason": "peak 1 (cap 4)"
+    },
+    {
+     "name": "flash.frames",
+     "ok": true,
+     "reason": "longest screen flash 0 frames (cap 3)"
+    },
+    {
+     "name": "flash.rate",
+     "ok": true,
+     "reason": "0 screen flashes in 2.00 s (cap 3/s)"
+    },
+    {
+     "name": "plain_pieces",
+     "ok": true,
+     "reason": "peak 0 plain blocks (cap 0)"
+    }
+   ],
+   "id": "laser",
+   "kind": "loop",
+   "peak": {
+    "beams": 3,
+    "lights": 1,
+    "particles": 29,
+    "pieces": 0,
+    "plain": 0,
+    "screens": 0
+   },
+   "scores": {
+    "body_buried": 0.1792,
+    "coverage_far": 0.0224,
+    "crisp": 0.1461
+   },
+   "seconds": 2
+  },
+  "level_up": {
+   "gates": [
+    {
+     "name": "budget.particles",
+     "ok": true,
+     "reason": "peak 30 (cap 400)"
+    },
+    {
+     "name": "budget.beams",
+     "ok": true,
+     "reason": "peak 32 (cap 96)"
+    },
+    {
+     "name": "budget.pieces",
+     "ok": true,
+     "reason": "peak 1 (cap 64)"
+    },
+    {
+     "name": "budget.lights",
+     "ok": true,
+     "reason": "peak 1 (cap 4)"
+    },
+    {
+     "name": "ends_clean",
+     "ok": true,
+     "reason": "lasts 1.27 s (cap 3.0), 0 left behind"
+    },
+    {
+     "name": "flash.frames",
+     "ok": true,
+     "reason": "longest screen flash 0 frames (cap 3)"
+    },
+    {
+     "name": "flash.rate",
+     "ok": true,
+     "reason": "0 screen flashes in 1.27 s (cap 3/s)"
+    },
+    {
+     "name": "plain_pieces",
+     "ok": true,
+     "reason": "peak 0 plain blocks (cap 0)"
+    }
+   ],
+   "id": "level_up",
+   "kind": "burst",
+   "peak": {
+    "beams": 32,
+    "lights": 1,
+    "particles": 30,
+    "pieces": 1,
+    "plain": 0,
+    "screens": 0
+   },
+   "scores": {
+    "body_buried": 0.6368,
+    "coverage_far": 0.1207,
+    "crisp": 0.1993
+   },
+   "seconds": 1.267
+  },
+  "lightning": {
+   "gates": [
+    {
+     "name": "budget.particles",
+     "ok": true,
+     "reason": "peak 23 (cap 400)"
+    },
+    {
+     "name": "budget.beams",
+     "ok": true,
+     "reason": "peak 88 (cap 96)"
+    },
+    {
+     "name": "budget.pieces",
+     "ok": true,
+     "reason": "peak 0 (cap 64)"
+    },
+    {
+     "name": "budget.lights",
+     "ok": true,
+     "reason": "peak 1 (cap 4)"
+    },
+    {
+     "name": "ends_clean",
+     "ok": true,
+     "reason": "lasts 0.57 s (cap 3.0), 0 left behind"
+    },
+    {
+     "name": "flash.frames",
+     "ok": true,
+     "reason": "longest screen flash 0 frames (cap 3)"
+    },
+    {
+     "name": "flash.rate",
+     "ok": true,
+     "reason": "0 screen flashes in 0.57 s (cap 3/s)"
+    },
+    {
+     "name": "plain_pieces",
+     "ok": true,
+     "reason": "peak 0 plain blocks (cap 0)"
+    }
+   ],
+   "id": "lightning",
+   "kind": "burst",
+   "peak": {
+    "beams": 88,
+    "lights": 1,
+    "particles": 23,
+    "pieces": 0,
+    "plain": 0,
+    "screens": 0
+   },
+   "scores": {
+    "body_buried": 1.0,
+    "coverage_far": 0.572,
+    "crisp": 0.2518
+   },
+   "seconds": 0.567
+  },
+  "lightning_slash": {
+   "gates": [
+    {
+     "name": "budget.particles",
+     "ok": true,
+     "reason": "peak 42 (cap 400)"
+    },
+    {
+     "name": "budget.beams",
+     "ok": true,
+     "reason": "peak 85 (cap 96)"
+    },
+    {
+     "name": "budget.pieces",
+     "ok": true,
+     "reason": "peak 0 (cap 64)"
+    },
+    {
+     "name": "budget.lights",
+     "ok": true,
+     "reason": "peak 1 (cap 4)"
+    },
+    {
+     "name": "ends_clean",
+     "ok": true,
+     "reason": "lasts 0.63 s (cap 3.0), 0 left behind"
+    },
+    {
+     "name": "flash.frames",
+     "ok": true,
+     "reason": "longest screen flash 2 frames (cap 3)"
+    },
+    {
+     "name": "flash.rate",
+     "ok": true,
+     "reason": "1 screen flashes in 0.63 s (cap 3/s)"
+    },
+    {
+     "name": "plain_pieces",
+     "ok": true,
+     "reason": "peak 0 plain blocks (cap 0)"
+    }
+   ],
+   "id": "lightning_slash",
+   "kind": "burst",
+   "peak": {
+    "beams": 85,
+    "lights": 1,
+    "particles": 42,
+    "pieces": 0,
+    "plain": 0,
+    "screens": 1
+   },
+   "scores": {
+    "body_buried": 0.9257,
+    "coverage_far": 1.0,
+    "crisp": 0.1739
+   },
+   "seconds": 0.633
+  },
+  "magic_circle": {
+   "gates": [
+    {
+     "name": "budget.particles",
+     "ok": true,
+     "reason": "peak 26 (cap 400)"
+    },
+    {
+     "name": "budget.beams",
+     "ok": true,
+     "reason": "peak 16 (cap 96)"
+    },
+    {
+     "name": "budget.pieces",
+     "ok": true,
+     "reason": "peak 0 (cap 64)"
+    },
+    {
+     "name": "budget.lights",
+     "ok": true,
+     "reason": "peak 1 (cap 4)"
+    },
+    {
+     "name": "flash.frames",
+     "ok": true,
+     "reason": "longest screen flash 0 frames (cap 3)"
+    },
+    {
+     "name": "flash.rate",
+     "ok": true,
+     "reason": "0 screen flashes in 2.00 s (cap 3/s)"
+    },
+    {
+     "name": "plain_pieces",
+     "ok": true,
+     "reason": "peak 0 plain blocks (cap 0)"
+    }
+   ],
+   "id": "magic_circle",
+   "kind": "loop",
+   "peak": {
+    "beams": 16,
+    "lights": 1,
+    "particles": 26,
+    "pieces": 0,
+    "plain": 0,
+    "screens": 0
+   },
+   "scores": {
+    "body_buried": 0.1373,
+    "coverage_far": 0.0457,
+    "crisp": 0.1128
+   },
+   "seconds": 2
+  },
+  "multi_slash": {
+   "gates": [
+    {
+     "name": "budget.particles",
+     "ok": true,
+     "reason": "peak 43 (cap 400)"
+    },
+    {
+     "name": "budget.beams",
+     "ok": false,
+     "reason": "peak 180 (cap 96)"
+    },
+    {
+     "name": "budget.pieces",
+     "ok": true,
+     "reason": "peak 0 (cap 64)"
+    },
+    {
+     "name": "budget.lights",
+     "ok": true,
+     "reason": "peak 1 (cap 4)"
+    },
+    {
+     "name": "ends_clean",
+     "ok": true,
+     "reason": "lasts 0.77 s (cap 3.0), 0 left behind"
+    },
+    {
+     "name": "flash.frames",
+     "ok": true,
+     "reason": "longest screen flash 0 frames (cap 3)"
+    },
+    {
+     "name": "flash.rate",
+     "ok": true,
+     "reason": "0 screen flashes in 0.77 s (cap 3/s)"
+    },
+    {
+     "name": "plain_pieces",
+     "ok": true,
+     "reason": "peak 0 plain blocks (cap 0)"
+    }
+   ],
+   "id": "multi_slash",
+   "kind": "burst",
+   "peak": {
+    "beams": 180,
+    "lights": 1,
+    "particles": 43,
+    "pieces": 0,
+    "plain": 0,
+    "screens": 0
+   },
+   "scores": {
+    "body_buried": 0.3634,
+    "coverage_far": 0.0527,
+    "crisp": 0.1466
+   },
+   "seconds": 0.767
+  },
+  "necrotic_aura": {
+   "gates": [
+    {
+     "name": "budget.particles",
+     "ok": true,
+     "reason": "peak 74 (cap 400)"
+    },
+    {
+     "name": "budget.beams",
+     "ok": true,
+     "reason": "peak 0 (cap 96)"
+    },
+    {
+     "name": "budget.pieces",
+     "ok": true,
+     "reason": "peak 0 (cap 64)"
+    },
+    {
+     "name": "budget.lights",
+     "ok": true,
+     "reason": "peak 1 (cap 4)"
+    },
+    {
+     "name": "flash.frames",
+     "ok": true,
+     "reason": "longest screen flash 0 frames (cap 3)"
+    },
+    {
+     "name": "flash.rate",
+     "ok": true,
+     "reason": "0 screen flashes in 2.00 s (cap 3/s)"
+    },
+    {
+     "name": "plain_pieces",
+     "ok": true,
+     "reason": "peak 0 plain blocks (cap 0)"
+    }
+   ],
+   "id": "necrotic_aura",
+   "kind": "loop",
+   "peak": {
+    "beams": 0,
+    "lights": 1,
+    "particles": 74,
+    "pieces": 0,
+    "plain": 0,
+    "screens": 0
+   },
+   "scores": {
+    "body_buried": 0.0063,
+    "coverage_far": 0.0107,
+    "crisp": 0.0437
+   },
+   "seconds": 2
+  },
+  "outline": {
+   "gates": [
+    {
+     "name": "budget.particles",
+     "ok": true,
+     "reason": "peak 0 (cap 400)"
+    },
+    {
+     "name": "budget.beams",
+     "ok": true,
+     "reason": "peak 0 (cap 96)"
+    },
+    {
+     "name": "budget.pieces",
+     "ok": true,
+     "reason": "peak 0 (cap 64)"
+    },
+    {
+     "name": "budget.lights",
+     "ok": true,
+     "reason": "peak 0 (cap 4)"
+    },
+    {
+     "name": "flash.frames",
+     "ok": true,
+     "reason": "longest screen flash 0 frames (cap 3)"
+    },
+    {
+     "name": "flash.rate",
+     "ok": true,
+     "reason": "0 screen flashes in 2.00 s (cap 3/s)"
+    },
+    {
+     "name": "plain_pieces",
+     "ok": true,
+     "reason": "peak 0 plain blocks (cap 0)"
+    }
+   ],
+   "id": "outline",
+   "kind": "loop",
+   "peak": {
+    "beams": 0,
+    "lights": 0,
+    "particles": 0,
+    "pieces": 0,
+    "plain": 0,
+    "screens": 0
+   },
+   "scores": {
+    "body_buried": 0.0,
+    "coverage_far": 0.0,
+    "crisp": 0.0
+   },
+   "seconds": 2
+  },
+  "portal": {
+   "gates": [
+    {
+     "name": "budget.particles",
+     "ok": true,
+     "reason": "peak 102 (cap 400)"
+    },
+    {
+     "name": "budget.beams",
+     "ok": true,
+     "reason": "peak 8 (cap 96)"
+    },
+    {
+     "name": "budget.pieces",
+     "ok": true,
+     "reason": "peak 0 (cap 64)"
+    },
+    {
+     "name": "budget.lights",
+     "ok": true,
+     "reason": "peak 1 (cap 4)"
+    },
+    {
+     "name": "flash.frames",
+     "ok": true,
+     "reason": "longest screen flash 0 frames (cap 3)"
+    },
+    {
+     "name": "flash.rate",
+     "ok": true,
+     "reason": "0 screen flashes in 2.00 s (cap 3/s)"
+    },
+    {
+     "name": "plain_pieces",
+     "ok": true,
+     "reason": "peak 0 plain blocks (cap 0)"
+    }
+   ],
+   "id": "portal",
+   "kind": "loop",
+   "peak": {
+    "beams": 8,
+    "lights": 1,
+    "particles": 102,
+    "pieces": 0,
+    "plain": 0,
+    "screens": 0
+   },
+   "scores": {
+    "body_buried": 0.6399,
+    "coverage_far": 0.0419,
+    "crisp": 0.0369
+   },
+   "seconds": 2
+  },
+  "power_aura": {
+   "gates": [
+    {
+     "name": "budget.particles",
+     "ok": true,
+     "reason": "peak 24 (cap 400)"
+    },
+    {
+     "name": "budget.beams",
+     "ok": true,
+     "reason": "peak 20 (cap 96)"
+    },
+    {
+     "name": "budget.pieces",
+     "ok": true,
+     "reason": "peak 0 (cap 64)"
+    },
+    {
+     "name": "budget.lights",
+     "ok": true,
+     "reason": "peak 1 (cap 4)"
+    },
+    {
+     "name": "flash.frames",
+     "ok": true,
+     "reason": "longest screen flash 0 frames (cap 3)"
+    },
+    {
+     "name": "flash.rate",
+     "ok": true,
+     "reason": "0 screen flashes in 2.00 s (cap 3/s)"
+    },
+    {
+     "name": "plain_pieces",
+     "ok": true,
+     "reason": "peak 0 plain blocks (cap 0)"
+    }
+   ],
+   "id": "power_aura",
+   "kind": "loop",
+   "peak": {
+    "beams": 20,
+    "lights": 1,
+    "particles": 24,
+    "pieces": 0,
+    "plain": 0,
+    "screens": 0
+   },
+   "scores": {
+    "body_buried": 0.2666,
+    "coverage_far": 0.0317,
+    "crisp": 0.0486
+   },
+   "seconds": 2
+  },
+  "rain": {
+   "gates": [
+    {
+     "name": "budget.particles",
+     "ok": true,
+     "reason": "peak 329 (cap 400)"
+    },
+    {
+     "name": "budget.beams",
+     "ok": true,
+     "reason": "peak 0 (cap 96)"
+    },
+    {
+     "name": "budget.pieces",
+     "ok": true,
+     "reason": "peak 0 (cap 64)"
+    },
+    {
+     "name": "budget.lights",
+     "ok": true,
+     "reason": "peak 0 (cap 4)"
+    },
+    {
+     "name": "flash.frames",
+     "ok": true,
+     "reason": "longest screen flash 0 frames (cap 3)"
+    },
+    {
+     "name": "flash.rate",
+     "ok": true,
+     "reason": "0 screen flashes in 2.00 s (cap 3/s)"
+    },
+    {
+     "name": "plain_pieces",
+     "ok": true,
+     "reason": "peak 0 plain blocks (cap 0)"
+    }
+   ],
+   "id": "rain",
+   "kind": "loop",
+   "peak": {
+    "beams": 0,
+    "lights": 0,
+    "particles": 329,
+    "pieces": 0,
+    "plain": 0,
+    "screens": 0
+   },
+   "scores": {
+    "body_buried": 0.0277,
+    "coverage_far": 0.0004,
+    "crisp": 0.7099
+   },
+   "seconds": 2
+  },
+  "shadow_slash": {
+   "gates": [
+    {
+     "name": "budget.particles",
+     "ok": true,
+     "reason": "peak 22 (cap 400)"
+    },
+    {
+     "name": "budget.beams",
+     "ok": true,
+     "reason": "peak 88 (cap 96)"
+    },
+    {
+     "name": "budget.pieces",
+     "ok": true,
+     "reason": "peak 0 (cap 64)"
+    },
+    {
+     "name": "budget.lights",
+     "ok": true,
+     "reason": "peak 0 (cap 4)"
+    },
+    {
+     "name": "ends_clean",
+     "ok": true,
+     "reason": "lasts 0.67 s (cap 3.0), 0 left behind"
+    },
+    {
+     "name": "flash.frames",
+     "ok": true,
+     "reason": "longest screen flash 0 frames (cap 3)"
+    },
+    {
+     "name": "flash.rate",
+     "ok": true,
+     "reason": "0 screen flashes in 0.67 s (cap 3/s)"
+    },
+    {
+     "name": "plain_pieces",
+     "ok": true,
+     "reason": "peak 0 plain blocks (cap 0)"
+    }
+   ],
+   "id": "shadow_slash",
+   "kind": "burst",
+   "peak": {
+    "beams": 88,
+    "lights": 0,
+    "particles": 22,
+    "pieces": 0,
+    "plain": 0,
+    "screens": 0
+   },
+   "scores": {
+    "body_buried": 0.2474,
+    "coverage_far": 0.0351,
+    "crisp": 0.2222
+   },
+   "seconds": 0.667
+  },
+  "shield": {
+   "gates": [
+    {
+     "name": "budget.particles",
+     "ok": true,
+     "reason": "peak 17 (cap 400)"
+    },
+    {
+     "name": "budget.beams",
+     "ok": true,
+     "reason": "peak 0 (cap 96)"
+    },
+    {
+     "name": "budget.pieces",
+     "ok": true,
+     "reason": "peak 1 (cap 64)"
+    },
+    {
+     "name": "budget.lights",
+     "ok": true,
+     "reason": "peak 0 (cap 4)"
+    },
+    {
+     "name": "flash.frames",
+     "ok": true,
+     "reason": "longest screen flash 0 frames (cap 3)"
+    },
+    {
+     "name": "flash.rate",
+     "ok": true,
+     "reason": "0 screen flashes in 2.00 s (cap 3/s)"
+    },
+    {
+     "name": "plain_pieces",
+     "ok": true,
+     "reason": "peak 0 plain blocks (cap 0)"
+    }
+   ],
+   "id": "shield",
+   "kind": "loop",
+   "peak": {
+    "beams": 0,
+    "lights": 0,
+    "particles": 17,
+    "pieces": 1,
+    "plain": 0,
+    "screens": 0
+   },
+   "scores": {
+    "body_buried": 0.7856,
+    "coverage_far": 0.0215,
+    "crisp": 0.0168
+   },
+   "seconds": 2
+  },
+  "shockwave": {
+   "gates": [
+    {
+     "name": "budget.particles",
+     "ok": true,
+     "reason": "peak 19 (cap 400)"
+    },
+    {
+     "name": "budget.beams",
+     "ok": true,
+     "reason": "peak 24 (cap 96)"
+    },
+    {
+     "name": "budget.pieces",
+     "ok": true,
+     "reason": "peak 0 (cap 64)"
+    },
+    {
+     "name": "budget.lights",
+     "ok": true,
+     "reason": "peak 0 (cap 4)"
+    },
+    {
+     "name": "ends_clean",
+     "ok": true,
+     "reason": "lasts 1.00 s (cap 3.0), 0 left behind"
+    },
+    {
+     "name": "flash.frames",
+     "ok": true,
+     "reason": "longest screen flash 0 frames (cap 3)"
+    },
+    {
+     "name": "flash.rate",
+     "ok": true,
+     "reason": "0 screen flashes in 1.00 s (cap 3/s)"
+    },
+    {
+     "name": "plain_pieces",
+     "ok": true,
+     "reason": "peak 0 plain blocks (cap 0)"
+    }
+   ],
+   "id": "shockwave",
+   "kind": "burst",
+   "peak": {
+    "beams": 24,
+    "lights": 0,
+    "particles": 19,
+    "pieces": 0,
+    "plain": 0,
+    "screens": 0
+   },
+   "scores": {
+    "body_buried": 0.6148,
+    "coverage_far": 0.279,
+    "crisp": 0.3169
+   },
+   "seconds": 1
+  },
+  "slash": {
+   "gates": [
+    {
+     "name": "budget.particles",
+     "ok": true,
+     "reason": "peak 30 (cap 400)"
+    },
+    {
+     "name": "budget.beams",
+     "ok": true,
+     "reason": "peak 68 (cap 96)"
+    },
+    {
+     "name": "budget.pieces",
+     "ok": true,
+     "reason": "peak 0 (cap 64)"
+    },
+    {
+     "name": "budget.lights",
+     "ok": true,
+     "reason": "peak 1 (cap 4)"
+    },
+    {
+     "name": "ends_clean",
+     "ok": true,
+     "reason": "lasts 0.57 s (cap 3.0), 0 left behind"
+    },
+    {
+     "name": "flash.frames",
+     "ok": true,
+     "reason": "longest screen flash 0 frames (cap 3)"
+    },
+    {
+     "name": "flash.rate",
+     "ok": true,
+     "reason": "0 screen flashes in 0.57 s (cap 3/s)"
+    },
+    {
+     "name": "plain_pieces",
+     "ok": true,
+     "reason": "peak 0 plain blocks (cap 0)"
+    }
+   ],
+   "id": "slash",
+   "kind": "burst",
+   "peak": {
+    "beams": 68,
+    "lights": 1,
+    "particles": 30,
+    "pieces": 0,
+    "plain": 0,
+    "screens": 0
+   },
+   "scores": {
+    "body_buried": 0.1529,
+    "coverage_far": 0.0409,
+    "crisp": 0.2292
+   },
+   "seconds": 0.567
+  },
+  "smoke": {
+   "gates": [
+    {
+     "name": "budget.particles",
+     "ok": true,
+     "reason": "peak 40 (cap 400)"
+    },
+    {
+     "name": "budget.beams",
+     "ok": true,
+     "reason": "peak 0 (cap 96)"
+    },
+    {
+     "name": "budget.pieces",
+     "ok": true,
+     "reason": "peak 0 (cap 64)"
+    },
+    {
+     "name": "budget.lights",
+     "ok": true,
+     "reason": "peak 0 (cap 4)"
+    },
+    {
+     "name": "flash.frames",
+     "ok": true,
+     "reason": "longest screen flash 0 frames (cap 3)"
+    },
+    {
+     "name": "flash.rate",
+     "ok": true,
+     "reason": "0 screen flashes in 2.00 s (cap 3/s)"
+    },
+    {
+     "name": "plain_pieces",
+     "ok": true,
+     "reason": "peak 0 plain blocks (cap 0)"
+    }
+   ],
+   "id": "smoke",
+   "kind": "loop",
+   "peak": {
+    "beams": 0,
+    "lights": 0,
+    "particles": 40,
+    "pieces": 0,
+    "plain": 0,
+    "screens": 0
+   },
+   "scores": {
+    "body_buried": 0.0,
+    "coverage_far": 0.0194,
+    "crisp": 0.0363
+   },
+   "seconds": 2
+  },
+  "snow": {
+   "gates": [
+    {
+     "name": "budget.particles",
+     "ok": true,
+     "reason": "peak 297 (cap 400)"
+    },
+    {
+     "name": "budget.beams",
+     "ok": true,
+     "reason": "peak 0 (cap 96)"
+    },
+    {
+     "name": "budget.pieces",
+     "ok": true,
+     "reason": "peak 0 (cap 64)"
+    },
+    {
+     "name": "budget.lights",
+     "ok": true,
+     "reason": "peak 0 (cap 4)"
+    },
+    {
+     "name": "flash.frames",
+     "ok": true,
+     "reason": "longest screen flash 0 frames (cap 3)"
+    },
+    {
+     "name": "flash.rate",
+     "ok": true,
+     "reason": "0 screen flashes in 2.00 s (cap 3/s)"
+    },
+    {
+     "name": "plain_pieces",
+     "ok": true,
+     "reason": "peak 0 plain blocks (cap 0)"
+    }
+   ],
+   "id": "snow",
+   "kind": "loop",
+   "peak": {
+    "beams": 0,
+    "lights": 0,
+    "particles": 297,
+    "pieces": 0,
+    "plain": 0,
+    "screens": 0
+   },
+   "scores": {
+    "body_buried": 0.0286,
+    "coverage_far": 0.0047,
+    "crisp": 0.1825
+   },
+   "seconds": 2
+  },
+  "soul_flame": {
+   "gates": [
+    {
+     "name": "budget.particles",
+     "ok": true,
+     "reason": "peak 83 (cap 400)"
+    },
+    {
+     "name": "budget.beams",
+     "ok": true,
+     "reason": "peak 0 (cap 96)"
+    },
+    {
+     "name": "budget.pieces",
+     "ok": true,
+     "reason": "peak 0 (cap 64)"
+    },
+    {
+     "name": "budget.lights",
+     "ok": true,
+     "reason": "peak 1 (cap 4)"
+    },
+    {
+     "name": "flash.frames",
+     "ok": true,
+     "reason": "longest screen flash 0 frames (cap 3)"
+    },
+    {
+     "name": "flash.rate",
+     "ok": true,
+     "reason": "0 screen flashes in 2.00 s (cap 3/s)"
+    },
+    {
+     "name": "plain_pieces",
+     "ok": true,
+     "reason": "peak 0 plain blocks (cap 0)"
+    }
+   ],
+   "id": "soul_flame",
+   "kind": "loop",
+   "peak": {
+    "beams": 0,
+    "lights": 1,
+    "particles": 83,
+    "pieces": 0,
+    "plain": 0,
+    "screens": 0
+   },
+   "scores": {
+    "body_buried": 0.5824,
+    "coverage_far": 0.0415,
+    "crisp": 0.0291
+   },
+   "seconds": 2
+  },
+  "soul_release": {
+   "gates": [
+    {
+     "name": "budget.particles",
+     "ok": true,
+     "reason": "peak 14 (cap 400)"
+    },
+    {
+     "name": "budget.beams",
+     "ok": true,
+     "reason": "peak 80 (cap 96)"
+    },
+    {
+     "name": "budget.pieces",
+     "ok": true,
+     "reason": "peak 1 (cap 64)"
+    },
+    {
+     "name": "budget.lights",
+     "ok": true,
+     "reason": "peak 1 (cap 4)"
+    },
+    {
+     "name": "ends_clean",
+     "ok": true,
+     "reason": "lasts 1.03 s (cap 3.0), 0 left behind"
+    },
+    {
+     "name": "flash.frames",
+     "ok": false,
+     "reason": "longest screen flash 4 frames (cap 3)"
+    },
+    {
+     "name": "flash.rate",
+     "ok": true,
+     "reason": "1 screen flashes in 1.03 s (cap 3/s)"
+    },
+    {
+     "name": "plain_pieces",
+     "ok": true,
+     "reason": "peak 0 plain blocks (cap 0)"
+    }
+   ],
+   "id": "soul_release",
+   "kind": "burst",
+   "peak": {
+    "beams": 80,
+    "lights": 1,
+    "particles": 14,
+    "pieces": 1,
+    "plain": 0,
+    "screens": 1
+   },
+   "scores": {
+    "body_buried": 0.965,
+    "coverage_far": 0.999,
+    "crisp": 0.2284
+   },
+   "seconds": 1.033
+  },
+  "sparkles": {
+   "gates": [
+    {
+     "name": "budget.particles",
+     "ok": true,
+     "reason": "peak 37 (cap 400)"
+    },
+    {
+     "name": "budget.beams",
+     "ok": true,
+     "reason": "peak 0 (cap 96)"
+    },
+    {
+     "name": "budget.pieces",
+     "ok": true,
+     "reason": "peak 0 (cap 64)"
+    },
+    {
+     "name": "budget.lights",
+     "ok": true,
+     "reason": "peak 0 (cap 4)"
+    },
+    {
+     "name": "flash.frames",
+     "ok": true,
+     "reason": "longest screen flash 0 frames (cap 3)"
+    },
+    {
+     "name": "flash.rate",
+     "ok": true,
+     "reason": "0 screen flashes in 2.00 s (cap 3/s)"
+    },
+    {
+     "name": "plain_pieces",
+     "ok": true,
+     "reason": "peak 0 plain blocks (cap 0)"
+    }
+   ],
+   "id": "sparkles",
+   "kind": "loop",
+   "peak": {
+    "beams": 0,
+    "lights": 0,
+    "particles": 37,
+    "pieces": 0,
+    "plain": 0,
+    "screens": 0
+   },
+   "scores": {
+    "body_buried": 0.0057,
+    "coverage_far": 0.0002,
+    "crisp": 0.2789
+   },
+   "seconds": 2
+  },
+  "sword_trail": {
+   "gates": [
+    {
+     "name": "budget.particles",
+     "ok": true,
+     "reason": "peak 4 (cap 400)"
+    },
+    {
+     "name": "budget.beams",
+     "ok": true,
+     "reason": "peak 0 (cap 96)"
+    },
+    {
+     "name": "budget.pieces",
+     "ok": true,
+     "reason": "peak 0 (cap 64)"
+    },
+    {
+     "name": "budget.lights",
+     "ok": true,
+     "reason": "peak 0 (cap 4)"
+    },
+    {
+     "name": "flash.frames",
+     "ok": true,
+     "reason": "longest screen flash 0 frames (cap 3)"
+    },
+    {
+     "name": "flash.rate",
+     "ok": true,
+     "reason": "0 screen flashes in 2.00 s (cap 3/s)"
+    },
+    {
+     "name": "plain_pieces",
+     "ok": true,
+     "reason": "peak 0 plain blocks (cap 0)"
+    }
+   ],
+   "id": "sword_trail",
+   "kind": "loop",
+   "peak": {
+    "beams": 0,
+    "lights": 0,
+    "particles": 4,
+    "pieces": 0,
+    "plain": 0,
+    "screens": 0
+   },
+   "scores": {
+    "body_buried": 0.0029,
+    "coverage_far": 0.0001,
+    "crisp": 0.2383
+   },
+   "seconds": 2
+  },
+  "tornado": {
+   "gates": [
+    {
+     "name": "budget.particles",
+     "ok": true,
+     "reason": "peak 0 (cap 400)"
+    },
+    {
+     "name": "budget.beams",
+     "ok": false,
+     "reason": "peak 128 (cap 96)"
+    },
+    {
+     "name": "budget.pieces",
+     "ok": true,
+     "reason": "peak 0 (cap 64)"
+    },
+    {
+     "name": "budget.lights",
+     "ok": true,
+     "reason": "peak 0 (cap 4)"
+    },
+    {
+     "name": "ends_clean",
+     "ok": true,
+     "reason": "lasts 1.13 s (cap 3.0), 0 left behind"
+    },
+    {
+     "name": "flash.frames",
+     "ok": true,
+     "reason": "longest screen flash 0 frames (cap 3)"
+    },
+    {
+     "name": "flash.rate",
+     "ok": true,
+     "reason": "0 screen flashes in 1.13 s (cap 3/s)"
+    },
+    {
+     "name": "plain_pieces",
+     "ok": true,
+     "reason": "peak 0 plain blocks (cap 0)"
+    }
+   ],
+   "id": "tornado",
+   "kind": "burst",
+   "peak": {
+    "beams": 128,
+    "lights": 0,
+    "particles": 0,
+    "pieces": 0,
+    "plain": 0,
+    "screens": 0
+   },
+   "scores": {
+    "body_buried": 0.7774,
+    "coverage_far": 0.0624,
+    "crisp": 0.2453
+   },
+   "seconds": 1.133
+  },
+  "void_rift": {
+   "gates": [
+    {
+     "name": "budget.particles",
+     "ok": true,
+     "reason": "peak 47 (cap 400)"
+    },
+    {
+     "name": "budget.beams",
+     "ok": false,
+     "reason": "peak 120 (cap 96)"
+    },
+    {
+     "name": "budget.pieces",
+     "ok": true,
+     "reason": "peak 1 (cap 64)"
+    },
+    {
+     "name": "budget.lights",
+     "ok": true,
+     "reason": "peak 1 (cap 4)"
+    },
+    {
+     "name": "ends_clean",
+     "ok": true,
+     "reason": "lasts 2.10 s (cap 3.0), 0 left behind"
+    },
+    {
+     "name": "flash.frames",
+     "ok": true,
+     "reason": "longest screen flash 0 frames (cap 3)"
+    },
+    {
+     "name": "flash.rate",
+     "ok": true,
+     "reason": "0 screen flashes in 2.10 s (cap 3/s)"
+    },
+    {
+     "name": "plain_pieces",
+     "ok": true,
+     "reason": "peak 0 plain blocks (cap 0)"
+    }
+   ],
+   "id": "void_rift",
+   "kind": "burst",
+   "peak": {
+    "beams": 120,
+    "lights": 1,
+    "particles": 47,
+    "pieces": 1,
+    "plain": 0,
+    "screens": 0
+   },
+   "scores": {
+    "body_buried": 0.903,
+    "coverage_far": 0.0584,
+    "crisp": 0.0643
+   },
+   "seconds": 2.1
+  },
+  "wind_vortex": {
+   "gates": [
+    {
+     "name": "budget.particles",
+     "ok": true,
+     "reason": "peak 46 (cap 400)"
+    },
+    {
+     "name": "budget.beams",
+     "ok": false,
+     "reason": "peak 420 (cap 96)"
+    },
+    {
+     "name": "budget.pieces",
+     "ok": true,
+     "reason": "peak 0 (cap 64)"
+    },
+    {
+     "name": "budget.lights",
+     "ok": true,
+     "reason": "peak 0 (cap 4)"
+    },
+    {
+     "name": "ends_clean",
+     "ok": true,
+     "reason": "lasts 1.20 s (cap 3.0), 0 left behind"
+    },
+    {
+     "name": "flash.frames",
+     "ok": true,
+     "reason": "longest screen flash 0 frames (cap 3)"
+    },
+    {
+     "name": "flash.rate",
+     "ok": true,
+     "reason": "0 screen flashes in 1.20 s (cap 3/s)"
+    },
+    {
+     "name": "plain_pieces",
+     "ok": true,
+     "reason": "peak 0 plain blocks (cap 0)"
+    }
+   ],
+   "id": "wind_vortex",
+   "kind": "burst",
+   "peak": {
+    "beams": 420,
+    "lights": 0,
+    "particles": 46,
+    "pieces": 0,
+    "plain": 0,
+    "screens": 0
+   },
+   "scores": {
+    "body_buried": 0.6666,
+    "coverage_far": 0.1369,
+    "crisp": 0.2714
+   },
+   "seconds": 1.2
+  }
+ }
+}

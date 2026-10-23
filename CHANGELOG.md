@@ -4,6 +4,19 @@ All notable changes to EasyVFX are listed here. Versions follow [Semantic Versio
 
 ## [Unreleased]
 
+### Headless agentic loop (`tools/evfx`)
+- `tests/timeline.luau` records every frame of one play under Lune (beams, pieces, lights, screen effects, FOV,
+  streaming emitters, bursts). The harness gains an opt-in lockstep mode (`Harness.lockstep`, `Harness.tick`,
+  `Harness.onFrame`, a virtual `os.clock`): every waiting coroutine advances one frame per tick, so a play is
+  byte-identical from run to run. Without it, each coroutine's `task.wait` advanced the shared clock, so effects
+  measured about twice their real length. The existing tests don't use it and are unchanged.
+- `tools/evfx` (numpy and Pillow, no Blender): `strip`, `gif`, `lineup`, `sheet`, `diff` (with `preset@ref`), `export`,
+  `audit` and `selftest`. Particles are re-simulated from their emitter settings with a fixed seed per particle.
+- The audit's gates (budget, ends clean, flash length and rate, plain blocks) read `tools/evfx/rules.json`;
+  `tools/evfx/baseline.json` records today's results, and `tools/check.sh` and CI fail if a gate gets worse.
+  12 of 45 presets fail a gate today (impact-frame flashes over 3 frames, chained-beam counts over 96, plain rocks).
+- `tools/render_snapshot.py` is removed: it no longer read the snapshot's format. `docs/agentic-loop.md` shows the loop.
+
 ### Rough and missing-HD effects fixed
 - Slashes keep their sharp `Slash` blade (hot edge, eroding tail) in HD as well. Before, HD replaced it with soft particle crescents. HD now adds v3 on top:
   - star twinkles thrown off the blade;

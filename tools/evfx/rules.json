@@ -1,0 +1,18 @@
+{
+  "budget": {
+    "particles": 400,
+    "beams": 96,
+    "pieces": 64,
+    "lights": 4
+  },
+  "burstSeconds": 3.0,
+  "flashFrames": 3,
+  "flashesPerSecond": 3,
+  "plainPieces": 0,
+  "moments": 11,
+  "scores": {
+    "lit": 0.04,
+    "bright": 0.25
+  },
+  "presets": {}
+}
