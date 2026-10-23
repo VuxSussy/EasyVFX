@@ -33,6 +33,12 @@ echo "== builder + runtime tests"
 echo "== UI tests"
 "$LUNE" run tests/ui.luau | tail -1
 
+echo "== texgen selftest"
+"$PYTHON" tools/texgen selftest | tail -1
+
+echo "== texgen check (library v4 matches its recipes and the rules)"
+"$PYTHON" tools/texgen check --fresh | tail -1
+
 echo "== evfx selftest"
 "$PYTHON" tools/evfx selftest | tail -1
 

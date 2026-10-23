@@ -4,6 +4,21 @@ All notable changes to EasyVFX are listed here. Versions follow [Semantic Versio
 
 ## [Unreleased]
 
+### Texture generator and library v4 (`tools/texgen`)
+- `tools/texgen` draws VFX textures in Python (numpy and Pillow, no Blender): `list`, `build`, `sheet`, `gif`, `check`
+  and `selftest`. Each texture is a recipe in `tools/texgen/bank.json`, rendered by id with knobs (size, seed, timing,
+  hue). `docs/texgen.md` explains it.
+- Library v4, 31 textures in `pack/generated` (not uploaded): shapes (core flash, cross flare, god-ray fan, shard,
+  ink stroke), 4x4 erosion flipbooks (burst, smoke, flame loop, shock ring, slash eroding from its tail, dust ring),
+  spritesheets (rock chunks, embers, bolts), tiled strips (energy, fire, lightning, wind), the art tier (brush
+  strokes, two sigils, cel petals and shards, a rainbow-fringe ring, frost, flame and storm ground sigils, floor
+  streaks, a dark halo) and three source noise maps.
+- `tools/check.sh` and CI run `texgen selftest` and `texgen check --fresh`.
+- `evfx` reads `pack/generated` after `pack/textures`, so presets can be judged on v4 textures before upload.
+- `docs/plan-real-vfx.md` gains reference H (Ampro's slash and hit) and its particle rules: emitters named by role and
+  grouped by beat, emit by count, keypoint envelopes, the two-way line burst, the flat slash, an "Emit and preview"
+  button for Studio.
+
 ### Headless agentic loop (`tools/evfx`)
 - `tests/timeline.luau` records every frame of one play under Lune (beams, pieces, lights, screen effects, FOV,
   streaming emitters, bursts). The harness gains an opt-in lockstep mode (`Harness.lockstep`, `Harness.tick`,

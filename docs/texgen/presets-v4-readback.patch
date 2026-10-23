@@ -1,0 +1,163 @@
+diff --git a/src/Plugin/Shared/Presets.luau b/src/Plugin/Shared/Presets.luau
+index d657130..40b6229 100644
+--- a/src/Plugin/Shared/Presets.luau
++++ b/src/Plugin/Shared/Presets.luau
+@@ -176,6 +176,38 @@ local function hdFlip(pack: string, at: any, count: number, size: { any }, life:
+ 	return layer
+ end
+ 
++-- Library v4 readback (tools/texgen): the same layers on generated textures.
++local function v4(layer: Layer, pack: string, extra: { [string]: any }?): Layer
++	layer.hd = true
++	layer.pack = pack
++	layer.texture = nil
++	if extra then
++		for k, v in extra do
++			layer[k] = v
++		end
++	end
++	return layer
++end
++
++local function v4Core(at: any, size: number): Layer
++	return {
++		type = "particles",
++		name = "Core",
++		hd = true,
++		pack = "shape_core_flash",
++		at = at,
++		burst = 1,
++		speed = { 0, 0 },
++		size = { { 0, size }, { 1, size * 0.4 } },
++		transparency = { { 0, 0 }, { 1, 1 } },
++		lifetime = { 0.07, 0.07 },
++		color = { "w" },
++		lightEmission = 1,
++		brightness = 3,
++		zOffset = 2,
++	}
++end
++
+ local function hdDust(count: number): Layer
+ 	return hdFlip("flip_smoke", Vector3.new(0, -1.6, 0), count, { { 0, 2.5 }, { 1, 6 } }, { 0.9, 1.4 }, {
+ 		color = { "g" },
+@@ -438,7 +470,28 @@ Presets.List = ({
+ 				color0 = "p",
+ 				color1 = "s",
+ 			},
+-			twinkles(14, 28, Vector3.new(0, 0, -4.5), 0.04),
++			{
++				type = "particles",
++				name = "Slash",
++				hd = true,
++				pack = "flip_slash_erode",
++				at = "center",
++				flipbook = "Grid4x4",
++				flipMode = "OneShot",
++				burst = 2,
++				orientation = "VelocityPerpendicular",
++				direction = "Top",
++				speed = { 5, 5 },
++				spread = { 0, 0 },
++				size = { { 0, 9 }, { 1, 10 } },
++				lifetime = { 0.35, 0.4 },
++				rotation = { -15, 15 },
++				color = { "w", "p" },
++				lightEmission = 1,
++				lightInfluence = 0,
++				brightness = 2,
++			},
++			v4(twinkles(14, 28, Vector3.new(0, 0, -4.5), 0.04), "shape_cross_flare"),
+ 			{
+ 				type = "shape",
+ 				kind = "Lines",
+@@ -446,7 +499,7 @@ Presets.List = ({
+ 				color0 = "p",
+ 				color1 = "s",
+ 			},
+-			sparks(14, 35),
++			v4(sparks(14, 35), "shape_aniso_shard"),
+ 			{ type = "light", brightness = 3, range = 14, color = "p", flash = 0.25 },
+ 		},
+ 	},
+@@ -511,9 +564,10 @@ Presets.List = ({
+ 				color0 = "p",
+ 				color1 = "s",
+ 			},
+-			hdFlip("flip_impact", "center", 1, { { 0, 6 }, { 1, 9 } }, { 0.4, 0.4 }, { zOffset = 1, color = { "p", "s" }, brightness = 1.2 }),
+-			hdRing("center", 13, 0.35, Vector3.new(90, 0, 0)),
+-			sparks(16, 30),
++			v4Core("center", 4),
++			hdFlip("flip_burst_dissolve", "center", 1, { { 0, 6 }, { 1, 9 } }, { 0.4, 0.4 }, { zOffset = 1, color = { "p", "s" }, brightness = 1.2 }),
++			v4(hdRing("center", 13, 0.35, Vector3.new(90, 0, 0)), "flip_shock_ring", { flipbook = "Grid4x4", flipMode = "OneShot" }),
++			v4(sparks(16, 30), "shape_aniso_shard"),
+ 			{ type = "light", brightness = 4, range = 14, color = "p", flash = 0.2 },
+ 		},
+ 	},
+@@ -526,8 +580,49 @@ Presets.List = ({
+ 		placement = "ground",
+ 		defaults = { color1 = rgb(255, 200, 60), color2 = rgb(255, 90, 20), trigger = "Loop", interval = 3.5 },
+ 		layers = {
+-			{ type = "shape", kind = "Crater", attrs = { Count = 14, Radius = 7, SizeMin = 1.4, SizeMax = 2.6, Duration = 3, Ground = true } },
+-			{ type = "shape", kind = "Debris", attrs = { Count = 14, Force = 40, SizeMin = 0.4, SizeMax = 1.1, Duration = 2.2, Ground = true } },
++			basic({ type = "shape", kind = "Crater", attrs = { Count = 14, Radius = 7, SizeMin = 1.4, SizeMax = 2.6, Duration = 3, Ground = true } }),
++			basic({ type = "shape", kind = "Debris", attrs = { Count = 14, Force = 40, SizeMin = 0.4, SizeMax = 1.1, Duration = 2.2, Ground = true } }),
++			{
++				type = "particles",
++				name = "FloorStreaks",
++				hd = true,
++				pack = "art_floor_streaks",
++				at = Vector3.new(0, -1.9, 0),
++				burst = 1,
++				orientation = "VelocityPerpendicular",
++				direction = "Top",
++				speed = { 0.01, 0.01 },
++				size = { { 0, 12 }, { 0.15, 15 }, { 1, 15 } },
++				transparency = { { 0, 0 }, { 0.5, 0.2 }, { 1, 1 } },
++				lifetime = { 1.0, 1.0 },
++				rotation = { 0, 360 },
++				color = { "w", "p" },
++				lightEmission = 1,
++				brightness = 1.5,
++			},
++			{
++				type = "particles",
++				name = "Rocks",
++				hd = true,
++				pack = "sheet_rock_chunks",
++				at = Vector3.new(0, -1.5, 0),
++				flipbook = "Grid4x4",
++				flipMode = "Loop",
++				flipRandom = true,
++				burst = 14,
++				direction = "Top",
++				speed = { 22, 34 },
++				spread = { 35, 35 },
++				accel = Vector3.new(0, -70, 0),
++				size = { { 0, 1.1 }, { 1, 0.9 } },
++				transparency = { { 0, 0 }, { 0.8, 0 }, { 1, 1 } },
++				lifetime = { 0.8, 1.0 },
++				rotation = { 0, 360 },
++				rotSpeed = { -300, 300 },
++				color = { "g" },
++				lightEmission = 0,
++				lightInfluence = 1,
++			},
+ 			{
+ 				type = "shape",
+ 				kind = "Ring",
+@@ -543,9 +638,11 @@ Presets.List = ({
+ 				color1 = "s",
+ 			},
+ 			basic(dust(14)),
+-			hdDust(12),
+-			hdRing(Vector3.new(0, -1.8, 0), 30, 0.55),
+-			hdFlip("flip_impact", Vector3.new(0, -1, 0), 1, { { 0, 7 }, { 1, 11 } }, { 0.35, 0.35 }, { color = { "p", "s" }, brightness = 1.2 }),
++			v4(hdDust(12), "flip_smoke_puff", { lifetime = { 0.6, 0.9 } }),
++			v4(hdRing(Vector3.new(0, -1.8, 0), 18, 0.6), "flip_dust_ring", { flipbook = "Grid4x4", flipMode = "OneShot", color = { "g" }, lightEmission = 0, lightInfluence = 1, brightness = 1 }),
++			v4(hdRing(Vector3.new(0, -1.8, 0), 30, 0.45), "flip_shock_ring", { flipbook = "Grid4x4", flipMode = "OneShot" }),
++			v4Core(Vector3.new(0, -1, 0), 5),
++			hdFlip("flip_burst_dissolve", Vector3.new(0, -1, 0), 1, { { 0, 5 }, { 1, 8 } }, { 0.35, 0.35 }, { color = { "p", "s" }, brightness = 1, zOffset = -1 }),
+ 			{ type = "shape", kind = "Shake", attrs = { Magnitude = 1.6, Duration = 0.7, Roughness = 10 } },
+ 			{ type = "light", brightness = 5, range = 22, color = "p", flash = 0.35 },
+ 		},
