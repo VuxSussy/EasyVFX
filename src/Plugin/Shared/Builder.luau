@@ -531,19 +531,54 @@ LayerBuilders.beam = function(ctx, key, layer)
 	end)
 end
 
--- A textured mesh shell (tools/meshgen, docs/plan-real-vfx.md step 2): the template
--- MeshPart the runtime clones and animates. A script can't set MeshId, so the template
--- comes from AssetService; texture frames are swapped through TextureID at play time,
--- since a mesh can't play a flipbook atlas.
+-- A textured mesh shell (tools/meshgen, docs/plan-real-vfx.md step 2). A MeshPart's
+-- TextureID alpha doesn't cut it out, and only a plugin may set a SurfaceAppearance's
+-- colour map (docs/meshgen.md), so the builder bakes one MeshPart per texture frame,
+-- each with its own SurfaceAppearance, under a hidden lead part. The runtime shows one
+-- frame at a time. A script can't set MeshId, so the mesh comes from AssetService.
+local function shellFrame(base: MeshPart, texture: string, index: number): MeshPart
+	local frame = base:Clone()
+	-- a frame belongs to its lead part, not to a layer of its own
+	frame:SetAttribute(Builder.LAYER_ATTR, nil)
+	frame:SetAttribute("VFX_MeshAsset", nil)
+	frame.Name = string.format("Frame%02d", index)
+	frame.Transparency = 1
+	frame.Material = Enum.Material.SmoothPlastic
+	frame:SetAttribute("VFX_Frame", index)
+	frame:SetAttribute("VFX_FrameTexture", texture)
+	local sa = Instance.new("SurfaceAppearance")
+	sa.AlphaMode = Enum.AlphaMode.Transparency
+	-- plugin-only properties; the Content ones first, the older ContentId one as a fallback
+	if not pcall(function()
+		sa.ColorMapContent = Content.fromUri(texture)
+	end) then
+		pcall(function()
+			(sa :: any).ColorMap = texture
+		end)
+	end
+	pcall(function()
+		sa.EmissiveMaskContent = Content.fromUri(texture)
+	end)
+	sa.Parent = frame
+	return frame
+end
+
 LayerBuilders.shell = function(ctx, key, layer)
 	local params: Params = ctx.params
 	local meshId = ctx.assets[layer.mesh]
 	if type(meshId) ~= "string" then
 		return
 	end
+	local frames = {}
+	for _, k in layer.frames or {} do
+		if ctx.assets[k] then
+			table.insert(frames, ctx.assets[k])
+		end
+	end
+	local signature = meshId .. "|" .. table.concat(frames, ",")
 	local found = ctx.existing[key]
 	local part: MeshPart
-	if found and found:IsA("MeshPart") and found:GetAttribute("VFX_MeshAsset") == meshId then
+	if found and found:IsA("MeshPart") and found:GetAttribute("VFX_MeshAsset") == signature then
 		part = found :: MeshPart
 	else
 		if found then
@@ -558,25 +593,27 @@ LayerBuilders.shell = function(ctx, key, layer)
 		end
 		part = made :: MeshPart
 		part:SetAttribute(Builder.LAYER_ATTR, key)
-		part:SetAttribute("VFX_MeshAsset", meshId)
+		part:SetAttribute("VFX_MeshAsset", signature)
+		for i, texture in frames do
+			shellFrame(part, texture, i).Parent = part
+		end
 		ctx.existing[key] = part
 	end
 	ctx.wanted[key] = true
 	part.Name = layer.name or "Shell"
-	part.Anchored = true
-	part.CanCollide = false
-	part.CanTouch = false
-	part.CanQuery = false
-	part.CastShadow = false
-	part.Transparency = 1
-	part.CFrame = ctx.root.CFrame
-	local frames = {}
-	for _, k in layer.frames or {} do
-		if ctx.assets[k] then
-			table.insert(frames, ctx.assets[k])
+	local pieces: { Instance } = part:GetChildren()
+	table.insert(pieces, part)
+	for _, p in pieces do
+		if p:IsA("BasePart") then
+			p.Anchored = true
+			p.CanCollide = false
+			p.CanTouch = false
+			p.CanQuery = false
+			p.CastShadow = false
+			p.Transparency = 1
+			p.CFrame = ctx.root.CFrame
 		end
 	end
-	part.TextureID = frames[1] or ""
 	local attrs: { [string]: any } = table.clone(layer.attrs or {})
 	local timeScale = params.lifetime / math.max(0.05, params.speed)
 	for _, k in { "Size0", "Size1", "Offset" } do
@@ -591,7 +628,7 @@ LayerBuilders.shell = function(ctx, key, layer)
 	end
 	attrs.Color0 = resolveColor(layer.color0 or "w", params)
 	attrs.Color1 = resolveColor(layer.color1 or layer.color0 or "p", params)
-	attrs.Frames = table.concat(frames, ",")
+	attrs.Emissive = (attrs.Emissive or 3) * params.glow
 	attrs.VFX_Shell = true
 	for name, value in attrs do
 		part:SetAttribute(name, value)

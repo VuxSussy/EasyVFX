@@ -41,10 +41,16 @@ A `shell` layer names a mesh and its texture frames:
   color0 = "w", color1 = "p" }
 ```
 
-- **Building:** a script can't set `MeshId`, so the builder makes a hidden template MeshPart with
-  `AssetService:CreateMeshPartAsync` (plugins may call it).
-- **Playing:** the runtime clones the template. The clone grows from `Size0` to `Size1`, turns by `SpinDeg` and fades.
-  It also swaps `TextureID` through the frames, since a mesh can't play a flipbook atlas.
+- **Building:** a script can't set `MeshId`, so the builder makes a hidden lead MeshPart with
+  `AssetService:CreateMeshPartAsync` (plugins may call it). A MeshPart's `TextureID` alpha doesn't cut it out (see
+  "In Studio" below), so the builder also bakes one frame MeshPart per texture frame under the lead. Each frame gets
+  its own `SurfaceAppearance`: `AlphaMode` Transparency, the frame as `ColorMapContent` and `EmissiveMaskContent`.
+  Only a plugin may set those.
+- **Playing:** the runtime clones the lead and shows one frame at a time. The visible frame grows from `Size0` to
+  `Size1`, turns by `SpinDeg` and fades (never below `Transparency` 0.02, where the alpha dithers). The runtime also
+  sets the `SurfaceAppearance`'s `Color`, `EmissiveTint` and `EmissiveStrength` (`Emissive`, default 3), which scripts
+  may write.
+- **Cost:** every frame is a MeshPart, so a shell carries few frames; `slash_v4` uses every other ribbon frame (8).
 - **Frames:** texgen's `sequence` kind writes frames as separate images (`seq/slash_ribbon` gives 16).
 - **Before upload:** without uploaded IDs the layer is skipped.
 - **evfx:** draws `pack://` meshes from `pack/meshes`, with perspective-correct UVs and two-sided coverage counted
@@ -68,5 +74,4 @@ its shell with `EditableMesh` and its frame with `EditableImage`, so nothing has
 - **Only a plugin can write the colour map.** `SurfaceAppearance.ColorMap` and `ColorMapContent` need
   `PluginSecurity`. `AlphaMode`, `Color`, `EmissiveStrength` and `EmissiveTint` are writable at runtime. So the
   builder (a plugin) has to bake one part per frame with its own `SurfaceAppearance`, and the runtime can only switch
-  which one is visible and drive its emissive. Swapping `TextureID` at runtime, as the `shell` layer does today, won't
-  show the erosion in the game.
+  which one is visible and drive its emissive. The `shell` layer works that way now.

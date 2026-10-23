@@ -2,10 +2,10 @@
 
     python tools/meshgen studio [-o folder]   (run 00.luau first, then each shot)
 
-It builds each shell with EditableMesh and its texture frames with EditableImage (from
-pack/meshes and pack/generated), then lays out a static strip in edit mode: the slash
-ribbon's frames on crescent shells side by side, Neon next to SmoothPlastic, and the
-cone with its wind strip. Run it in the command bar or through an MCP execute call.
+It builds each shell with EditableMesh and its texture frame with EditableImage (from
+pack/meshes and pack/generated), puts the frame in a SurfaceAppearance the way the
+builder bakes it, and lays out a static strip in edit mode: the slash ribbon's frames on
+crescent shells side by side, the cone with its wind strip and the torus. Run it in the command bar or through an MCP execute call.
 Studio-only (EditableMesh and EditableImage run on the CPU).
 """
 
@@ -21,16 +21,16 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 GEN = os.path.join(ROOT, "pack", "generated")
 MESHES = os.path.join(ROOT, "pack", "meshes")
 
-# (label, mesh, texture, position, material, colour)
+# (label, mesh, texture, position, material, colour); every shot uses the runtime's
+# SurfaceAppearance path, so the material only matters where the alpha is cut away
 SHOTS = [
-    ("wide f00 Neon", "mesh_crescent_wide", "seq_slash_ribbon_00", (0, 6, 0), "Neon", (255, 214, 64)),
-    ("wide f04 Neon", "mesh_crescent_wide", "seq_slash_ribbon_04", (12, 6, 0), "Neon", (255, 214, 64)),
-    ("wide f08 Neon", "mesh_crescent_wide", "seq_slash_ribbon_08", (24, 6, 0), "Neon", (255, 214, 64)),
-    ("wide f12 Neon", "mesh_crescent_wide", "seq_slash_ribbon_12", (36, 6, 0), "Neon", (255, 214, 64)),
-    ("wide f00 Plastic", "mesh_crescent_wide", "seq_slash_ribbon_00", (0, 6, 14), "SmoothPlastic", (255, 214, 64)),
-    ("thin f04 Neon", "mesh_crescent_thin", "seq_slash_ribbon_04", (12, 6, 14), "Neon", (255, 120, 20)),
-    ("cone wind Neon", "mesh_cone", "strip_wind_stroke", (24, 4, 14), "Neon", (255, 214, 64)),
-    ("torus energy Neon", "mesh_torus", "strip_energy_streak", (36, 6, 14), "Neon", (120, 200, 255)),
+    ("wide f00", "mesh_crescent_wide", "seq_slash_ribbon_00", (0, 6, 0), "SmoothPlastic", (255, 214, 64)),
+    ("wide f04", "mesh_crescent_wide", "seq_slash_ribbon_04", (12, 6, 0), "SmoothPlastic", (255, 214, 64)),
+    ("wide f08", "mesh_crescent_wide", "seq_slash_ribbon_08", (24, 6, 0), "SmoothPlastic", (255, 214, 64)),
+    ("wide f12", "mesh_crescent_wide", "seq_slash_ribbon_12", (36, 6, 0), "SmoothPlastic", (255, 214, 64)),
+    ("thin f04", "mesh_crescent_thin", "seq_slash_ribbon_04", (12, 6, 14), "SmoothPlastic", (255, 120, 20)),
+    ("cone wind", "mesh_cone", "strip_wind_stroke", (24, 4, 14), "SmoothPlastic", (255, 214, 64)),
+    ("torus energy", "mesh_torus", "strip_energy_streak", (36, 6, 14), "SmoothPlastic", (120, 200, 255)),
 ]
 TEX_MAX = 256  # textures are halved for the script's size; enough to judge in Studio
 
@@ -94,7 +94,17 @@ local ok, err = pcall(function()
 	part.CFrame = CFrame.new({pos[0]}, {pos[1]}, {pos[2]}) * CFrame.Angles(math.rad(70), 0, 0)
 	part.Material = Enum.Material.{mat}
 	part.Color = Color3.fromRGB({col[0]}, {col[1]}, {col[2]})
-	part.TextureContent = Content.fromObject(P.image({w}, {h}, '{b}'))
+	-- the runtime's path: the frame in a SurfaceAppearance, alpha cut out, emissive mask
+	local img = P.image({w}, {h}, '{b}')
+	local sa = Instance.new("SurfaceAppearance")
+	sa.AlphaMode = Enum.AlphaMode.Transparency
+	sa.ColorMapContent = Content.fromObject(img)
+	sa.EmissiveMaskContent = Content.fromObject(img)
+	sa.EmissiveStrength = 3
+	sa.EmissiveTint = part.Color
+	sa.Color = part.Color
+	sa.Parent = part
+	part.Transparency = 0.02
 	part.Parent = P.folder
 end)
 return "{label}: " .. (if ok then "ok" else tostring(err))

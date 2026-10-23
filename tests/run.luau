@@ -680,9 +680,17 @@ do
 		end
 	end
 	check(template ~= nil and template.MeshId == "rbxassetid://31", "slash_v4 builds its crescent shell template")
-	check(template ~= nil and template.Transparency == 1 and template:GetAttribute("VFX_Shell") == true, "the shell template stays hidden")
-	local frameList = if template then string.split(template:GetAttribute("Frames") :: string, ",") else {}
-	check(#frameList == 16 and frameList[1] == "rbxassetid://400", "the shell carries its 16 ribbon frames")
+	check(template ~= nil and template.Transparency == 1 and template:GetAttribute("VFX_Shell") == true, "the shell's lead part stays hidden")
+	local frameParts = {}
+	for _, c in (if template then template:GetChildren() else {}) do
+		if c:IsA("MeshPart") and c:GetAttribute("VFX_Frame") then
+			frameParts[c:GetAttribute("VFX_Frame")] = c
+		end
+	end
+	check(#frameParts == 8, "the shell bakes one MeshPart per frame (" .. #frameParts .. ")")
+	check(frameParts[1] ~= nil and frameParts[1]:FindFirstChildOfClass("SurfaceAppearance") ~= nil, "each frame carries a SurfaceAppearance")
+	check(frameParts[1] ~= nil and frameParts[1].MeshId == "rbxassetid://31", "each frame has the shell's mesh")
+	check(frameParts[2] ~= nil and frameParts[2]:GetAttribute("VFX_FrameTexture") == "rbxassetid://402", "frames take every other ribbon frame")
 	local okNoMesh, noMeshRoot = pcall(Builder.create, Builder.defaultParams("slash_v4"), { cframe = roblox.CFrame.new(), size = roblox.Vector3.new(4, 4, 4), parent = holderP }, withV4)
 	local anyMesh = false
 	for _, d in (if okNoMesh then noMeshRoot:GetDescendants() else {}) do
@@ -691,22 +699,29 @@ do
 	check(okNoMesh and not anyMesh, "without a mesh ID the shell layer is skipped")
 	if okShell then
 		local seen = {}
+		local most = 0
 		local live = EasyVFX.PlayLocal(shellRoot)
 		check(live > 0, "slash_v4 with shells has a length")
 		for _ = 1, 60 do
 			task.wait()
 			local folder = (H.workspace.CurrentCamera or H.workspace):FindFirstChild("EasyVFX_Live")
-			for _, d in (if folder then folder:GetChildren() else {}) do
-				if d:IsA("MeshPart") then
-					seen[d.TextureID] = true
+			local visible = 0
+			for _, d in (if folder then folder:GetDescendants() else {}) do
+				if d:IsA("MeshPart") and d.Transparency < 1 and d:GetAttribute("VFX_Frame") and d.Name ~= "SlashEcho" then
+					if d.Parent and d.Parent.Name == "Slash" then
+						visible += 1
+						seen[d:GetAttribute("VFX_FrameTexture")] = true
+					end
 				end
 			end
+			most = math.max(most, visible)
 		end
 		local n = 0
 		for _ in seen do
 			n += 1
 		end
-		check(n >= 4, "a playing shell swaps through its frames (" .. n .. " seen)")
+		check(n >= 4, "a playing shell steps through its frames (" .. n .. " seen)")
+		check(most == 1, "a shell shows one frame at a time (" .. most .. ")")
 		for _ = 1, 120 do
 			task.wait()
 		end
