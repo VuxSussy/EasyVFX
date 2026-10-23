@@ -162,6 +162,24 @@ The motion bible's victim shake ("decaying over the freeze") is then `fadeOut` e
 | path visualization | `evfx` already draws particle paths headless; add path layers when they exist |
 | `emit` returns `Finished` | `EasyVFX.PlayLocal` returns a handle with `finished` (for chaining beats) |
 
+## The store page's feature list
+
+The plugin's store page (pasted by Phát) lists features the docs don't cover. Each, with what we have and what we'd
+add:
+
+| Their feature | EasyVFX | Add |
+|---|---|---|
+| beam flipbooks | beams scroll one texture | `frames = { ids, ease }` on beams too, the same shape as shells |
+| lightning | `sheet/bolt_variants`, `strip/lightning_fringe`, lightning presets | a `lightning` layer: segments re-jittered every few frames, stepped on twos |
+| custom tween properties | none | `tween = { property, from, to, ease, hold }` on any property, with the same curve type as section 1 |
+| texture loading (prevents flicker) | none | preload a preset's textures and meshes the first time it plays (`ContentProvider:PreloadAsync`) |
+| recolor | `color1` / `color2` and palette tokens (`w`, `p`, `s`, `k`) | a studio recolor knob over the same tokens |
+| retime and resize | `params.speed`, `params.size` | retime through the `speed` clock; keep every `hold` and ease |
+| copier and shifter | none | copy a curve or an exit preset from one layer to another (a studio action, saved as code) |
+| mesh flipbook importer and uploader | meshgen shells, frames baked per texture, uploads gated | nothing new: uploads stay held until the effects look right |
+| path visualization | `evfx` renders the paths headless | path layers when they exist |
+| quick add by hotkey, UI themes | the plugin's Create tab | not needed for the agent loop |
+
 ## What a user's review asks for
 
 A VFX Forge user's review (pasted by Phát, 2026-10-24) makes four points that match this plan:
@@ -181,8 +199,8 @@ A VFX Forge user's review (pasted by Phát, 2026-10-24) makes four points that m
 ## Order
 
 1. Named-ease curves with `hold`, and the exit presets: they fix the abrupt endings, and the grammar can name a
-   layer's exit.
+   layer's exit. The same curve type serves `tween` on any property.
 2. The whole-effect `speed` clock: hit-stop and Retime on one clock, which fixes the desync.
-3. The shell renames, with `frames.ease`.
+3. The shell renames, with `frames.ease` for shells and beams, and texture preloading on first play.
 4. The shake envelope.
-5. Path layers and ground pieces, after a call on rocks.
+5. Layer kits (public, documented), then lightning, path layers and ground pieces (after a call on rocks).
