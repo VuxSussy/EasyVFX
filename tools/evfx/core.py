@@ -42,12 +42,18 @@ def lune():
     sys.exit("evfx: lune not found; run `rokit install`")
 
 
-def export(presets=None, mode="hd", root=ROOT, out=None):
-    """Runs tests/timeline.luau in `root` and returns the folder it wrote."""
-    out = out or os.path.join(CACHE, "timeline", mode)
+def _folder(mode, fps):
+    return os.path.join(CACHE, "timeline", mode if fps == 30 else f"{mode}-{fps}")
+
+
+def export(presets=None, mode="hd", root=ROOT, out=None, fps=30):
+    """Runs tests/timeline.luau in `root` and returns the folder it wrote. `fps` is the
+    harness frame rate: 30 for the audit, 60 for the beat judge."""
+    out = out or _folder(mode, fps)
     os.makedirs(out, exist_ok=True)
     args = [lune(), "run", "tests/timeline.luau", os.path.abspath(out), mode, ",".join(presets or [])]
-    done = subprocess.run(args, cwd=root, capture_output=True, text=True)
+    env = {**os.environ, "EVFX_FPS": str(fps)}
+    done = subprocess.run(args, cwd=root, capture_output=True, text=True, env=env)
     if done.returncode != 0:
         sys.exit("evfx: timeline export failed\n" + done.stdout + done.stderr)
     failed = [line for line in done.stdout.splitlines() if "FAILED" in line]
@@ -56,11 +62,11 @@ def export(presets=None, mode="hd", root=ROOT, out=None):
     return out
 
 
-def load(preset, mode="hd", folder=None, fresh=False):
-    folder = folder or os.path.join(CACHE, "timeline", mode)
+def load(preset, mode="hd", folder=None, fresh=False, fps=30):
+    folder = folder or _folder(mode, fps)
     path = os.path.join(folder, preset + ".json")
     if fresh or not os.path.exists(path):
-        export([preset], mode, out=folder)
+        export([preset], mode, out=folder, fps=fps)
     if not os.path.exists(path):
         sys.exit(f"evfx: no preset named {preset}")
     with open(path, encoding="utf-8") as f:

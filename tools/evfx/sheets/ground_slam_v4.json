@@ -1,0 +1,14 @@
+{
+ "preset": "ground_slam_v4",
+ "status": "draft",
+ "note": "Frames are 60 fps from the effect's start, which is the hit.",
+ "move": {"from": "BasicHeavy.Cleave", "windup": 0.5, "active": 0.1, "recovery": 0.7, "style": "Heavy", "fire": 0},
+ "beats": [
+  {"name": "Hit", "from": 0, "to": 2, "flash": true, "hit": true, "shape": "core flash", "palette": ["gold"],
+   "layers": {"back": ["Halo"], "main": ["Core", "Flare"], "line": ["Rays"]}, "ref": "lotus:dome"},
+  {"name": "Slam", "from": 0, "to": 24, "shape": "ground burst", "palette": ["gold"],
+   "layers": {"ground": ["Floor", "Ring"], "main": ["mesh_cone", "Shards"], "dust": ["Rocks"]}, "ref": "frigid:contact"},
+  {"name": "Settle", "from": 3, "to": 45, "shape": "dust volume", "palette": ["gold"],
+   "layers": {"ground": ["DustRing"], "back": ["Volume"], "dust": ["Embers"]}, "ref": "lotus:tail"}
+ ]
+}

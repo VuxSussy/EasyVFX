@@ -8,6 +8,9 @@
     python tools/evfx diff <preset>[@ref] <preset>[@ref]       strips and numbers, side by side
     python tools/evfx export <preset>                         per-frame census and the audit, as text
     python tools/evfx phases <preset>[@ref] ...               flash, burst, tail, white core, hues (plan §4)
+    python tools/evfx beats [preset ...] [--png]               the beat judge: fix-first list against the beat
+                                                              sheet, the references and the move (60 fps)
+    python tools/evfx ref <name> [--build]                    a reference's beats and their stats
     python tools/evfx audit [preset ...] [--check | --update] [--no-scores]
     python tools/evfx selftest                                planted bad cases must fail
 
@@ -24,8 +27,9 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from evfx import core, measure, render  # noqa: E402
+from evfx import beats, core, measure, refs, render  # noqa: E402
 
+import numpy as np  # noqa: E402
 from PIL import Image, ImageDraw  # noqa: E402
 
 OUT = os.path.join(core.CACHE, "out")
@@ -247,6 +251,94 @@ def cmd_phases(args):
                 print(f"  {r['t']:5.2f}  {_bar(r['coverage'], top)}  {_bar(r['lum'], topl)}  {r['buried']:.2f}")
 
 
+SEV = {3: (255, 90, 80), 2: (255, 190, 70), 1: (150, 170, 200)}
+
+
+def _beat_picture(spec, timeline, found, path):
+    """The curves with every beat's span, the hit and the recovery's end, then each beat
+    at its brightest frame."""
+    c = beats.curves(timeline)
+    n = len(c["coverage"])
+    w, top, row_h = 1200, 150, 16
+    rows = len(spec["beats"])
+    plot_h = top + rows * row_h + 30
+    cams = core.views(timeline, (290, 194))
+    tiles = []
+    for b in spec["beats"]:
+        own = b.get("_curves") or c
+        lo, hi = max(0, b["from"]), min(n - 1, max(b["to"], b["from"]))
+        at = lo + int(np.argmax(own["lum"][lo : hi + 1])) if hi >= lo else lo
+        rgb, _ = render.draw(timeline, at * timeline["frameTime"], cams["close"])
+        img = render.to_image(rgb)
+        d = ImageDraw.Draw(img)
+        mine = [f for f in found if f["beat"] == b["name"]]
+        d.rectangle([0, 0, 290, 16], fill=(0, 0, 0))
+        d.text((4, 3), f"{b['name']} f{at}" + (f"  {len(mine)} to fix" if mine else ""), fill=SEV[max(f["sev"] for f in mine)] if mine else LABEL)
+        tiles.append(img)
+    cols = 4
+    grid_h = ((len(tiles) + cols - 1) // cols) * 198
+    sheet = Image.new("RGB", (w, plot_h + grid_h), (18, 18, 22))
+    d = ImageDraw.Draw(sheet)
+    x = lambda k: 64 + (w - 84) * k / max(1, n - 1)  # noqa: E731
+    for key, colour in (("coverage", (110, 180, 255)), ("white", (245, 245, 245)), ("lum", (255, 200, 90))):
+        ys = c[key]
+        peak = max(ys) or 1
+        pts = [(x(k), 10 + (top - 20) * (1 - v / peak)) for k, v in enumerate(ys)]
+        d.line(pts, fill=colour, width=2)
+    d.text((68, 4), "coverage", fill=(110, 180, 255))
+    d.text((144, 4), "white", fill=(245, 245, 245))
+    d.text((194, 4), "brightness", fill=(255, 200, 90))
+    for k in range(0, n, 10):
+        d.line([(x(k), top - 6), (x(k), top)], fill=(90, 90, 100))
+        d.text((x(k) - 6, top + rows * row_h + 4), str(k), fill=(120, 120, 130))
+    for i, b in enumerate(spec["beats"]):
+        y = top + i * row_h
+        colour = (255, 255, 255) if b.get("flash") else (120, 110, 200)
+        d.rectangle([x(b["from"]), y + 2, max(x(b["from"]) + 2, x(b["to"])), y + row_h - 3], fill=colour)
+        d.text((4, y + 2), b["name"][:9], fill=LABEL)
+    move = spec.get("move")
+    if move:
+        fps = round(1 / timeline["frameTime"])
+        hit = -move.get("fire", 0) * fps
+        end = hit + (move["active"] + move["recovery"]) * fps
+        for k, colour, label in ((hit, (255, 80, 80), "hit"), (end, (255, 160, 60), "recovery ends")):
+            if 0 <= k <= n - 1:
+                d.line([(x(k), 8), (x(k), top + rows * row_h)], fill=colour, width=1)
+                d.text((x(k) + 3, 14 if label == "hit" else 26), label, fill=colour)
+    for f in found:
+        d.ellipse([x(f["frame"]) - 4, top - 14, x(f["frame"]) + 4, top - 6], fill=SEV[f["sev"]])
+    for i, img in enumerate(tiles):
+        r, col = divmod(i, cols)
+        sheet.paste(img, (6 + col * 298, plot_h + r * 198))
+    sheet.save(path, quality=90)
+
+
+def cmd_beats(args):
+    names = args.presets or beats.sheets()
+    for name in names:
+        spec = beats.sheet(name)
+        timeline = core.load(name, args.mode, fresh=args.fresh, fps=60)
+        found = beats.judge(spec, timeline)
+        text = beats.report(spec, found)
+        print(text + "\n")
+        base = _out(args, f"{name}.beats")
+        with open(base + ".txt", "w", encoding="utf-8") as f:
+            f.write(text + "\n")
+        if args.png:
+            _beat_picture(spec, timeline, found, base + ".jpg")
+            print(base + ".jpg")
+
+
+def cmd_ref(args):
+    ref = refs.build(args.name, args.clip) if args.build else refs.load(args.name)
+    print(f"{ref['title']} ({ref['tier']}), {ref['source']}")
+    print("  beat         frames      len peak rise half tenth flash hues  calm  top")
+    for b in ref["beats"]:
+        st = b.get("stats") or {}
+        print(f"  {b['name']:<12} f{b['from']:>3}-{b['to']:<5} {st.get('length', 0):>4} {st.get('peak_at', 0):>4} {st.get('rise', 0):>4} "
+              f"{st.get('half', 0):>4} {st.get('tenth', 0):>5} {st.get('flash', 0):>5} {st.get('hues', 0):>4} {st.get('calm', 0):>5.2f}  {', '.join(st.get('top', []))}")
+
+
 def _compare(old, new):
     """Gates that passed in the baseline and fail now, and score changes."""
     worse, better = [], []
@@ -353,6 +445,17 @@ def main():
     p.add_argument("presets", nargs="+")
     p.add_argument("--frames", action="store_true", help="print the per-frame curve")
     p.set_defaults(run=cmd_phases)
+
+    p = sub.add_parser(parents=[common], name="beats")
+    p.add_argument("presets", nargs="*", help="presets with a sheet in tools/evfx/sheets (all when empty)")
+    p.add_argument("--png", action="store_true", help="also draw the beats over the curves, and each beat")
+    p.set_defaults(run=cmd_beats)
+
+    p = sub.add_parser(parents=[common], name="ref")
+    p.add_argument("name")
+    p.add_argument("--build", action="store_true", help="re-measure the beats from the clip in .cache/refs")
+    p.add_argument("--clip", help="the clip, when it is not where the reference says")
+    p.set_defaults(run=cmd_ref)
 
     p = sub.add_parser(parents=[common], name="audit")
     p.add_argument("presets", nargs="*")

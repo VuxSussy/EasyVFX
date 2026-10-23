@@ -105,7 +105,7 @@ def cmd_build(args):
         lo, hi = verts.min(0), verts.max(0)
         manifest["meshes"][filename(i)[:-4]] = {
             "id": i, "triangles": len(tris), "bounds": [round(float(x), 4) for x in (hi - lo)],
-            "sha256": hashlib.sha256(text.encode()).hexdigest(), "upload": True, "use": bank()[i]["use"],
+            "sha256": hashlib.sha256(text.encode()).hexdigest(), "upload": bank()[i].get("upload", True), "use": bank()[i]["use"],
         }
         print(f"{i:22s} {len(tris):5d} tris  " + ("ok" if not fails else "; ".join(fails)))
     manifest["meshes"] = dict(sorted(manifest["meshes"].items()))

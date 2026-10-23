@@ -4,6 +4,38 @@ All notable changes to EasyVFX are listed here. Versions follow [Semantic Versio
 
 ## [Unreleased]
 
+### The beat judge
+- `evfx beats` judges an effect beat by beat against a beat sheet (`tools/evfx/sheets`) and prints what to fix first,
+  with frames. It checks the sheet's beats, flashes, palettes and depths and compares each beat with a reference
+  beat. When the sheet names an SE370 move, it also times the beats to that move by SE370's motion bible: the hit
+  frame, a quiet or telling wind-up, the burst in the follow-through, the tail against the recovery, and the style's
+  keywords. `--png` draws it.
+- `evfx ref` cuts Lotus and Frigid Rush into beats and measures their shape. Only the cut and the numbers are
+  committed (`tools/evfx/references`).
+- Timelines can be exported at 60 fps (`EVFX_FPS=60`); `phases` rows carry per-frame hue and motion.
+- Sheets for `slash_v4`, `impact_v4` and `ground_slam_v4` (drafts, on Chop, Barge and Cleave) and for the
+  `bloom_strike` study.
+
+### Bloom Strike: Lotus's layering on generated art
+- `docs/refs/dissection-lotus-frigid.md` steps through Lotus and Frigid Rush at 60 fps: beats, frames, shapes,
+  palettes. `docs/refs/lotus-layers.md` maps every Lotus beat's layers back to front, each with a role, blend and
+  facing, and finds the five depths each beat stacks: ground, back volume, main shape, line work, dust.
+- `bloom_strike` rebuilds that layering on generated art in a 4 s move. Emitters are named by role and grouped by
+  beat, with two 2-frame flashes:
+  - wrap: crescent shells over violet smoke;
+  - flare: 8-point star over a dark halo, then a cross;
+  - sphere shell, then a flower sigil with orbit rings and bokeh;
+  - gold seed, then the dome flash and a rainbow ring;
+  - a pillar and a blooming lotus-crown mesh over a gold ground ring;
+  - a calm gold swirl, petals and grass.
+
+  It is hidden in the plugin until library v4 is uploaded.
+- New texgen recipes: `shape/star8`, `shape/hollow_ring`, `shape/bokeh`, `art/flower_sigil`, `art/brush_ring`,
+  `art/petal_single`, `strip/pillar_streaks`, `strip/dome_glow`, `sheet/grass`. New meshes: `mesh/dome` and
+  `mesh/lotus`, a petal crown dressed by one petal texture.
+- Found on the way: a hit-stop pauses shells but not particle emit delays, so a multi-beat preset skips it.
+  Layers in one group share an attachment, placed by the group's first layer.
+
 ### Shells on SurfaceAppearance
 - In Studio, a MeshPart's `TextureID` alpha doesn't cut it out, and only a plugin may set a `SurfaceAppearance`'s
   colour map. The `shell` layer now bakes one frame MeshPart per texture frame under a hidden lead, each with its own

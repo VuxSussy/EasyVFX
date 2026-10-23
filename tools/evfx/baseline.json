@@ -116,6 +116,66 @@
    },
    "seconds": 0.7
   },
+  "bloom_strike": {
+   "gates": [
+    {
+     "name": "budget.particles",
+     "ok": true,
+     "reason": "peak 63 (cap 400)"
+    },
+    {
+     "name": "budget.beams",
+     "ok": true,
+     "reason": "peak 0 (cap 96)"
+    },
+    {
+     "name": "budget.pieces",
+     "ok": true,
+     "reason": "peak 3 (cap 64)"
+    },
+    {
+     "name": "budget.lights",
+     "ok": true,
+     "reason": "peak 1 (cap 4)"
+    },
+    {
+     "name": "ends_clean",
+     "ok": true,
+     "reason": "lasts 2.80 s (cap 3.0), 0 left behind"
+    },
+    {
+     "name": "flash.frames",
+     "ok": true,
+     "reason": "longest screen flash 0 frames (cap 3)"
+    },
+    {
+     "name": "flash.rate",
+     "ok": true,
+     "reason": "0 screen flashes in 2.80 s (cap 3/s)"
+    },
+    {
+     "name": "plain_pieces",
+     "ok": true,
+     "reason": "peak 0 plain blocks (cap 0)"
+    }
+   ],
+   "id": "bloom_strike",
+   "kind": "burst",
+   "peak": {
+    "beams": 0,
+    "lights": 1,
+    "particles": 63,
+    "pieces": 3,
+    "plain": 0,
+    "screens": 0
+   },
+   "scores": {
+    "body_buried": 0.9157,
+    "coverage_far": 0.0268,
+    "crisp": 0.0635
+   },
+   "seconds": 2.8
+  },
   "bubbles": {
    "gates": [
     {
@@ -2250,9 +2310,9 @@
     "screens": 0
    },
    "scores": {
-    "body_buried": 0.2244,
+    "body_buried": 0.227,
     "coverage_far": 0.0421,
-    "crisp": 0.1558
+    "crisp": 0.0799
    },
    "seconds": 0.5
   },

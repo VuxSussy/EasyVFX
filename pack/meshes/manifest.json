@@ -49,6 +49,30 @@
       "upload": true,
       "use": "a light pillar or a beam's body"
     },
+    "mesh_dome": {
+      "id": "mesh/dome",
+      "triangles": 1216,
+      "bounds": [
+        1.0,
+        0.5,
+        1.0
+      ],
+      "sha256": "a371b74e7aaa013f5f05d82a6eec4450644a5f909116f9759f649d07fa3b7dc7",
+      "upload": true,
+      "use": "a hemisphere: the dome flash on the ground"
+    },
+    "mesh_lotus": {
+      "id": "mesh/lotus",
+      "triangles": 1680,
+      "bounds": [
+        1.0,
+        0.6219,
+        1.0
+      ],
+      "sha256": "1cb4146b7eb789a6c0111a6501d2bf76223a398b0237240c6723bc7d9ff0b84b",
+      "upload": false,
+      "use": "a lotus crown for the Bloom Strike study; learning only, not uploaded"
+    },
     "mesh_sphere": {
       "id": "mesh/sphere",
       "triangles": 1920,

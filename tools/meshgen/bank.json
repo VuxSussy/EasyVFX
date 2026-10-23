@@ -8,6 +8,8 @@
     "mesh/cone": {"recipe": "cone", "use": "a burst thrown up from the ground; a shockwave with height"},
     "mesh/sphere": {"recipe": "sphere", "use": "a dome flash or a shield"},
     "mesh/torus": {"recipe": "torus", "use": "a hard ring that keeps its thickness at any angle"},
-    "mesh/cylinder": {"recipe": "cylinder", "use": "a light pillar or a beam's body"}
+    "mesh/cylinder": {"recipe": "cylinder", "use": "a light pillar or a beam's body"},
+    "mesh/dome": {"recipe": "dome", "use": "a hemisphere: the dome flash on the ground"},
+    "mesh/lotus": {"recipe": "lotus", "upload": false, "use": "a lotus crown for the Bloom Strike study; learning only, not uploaded"}
   }
 }

@@ -151,27 +151,29 @@ def summary(timeline, with_scores=True):
     return result, rows
 
 
-def phases(timeline, limits=None):
+def phases(timeline, limits=None, ks=None):
     """The grammar of plan §4, read frame by frame from the close view: how many frames
     the flash holds (the view's added brightness at least half its peak, the way the ZZZ
     capture was measured), the frame the burst peaks, when the tail ends, whether the
     brightest pixels are white, how many hues the effect uses and the most of the body
-    it buries. Returns (summary, rows)."""
+    it buries. `ks` limits the rows to those frame indices. Returns (summary, rows)."""
     limits = limits or rules(timeline.get("id"))
     lit, bright = limits["scores"]["lit"], limits["scores"]["bright"]
     cams = core.views(timeline)
     step = timeline.get("frameTime", 1 / 30)
     count = int(round(core.duration(timeline) / step)) + 1
     empty = render.draw({**timeline, "frames": [], "bursts": [], "emitters": []}, 0, cams["close"])[0]
-    rows, hue_hist = [], np.zeros(12)
-    for k in range(count):
+    rows, hue_hist, last = [], np.zeros(12), empty
+    for k in ks if ks is not None else range(count):
         t = k * step
         rgb, info = render.draw(timeline, t, cams["close"])
         diff = np.abs(rgb - empty).mean(axis=2)
         mask = diff > lit
         white = mask & (rgb.min(axis=2) > 0.85)
         row = {"t": round(t, 3), "coverage": float(mask.mean()), "white": float(white.mean()),
-               "lum": float(np.clip(rgb - empty, 0, None).mean()), "core": 0.0, "buried": 0.0}
+               "lum": float(np.clip(rgb - empty, 0, None).mean()), "core": 0.0, "buried": 0.0,
+               "motion": float(np.abs(rgb - last).mean()), "hue": [0.0] * 12}
+        last = rgb
         if mask.sum() > 20:
             px = rgb[mask]
             top = px[np.argsort(px.mean(axis=1))[-max(1, len(px) // 50):]]
@@ -182,7 +184,9 @@ def phases(timeline, limits=None):
             if len(col):
                 r, g, b = col[:, 0], col[:, 1], col[:, 2]
                 hue = (np.degrees(np.arctan2(np.sqrt(3) * (g - b), 2 * r - g - b)) % 360) // 30
-                hue_hist += np.bincount(hue.astype(int), minlength=12)[:12]
+                counts = np.bincount(hue.astype(int), minlength=12)[:12]
+                hue_hist += counts
+                row["hue"] = [round(float(c), 4) for c in counts / counts.sum()]
         body = info["body"]
         if body is not None and body.any():
             row["buried"] = float((diff[body] > bright).mean())

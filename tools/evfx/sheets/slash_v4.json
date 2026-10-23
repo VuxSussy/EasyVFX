@@ -1,0 +1,14 @@
+{
+ "preset": "slash_v4",
+ "status": "draft",
+ "note": "Frames are 60 fps from the effect's start. The crescents sweep in for 4 frames before contact, so the effect fires 0.067 s before the hit.",
+ "move": {"from": "BasicSingle.Chop", "windup": 0.07, "active": 0.08, "recovery": 0.26, "style": "Duelist", "fire": -0.067},
+ "beats": [
+  {"name": "Swing", "from": 0, "to": 20, "shape": "crescent shells", "palette": ["gold"],
+   "layers": {"back": ["Ink"], "main": ["mesh_crescent_wide", "mesh_crescent_thin"], "line": ["LineBurst"]}, "ref": "lotus:slash"},
+  {"name": "Hit", "from": 4, "to": 6, "flash": true, "hit": true, "shape": "core flash", "palette": ["gold"],
+   "layers": {"back": ["Halo"], "main": ["Core", "Flare"], "line": ["Rays"]}, "ref": "lotus:flare"},
+  {"name": "Scatter", "from": 4, "to": 36, "shape": "shards", "palette": ["gold"],
+   "layers": {"line": ["Shards"], "dust": ["Embers"]}}
+ ]
+}

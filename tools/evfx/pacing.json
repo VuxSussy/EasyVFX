@@ -1,0 +1,35 @@
+{
+ "_about": "Beat judge limits (tools/evfx beats). Frames are 60 fps. Numbers marked bible come from SE370's docs/motion-bible.md; the others from the Lotus and Frigid dissection (docs/refs).",
+ "fps": 60,
+ "flashFrames": 2,
+ "keyFrames": 4,
+ "hitShare": [0.2, 0.333],
+ "hitTolerance": 1,
+ "onsetTolerance": 2,
+ "windupQuiet": 0.25,
+ "followThrough": 0.333,
+ "maxHues": 3,
+ "stepRate": 12,
+ "alive": 0.003,
+ "styles": {
+  "Hunter": ["heavy", "committed", "wind-up", "hang time", "hit-stop", "telegraph"],
+  "Heavy": ["heavy", "committed", "wind-up", "hang time", "hit-stop", "strain", "long recovery"],
+  "Brawler": ["snappy", "punchy", "overshoot", "settle"],
+  "BrawlerJab": ["snappy", "punchy"],
+  "BrawlerKick": ["snappy", "punchy", "overshoot"],
+  "Duelist": ["snappy", "crisp", "hit-stop", "clean recovery"]
+ },
+ "keywords": {
+  "snappy": "the hit beat comes on within snapRise frames and its flash holds flashFrames",
+  "punchy": "the camera jolts within shakeWithin frames of the hit",
+  "crisp": "every key beat stays on screen keyFrames frames and comes on within crispRise",
+  "heavy": "something tells the wind-up, and the tail runs past the recovery",
+  "committed": "the tail runs to the end of the recovery",
+  "telegraph": "something tells the wind-up",
+  "clean recovery": "the tail is gone within cleanAfter seconds of the recovery's end"
+ },
+ "snapRise": 1,
+ "crispRise": 3,
+ "shakeWithin": 2,
+ "cleanAfter": 0.15
+}

@@ -8,7 +8,7 @@ from PIL import Image, ImageDraw
 
 from evfx import core, render
 
-TEXTURES = {"crescent": "pack://seq_slash_ribbon_00"}
+TEXTURES = {"crescent": "pack://seq_slash_ribbon_00", "lotus": "pack://art_petal_single", "cylinder": "pack://strip_pillar_streaks"}
 DEFAULT = "pack://strip_energy_streak"
 ANGLES = ((0.0, 25.0), (60.0, 50.0), (150.0, 10.0))
 CELL = (300, 220)

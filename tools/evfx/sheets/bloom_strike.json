@@ -1,0 +1,23 @@
+{
+ "preset": "bloom_strike",
+ "status": "study",
+ "note": "Lotus's beats compressed to a game-length move (docs/refs/lotus-layers.md). A study: no SE370 move, never shipped.",
+ "beats": [
+  {"name": "Wrap", "from": 0, "to": 14, "shape": "crescents", "palette": ["pink", "violet"],
+   "layers": {"back": ["SlashSmoke"], "main": ["mesh_crescent_wide", "mesh_crescent_thin"], "line": ["MotionStreaks"], "dust": ["Embers"]}, "ref": "lotus:slash"},
+  {"name": "Flare", "from": 26, "to": 28, "flash": true, "shape": "8-point star", "palette": ["violet"],
+   "layers": {"back": ["DarkHalo", "Bloom"], "main": ["Star8", "Cross4"]}, "ref": "lotus:flare"},
+  {"name": "Sphere", "from": 30, "to": 52, "shape": "sphere", "palette": ["pink", "blue"],
+   "layers": {"main": ["SparkBall", "mesh_sphere"], "line": ["Tendrils", "RimWisps"]}, "ref": "lotus:sphere"},
+  {"name": "Sigil", "from": 50, "to": 96, "shape": "flower sigil", "palette": ["blue", "violet", "pink"],
+   "layers": {"back": ["Bokeh"], "main": ["FlowerSigil"], "dust": ["OrbitRings", "Twinkles"]}, "ref": "lotus:sigil"},
+  {"name": "Seed", "from": 78, "to": 90, "shape": "gold seed", "palette": ["gold"],
+   "layers": {"main": ["Seed", "RingStroke"]}, "ref": "lotus:seed"},
+  {"name": "Dome", "from": 90, "to": 92, "flash": true, "shape": "white dome", "palette": [],
+   "layers": {"main": ["mesh_dome"]}, "ref": "lotus:dome"},
+  {"name": "Bloom", "from": 92, "to": 162, "shape": "lotus in a pillar", "palette": ["magenta", "gold", "pink"],
+   "layers": {"ground": ["GroundRing"], "back": ["Grass"], "main": ["mesh_lotus", "mesh_cylinder"], "line": ["FringeArc", "BaseSparks"], "dust": ["Petals", "GoldDust"]}, "ref": "lotus:lotus"},
+  {"name": "Tail", "from": 160, "to": 240, "shape": "gold dust", "palette": ["gold", "pink", "green"],
+   "layers": {"ground": ["GroundSwirl"], "dust": ["Petals", "GoldDust"]}, "ref": "lotus:tail"}
+ ]
+}

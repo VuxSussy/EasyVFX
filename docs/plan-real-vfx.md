@@ -382,5 +382,10 @@ Phát uses it on his Mac. What carries over, most valuable first:
 | calibration: held-out evidence behind every verdict | each score validated on held-out reference and bad clips | the verdicts can be trusted |
 | MCP server | `evfx` as an MCP server | agents call it the way they call earshot |
 
+**Built (2026-10-23):** `profile` + `critique` and `kit` as `evfx beats` ([the agentic loop](agentic-loop.md#beats)):
+references cut into beats and measured (`evfx ref`), a beat sheet per effect, and a fix-first list that judges each
+beat against its sheet, its reference beat and the SE370 move it plays on, timed by SE370's motion bible. Next on
+this list: `forge` (search the knobs against the judge) and `match` (image embeddings).
+
 **For SE370's sound:** sounds are still stubs (sound-M4). earshot itself could be the sound side of this pipeline,
 paired with evfx: one cue list, both checked against the same animation markers.
