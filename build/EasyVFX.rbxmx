@@ -798,12 +798,28 @@ type Anim = {
 	start: (() -> ())?,
 	step: (alpha: number, dt: number) -> (),
 	finish: (() -> ())?,
+	scale: number,
 }
 
 local active: { Anim } = {}
+-- The effect clock: every delayed emit, pulse and animation of a play runs on this driver,
+-- so a hit-stop or an effect's VFX_TimeScale moves all of it together (docs/vfx-grammar.md,
+-- "Curves and exits"). playScale is the time scale of the play being set up; addAnim takes it.
+local playScale = 1
+-- Emitters of plays still running, so a hit-stop can freeze their particles too.
+local liveEmitters: { [ParticleEmitter]: boolean } = setmetatable({}, { __mode = "k" }) :: any
 local driverRunning = false
 -- Hit-stop: while os.clock() < frozenUntil every running effect holds its frame.
 local frozenUntil = 0
+
+-- True while an instance is still in the game. Reading a destroyed one is safe in Roblox
+-- (Parent is nil) but raises in some hosts, so the effect clock's callbacks ask this.
+local function alive(inst: Instance): boolean
+	local ok, parent = pcall(function()
+		return inst.Parent
+	end)
+	return ok and parent ~= nil
+end
 
 local function finishAnim(a: Anim)
 	if a.finish then
@@ -828,7 +844,7 @@ local function runDriver()
 			local i = 1
 			while i <= #active do
 				local a = active[i]
-				a.t += dt
+				a.t += dt * a.scale
 				local keep = true
 				if a.t >= a.delay then
 					if not a.started then
@@ -878,6 +894,7 @@ local function addAnim(
 		start = start,
 		step = step,
 		finish = finish,
+		scale = playScale,
 	})
 	runDriver()
 end
@@ -2219,6 +2236,27 @@ end
 function EasyVFX.HitStop(seconds: number)
 	local length = math.clamp(seconds, 0, 0.3)
 	frozenUntil = math.max(frozenUntil, os.clock() + length)
+	-- particles freeze with the driver; each emitter's own time scale comes back after
+	for e in liveEmitters do
+		if alive(e) then
+			if e:GetAttribute("VFX_BaseTimeScale") == nil then
+				e:SetAttribute("VFX_BaseTimeScale", e.TimeScale)
+			end
+			e.TimeScale = 0
+		end
+	end
+	task.delay(length, function()
+		if os.clock() + 1e-3 < frozenUntil then
+			return -- a later hit-stop is still holding; it restores them
+		end
+		for e in liveEmitters do
+			local base = alive(e) and e:GetAttribute("VFX_BaseTimeScale")
+			if type(base) == "number" then
+				e.TimeScale = base
+				e:SetAttribute("VFX_BaseTimeScale", nil)
+			end
+		end
+	end)
 	for track in hitStopTracks do
 		if track.IsPlaying then
 			local speed = track.Speed
@@ -2469,16 +2507,16 @@ local function pulse(inst: Instance, delay: number, duration: number)
 		end)
 		return
 	end
-	task.delay(delay, function()
-		if pulseTokens[inst] == token and inst.Parent then
+	addAnim(delay, 0.016, function()
+		if pulseTokens[inst] == token and alive(inst) then
 			setOn(inst, true)
 		end
-	end)
-	task.delay(delay + duration, function()
-		if pulseTokens[inst] == token and inst.Parent then
+	end, function() end)
+	addAnim(delay + duration, 0.016, function()
+		if pulseTokens[inst] == token and alive(inst) then
 			setOn(inst, false)
 		end
-	end)
+	end, function() end)
 end
 
 -- Your own Blender/Studio mesh: a hidden template part that gets copied and animated.
@@ -2658,6 +2696,8 @@ function EasyVFX.PlayLocal(target: Instance | string, at: CFrame?): number
 		rng = Random.new(),
 		ignore = ignore,
 	}
+	local timeScale = root:GetAttribute("VFX_TimeScale")
+	playScale = if type(timeScale) == "number" then math.clamp(timeScale, 0.05, 4) else 1
 
 	-- Re-roll random tilts so HD slashes swing at a new angle every time.
 	for _, d in root:GetDescendants() do
@@ -2682,15 +2722,19 @@ function EasyVFX.PlayLocal(target: Instance | string, at: CFrame?): number
 		local delay = num(d, "EmitDelay", 0)
 		local duration = d:GetAttribute("EmitDuration")
 		if d:IsA("ParticleEmitter") then
+			liveEmitters[d] = true
+			if playScale ~= 1 then
+				d.TimeScale = playScale
+			end
 			local count = d:GetAttribute("EmitCount")
 			if type(count) == "number" and count > 0 then
 				local n = math.max(1, math.floor(count * ctx.quality + 0.5))
 				if delay > 0 then
-					task.delay(delay, function()
-						if d.Parent then
+					addAnim(delay, 0.016, function()
+						if alive(d) then
 							d:Emit(n)
 						end
-					end)
+					end, function() end)
 				else
 					d:Emit(n)
 				end
@@ -3157,6 +3201,7 @@ EasyVFX.InitServer()
 
 local Presets = require(script.Parent.Presets)
 local Custom = require(script.Parent.Custom)
+local Curves = require(script.Parent.Curves)
 
 local Builder = {}
 
@@ -3342,7 +3387,7 @@ local function numberSequence(spec: any, mul: number, minValue: number?, maxValu
 		return NumberSequence.new(v)
 	end
 	local points = {}
-	for _, kp in spec :: { { number } } do
+	for _, kp in Curves.keypoints(spec) do
 		local v = kp[2] * mul
 		if minValue then
 			v = math.max(minValue, v)
@@ -3521,10 +3566,15 @@ LayerBuilders.particles = function(ctx, key, layer)
 	e.FlipbookMode = enumItem(Enum.ParticleFlipbookMode, layer.flipMode, Enum.ParticleFlipbookMode.OneShot) :: any
 	e.FlipbookStartRandom = layer.flipRandom == true
 	e.Color = colorSequence(layer.color, params)
-	e.Size = numberSequence(layer.size or 1, params.size, 0)
-	e.Transparency = numberSequence(layer.transparency or 0, 1, 0, 1)
+	-- a layer's exit (Curves.EXITS) reshapes how it leaves: transparency, size, lifetime
+	local size, transparency, lifeMul = layer.size or 1, layer.transparency or 0, 1
+	if layer.exit then
+		transparency, size, lifeMul = Curves.exit(layer.exit, transparency, size)
+	end
+	e.Size = numberSequence(size, params.size, 0)
+	e.Transparency = numberSequence(transparency, 1, 0, 1)
 	e.Squash = numberSequence(layer.squash or 0, 1, -3, 3)
-	e.Lifetime = range(layer.lifetime, params.lifetime, 1)
+	e.Lifetime = range(layer.lifetime, params.lifetime * lifeMul, 1)
 	e.Speed = range(layer.speed, params.speed * math.sqrt(params.size), 5)
 	local spread = layer.spread or { 0, 0 }
 	e.SpreadAngle = Vector2.new(spread[1], spread[2])
@@ -4005,6 +4055,224 @@ return Builder
       </Item>
       <Item class="ModuleScript" referent="7">
         <Properties>
+          <string name="Name">Curves</string>
+          <string name="Source"><![CDATA[--!strict
+--[[
+	Curves: a property's change over a particle's (or a beam's) life as a named ease,
+	instead of hand-written keypoints. docs/vfx-grammar.md, "Curves and exits".
+
+		{ from = 0, to = 1, ease = "inCubic", hold = 0.4, envelope = 0.05 }
+
+	holds `from` until `hold` (a share of the life), then eases to `to` by the end. A layer may
+	still give raw keypoints ({ { t, v, envelope? }, ... }) or a single number; Curves.keypoints
+	passes those through, so every existing preset builds exactly as before.
+
+	Eases: "linear", "in"/"out"/"inOut" with "Sine", "Quad", "Cubic", "Quart", "Expo",
+	"Circ" or "Back" ("outBack" overshoots), and "steps4" ... "steps12" for the on-twos look.
+
+	Exits: how a layer leaves, one per role (tools/evfx/grammar.json `exits`):
+		flashCut      a core: holds, then gone fast in its last 40%
+		snapShrink    shards: hold, then shrink to nothing
+		holdFade      base, glint, dark, dust: hold most of the life, then fade
+		gustDisperse  volume, ground: thin early and slowly while it keeps growing
+		sinkFade      debris: solid until the last 15%, then fade
+	Curves.exit(name, transparency, size) returns the layer's new transparency and size specs.
+]]
+
+local Curves = {}
+
+local MAX_POINTS = 20 -- Roblox's NumberSequence limit
+local SAMPLES = 10
+
+local function back(t: number): number
+	local s = 1.70158
+	return t * t * ((s + 1) * t - s)
+end
+
+local IN: { [string]: (number) -> number } = {
+	Sine = function(t)
+		return 1 - math.cos(t * math.pi / 2)
+	end,
+	Quad = function(t)
+		return t * t
+	end,
+	Cubic = function(t)
+		return t * t * t
+	end,
+	Quart = function(t)
+		return t * t * t * t
+	end,
+	Expo = function(t)
+		return if t <= 0 then 0 else 2 ^ (10 * t - 10)
+	end,
+	Circ = function(t)
+		return 1 - math.sqrt(1 - t * t)
+	end,
+	Back = back,
+}
+
+--- The ease function for a name, or nil when the name isn't one.
+function Curves.ease(name: string?): ((number) -> number)?
+	if name == nil or name == "linear" then
+		return function(t)
+			return t
+		end
+	end
+	local n = (name :: string):match("^steps(%d+)$")
+	if n then
+		local k = math.max(1, tonumber(n) :: number)
+		return function(t)
+			return math.min(1, math.floor(t * k) / k)
+		end
+	end
+	local mode, family = (name :: string):match("^(in)(%u%l+)$")
+	if not mode then
+		mode, family = (name :: string):match("^(out)(%u%l+)$")
+	end
+	if not mode then
+		mode, family = (name :: string):match("^(inOut)(%u%l+)$")
+	end
+	local f = family and IN[family]
+	if not f then
+		return nil
+	end
+	if mode == "in" then
+		return f
+	elseif mode == "out" then
+		return function(t)
+			return 1 - f(1 - t)
+		end
+	end
+	return function(t)
+		return if t < 0.5 then f(t * 2) / 2 else 1 - f((1 - t) * 2) / 2
+	end
+end
+
+--- True when a spec is a named-ease curve (not a number or a keypoint list).
+function Curves.isCurve(spec: any): boolean
+	return type(spec) == "table" and (spec.from ~= nil or spec.to ~= nil or spec.ease ~= nil)
+end
+
+--- A spec's value at life-share t (curves, keypoint lists and numbers alike).
+function Curves.at(spec: any, t: number): number
+	if type(spec) == "number" then
+		return spec
+	end
+	if Curves.isCurve(spec) then
+		local from, to = spec.from or 0, spec.to or spec.from or 0
+		local hold = math.clamp(spec.hold or 0, 0, 0.99)
+		if t <= hold then
+			return from
+		end
+		local f = Curves.ease(spec.ease) :: (number) -> number
+		return from + (to - from) * f((t - hold) / (1 - hold))
+	end
+	local list = spec :: { { number } }
+	if #list == 0 then
+		return 0
+	end
+	if t <= list[1][1] then
+		return list[1][2]
+	end
+	for i = 2, #list do
+		local a, b = list[i - 1], list[i]
+		if t <= b[1] then
+			local span = math.max(1e-6, b[1] - a[1])
+			return a[2] + (b[2] - a[2]) * ((t - a[1]) / span)
+		end
+	end
+	return list[#list][2]
+end
+
+--- Keypoints {{t, v, envelope}} for any spec. A curve is sampled into at most 20 points
+--- (Roblox's limit): its hold, then the ease. A step ease keeps its hard steps.
+function Curves.keypoints(spec: any): { { number } }
+	if type(spec) == "number" then
+		return { { 0, spec, 0 }, { 1, spec, 0 } }
+	end
+	if not Curves.isCurve(spec) then
+		return spec :: { { number } }
+	end
+	assert(Curves.ease(spec.ease), "Curves: unknown ease " .. tostring(spec.ease))
+	local env = spec.envelope or 0
+	local hold = math.clamp(spec.hold or 0, 0, 0.99)
+	local points = { { 0, spec.from or 0, env } }
+	local steps = spec.ease and tostring(spec.ease):match("^steps(%d+)$")
+	local times = {}
+	if steps then
+		local k = tonumber(steps) :: number
+		for i = 1, k do
+			local edge = hold + (1 - hold) * i / k
+			table.insert(times, math.max(hold, edge - 1e-3))
+			table.insert(times, math.min(1, edge))
+		end
+	else
+		if hold > 0 then
+			table.insert(times, hold)
+		end
+		for i = 1, SAMPLES do
+			table.insert(times, hold + (1 - hold) * i / SAMPLES)
+		end
+	end
+	for _, t in times do
+		if t > points[#points][1] + 1e-4 and #points < MAX_POINTS then
+			table.insert(points, { t, Curves.at(spec, t), env })
+		end
+	end
+	if points[#points][1] < 1 then
+		if #points >= MAX_POINTS then
+			table.remove(points, #points)
+		end
+		table.insert(points, { 1, Curves.at(spec, 1), env })
+	end
+	return points
+end
+
+export type Exit = {
+	transparency: { hold: number, ease: string },
+	size: { scale: number?, hold: number?, ease: string? }?,
+	life: number?,
+}
+
+Curves.EXITS = {
+	flashCut = { transparency = { hold = 0.6, ease = "outQuad" } },
+	snapShrink = { transparency = { hold = 0.9, ease = "linear" }, size = { scale = 0, hold = 0.3, ease = "inQuad" } },
+	holdFade = { transparency = { hold = 0.5, ease = "inCubic" } },
+	gustDisperse = {
+		transparency = { hold = 0.3, ease = "inOutSine" },
+		size = { scale = 1.35, hold = 0, ease = "outSine" },
+		life = 1.5,
+	},
+	sinkFade = { transparency = { hold = 0.85, ease = "linear" } },
+} :: { [string]: Exit }
+
+--- A layer's transparency and size after its exit preset: transparency holds its starting
+--- value, then eases to 1; size (when the preset says) eases from its start to start x scale.
+--- Returns (transparency, size, lifetime multiplier).
+function Curves.exit(name: string, transparency: any, size: any): (any, any, number)
+	local preset = Curves.EXITS[name]
+	assert(preset, "Curves: unknown exit " .. tostring(name))
+	local t0 = Curves.at(transparency or 0, 0)
+	local newT = { from = t0, to = 1, hold = preset.transparency.hold, ease = preset.transparency.ease }
+	local newS = size
+	if preset.size then
+		local s0 = Curves.at(size or 1, 0)
+		local peak = s0
+		for _, t in { 0.25, 0.5, 0.75 } do
+			peak = math.max(peak, Curves.at(size or 1, t))
+		end
+		local start = if (preset.size.scale or 1) < 1 then peak else s0
+		newS = { from = start, to = start * (preset.size.scale or 1), hold = preset.size.hold or 0, ease = preset.size.ease or "linear" }
+	end
+	return newT, newS, preset.life or 1
+end
+
+return Curves
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="8">
+        <Properties>
           <string name="Name">Custom</string>
           <string name="Source"><![CDATA[--!strict
 --[[
@@ -4402,7 +4670,7 @@ return Custom
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="8">
+      <Item class="ModuleScript" referent="9">
         <Properties>
           <string name="Name">DefaultAssets</string>
           <string name="Source"><![CDATA[--!strict
@@ -4435,7 +4703,7 @@ return table.freeze({
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="9">
+      <Item class="ModuleScript" referent="10">
         <Properties>
           <string name="Name">EclipseBridge</string>
           <string name="Source"><![CDATA[--!strict
@@ -4715,7 +4983,7 @@ return Bridge
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="10">
+      <Item class="ModuleScript" referent="11">
         <Properties>
           <string name="Name">Presets</string>
           <string name="Source"><![CDATA[--!nonstrict
@@ -7033,18 +7301,61 @@ Presets.List = ({
 		kind = "burst",
 		placement = "ground",
 		defaults = { color1 = rgb(255, 200, 60), color2 = rgb(255, 90, 20), trigger = "Loop", interval = 3.5 },
+		-- Beat sheet tools/evfx/sheets/ground_slam_v4.json (Phát, 2026-10-24): it fires at the press,
+		-- so a Tell carries Cleave's 0.5 s wind-up and the hit lands at 0.5 s; every layer leaves
+		-- its own way (docs/vfx-grammar.md, exits). The smoke and the blast are CC0 flipbooks (pack/cc0)
+		-- whose frames are steady enough to play (the manifest's steadiness).
 		layers = {
-			-- Hit: 2 frames at the ground
-			heroFlash(Vector3.new(0, -1.2, 0), 8),
-			-- Burst: the ground answers (floor streaks, a ring, a dust ring, rocks, shards)
-			v4("art_floor_streaks", "Burst", Vector3.new(0, -1.9, 0), {
-				name = "Floor",
+			-- Tell (0-0.5 s): a gold ring tightening on the ground, a glint and rising motes
+			v4("cc0_kp_circle_03", "Tell", Vector3.new(0, -1.85, 0), {
+				name = "TellRing",
 				orientation = "VelocityPerpendicular",
 				direction = "Top",
 				speed = { 0.01, 0.01 },
-				size = { { 0, 15 }, { 0.12, 19 }, { 1, 19 } },
-				transparency = { { 0, 0.1 }, { 0.3, 0.45 }, { 1, 1 } },
+				size = { { 0, 16 }, { 1, 7 } },
+				transparency = { { 0, 1 }, { 0.35, 0.35 }, { 0.85, 0.2 }, { 1, 1 } },
 				lifetime = { 0.5, 0.5 },
+				color = { "p" },
+				brightness = 1.5,
+			}),
+			v4("cc0_kp_star_06", "Tell", Vector3.new(0, 0.6, 0), {
+				name = "TellGlint",
+				delay = 0.22,
+				size = { { 0, 0.5 }, { 0.7, 3.2 }, { 1, 1.4 } },
+				transparency = { { 0, 0.4 }, { 0.7, 0 }, { 1, 1 } },
+				lifetime = { 0.28, 0.28 },
+				rotation = { -10, 10 },
+				color = { "w", "p" },
+				brightness = 3,
+			}),
+			v4("sheet_embers", "Tell", Vector3.new(0, -1.2, 0), {
+				name = "TellMotes",
+				delay = 0.05,
+				burst = 14,
+				flipbook = "Grid4x4",
+				flipMode = "Loop",
+				flipRandom = true,
+				speed = { 2, 6 },
+				spread = { 180, 180 },
+				drag = 3,
+				accel = Vector3.new(0, 5, 0),
+				size = { { 0, 0.05 }, { 0.5, 0.4, 0.1 }, { 1, 0 } },
+				transparency = { { 0, 0 }, { 0.6, 0 }, { 1, 1 } },
+				lifetime = { 0.3, 0.45 },
+				color = { "w", "p" },
+			}),
+			-- Hit (0.5 s): 2 frames at the ground
+			heroFlash(Vector3.new(0, -1.2, 0), 7.6, 0.5),
+			-- Slam (0.5-0.9 s): the ground answers
+			v4("art_floor_streaks", "Slam", Vector3.new(0, -1.9, 0), {
+				name = "Floor",
+				delay = 0.5,
+				orientation = "VelocityPerpendicular",
+				direction = "Top",
+				speed = { 0.01, 0.01 },
+				size = { { 0, 15 }, { 0.12, 19 }, { 1, 21 } },
+				transparency = { { 0, 0.1 }, { 0.4, 0.35 }, { 1, 1 } },
+				lifetime = { 0.9, 0.9 },
 				color = { "p", "s" },
 				brightness = 0.8,
 			}),
@@ -7053,87 +7364,128 @@ Presets.List = ({
 				type = "shell",
 				hd = true,
 				name = "Cone",
+				group = "Slam",
 				mesh = "mesh_cone",
 				frames = { "strip_wind_stroke" },
 				attrs = {
-					Delay = 0.02,
+					Delay = 0.52,
 					Size0 = Vector3.new(5, 2, 5),
 					Size1 = Vector3.new(13, 5, 13),
-					Duration = 0.16,
+					Duration = 0.22,
 					SpinDeg = Vector3.new(0, 70, 0),
 					Offset = Vector3.new(0, -0.4, 0),
 					Transparency = 0.35,
-					FadeStart = 0.15,
+					FadeStart = 0.35,
 				},
 				color0 = "p",
 				color1 = "s",
 			},
-			v4("flip_shock_ring", "Burst", Vector3.new(0, -1.8, 0), {
+			-- a hand-drawn explosion (CodeManu, CC0): its frames change shape on purpose
+			v4("cc0_cm_explosion", "Slam", Vector3.new(0, -0.2, 0), {
+				name = "Blast",
+				delay = 0.5,
+				flipbook = "Grid4x4",
+				size = { { 0, 6.5 }, { 1, 10 } },
+				transparency = { { 0, 0 }, { 0.65, 0.05 }, { 1, 1 } },
+				lifetime = { 0.45, 0.45 },
+				rotation = { -15, 15 },
+				color = { "w" },
+				lightEmission = 0.6,
+				brightness = 1.3,
+				zOffset = 0.5,
+			}),
+			v4("flip_shock_ring", "Slam", Vector3.new(0, -1.8, 0), {
 				name = "Ring",
-				delay = 0.02,
+				delay = 0.52,
 				flipbook = "Grid4x4",
 				orientation = "VelocityPerpendicular",
 				direction = "Top",
 				speed = { 0.01, 0.01 },
 				size = { { 0, 8 }, { 1, 36 } },
-				lifetime = { 0.32, 0.32 },
+				transparency = { { 0, 0 }, { 0.4, 0 }, { 1, 1 } },
+				lifetime = { 0.7, 0.7 },
 				color = { "p", "s" },
 			}),
-			v4("flip_dust_ring", "Burst", Vector3.new(0, -1.85, 0), {
-				name = "DustRing",
-				delay = 0.03,
-				flipbook = "Grid4x4",
-				orientation = "VelocityPerpendicular",
-				direction = "Top",
-				speed = { 0.01, 0.01 },
-				size = { { 0, 8 }, { 1, 21 } },
-				transparency = { { 0, 0.35 }, { 1, 1 } },
-				lifetime = { 0.5, 0.5 },
-				color = { "g" },
-				lightEmission = 0,
-				lightInfluence = 1,
-				brightness = 1,
-			}),
-			v4("sheet_rock_chunks", "Burst", Vector3.new(0, -1.5, 0), {
+			v4("sheet_rock_chunks", "Slam", Vector3.new(0, -1.5, 0), {
 				name = "Rocks",
+				delay = 0.5,
 				burst = 12,
 				flipbook = "Grid4x4",
 				flipMode = "Loop",
 				flipRandom = true,
 				direction = "Top",
-				speed = { 26, 40 },
+				speed = { 22, 32 },
 				spread = { 40, 40 },
 				accel = Vector3.new(0, -80, 0),
-				size = { { 0, 1.1, 0.35 }, { 1, 0.85 } },
-				transparency = { { 0, 0 }, { 0.85, 0 }, { 1, 1 } },
-				lifetime = { 0.5, 0.65 },
+				size = { { 0, 1.0, 0.3 }, { 0.75, 1.0 }, { 1, 0.3 } },
+				transparency = { { 0, 0 }, { 0.75, 0 }, { 1, 1 } },
+				lifetime = { 0.5, 0.8 },
 				rotSpeed = { -400, 400 },
 				color = { "d" },
 				lightEmission = 0,
 				lightInfluence = 1,
 				brightness = 1,
+				zOffset = 0.5,
 			}),
-			heroShards(Vector3.new(0, -1.3, 0), 10, 80, { direction = "Top", spread = { 35, 35 } }),
-			v4("flip_smoke_puff", "Burst", Vector3.new(0, -1.6, 0), {
-				name = "Volume",
-				delay = 0.04,
-				burst = 6,
+			heroShards(Vector3.new(0, -1.3, 0), 10, 80, { delay = 0.5, direction = "Top", spread = { 35, 35 } }),
+			-- Settle (0.55-1.8 s): smoke disperses slowly, the dust ring fades, embers linger
+			v4("flip_dust_ring", "Settle", Vector3.new(0, -1.85, 0), {
+				name = "DustRing",
+				delay = 0.53,
 				flipbook = "Grid4x4",
+				orientation = "VelocityPerpendicular",
 				direction = "Top",
-				speed = { 8, 13 },
-				spread = { 85, 85 },
-				drag = 5,
-				size = { { 0, 2.5, 0.5 }, { 1, 5 } },
-				lifetime = { 0.5, 0.7 },
+				speed = { 0.01, 0.01 },
+				size = { { 0, 8 }, { 0.4, 21 }, { 1, 26 } },
+				transparency = { { 0, 0.35 }, { 0.35, 0.4 }, { 1, 1 } },
+				lifetime = { 1.0, 1.0 },
 				color = { "g" },
 				lightEmission = 0,
 				lightInfluence = 1,
 				brightness = 1,
 			}),
-			-- Tail
-			heroEmbers(Vector3.new(0, -1, 0), 10, 0.1),
-			{ type = "shape", kind = "Shake", attrs = { Magnitude = 1.6, Duration = 0.45, Roughness = 10 } },
-			{ type = "light", brightness = 3, range = 18, color = "p", flash = 0.1 },
+			-- smoke that disperses: a steady CC0 smoke flipbook (Iche), many thin puffs that
+			-- burst out, slow under drag, keep spreading and thin away over 1.4-2.2 s
+			v4("cc0_fb_wispy_smoke_01", "Settle", Vector3.new(0, -1.3, 0), {
+				name = "Volume",
+				delay = 0.53,
+				burst = 8,
+				flipbook = "Grid8x8",
+				direction = "Top",
+				speed = { 6, 14 },
+				spread = { 80, 80 },
+				drag = 4,
+				accel = Vector3.new(0, 1.2, 0),
+				size = { { 0, 2.4, 0.5 }, { 0.35, 5 }, { 1, 7.4 } },
+				transparency = { { 0, 0.5 }, { 0.2, 0.42 }, { 0.6, 0.65 }, { 1, 1 } },
+				lifetime = { 1.4, 2.2 },
+				rotation = { 0, 360 },
+				rotSpeed = { -15, 15 },
+				color = { "g" },
+				lightEmission = 0,
+				lightInfluence = 1,
+				brightness = 1,
+				zOffset = -1,
+			}),
+			v4("sheet_embers", "Settle", Vector3.new(0, -1, 0), {
+				name = "Embers",
+				delay = 0.6,
+				burst = 10,
+				flipbook = "Grid4x4",
+				flipMode = "Loop",
+				flipRandom = true,
+				speed = { 3, 8 },
+				spread = { 180, 180 },
+				drag = 2.5,
+				accel = Vector3.new(0, 2, 0),
+				size = { { 0, 0.45, 0.15 }, { 0.6, 0.35 }, { 1, 0.15 } },
+				transparency = { { 0, 0 }, { 0.35, 0 }, { 1, 1 } },
+				lifetime = { 0.6, 1.3 },
+				color = { "w", "p" },
+				zOffset = 1.5,
+			}),
+			{ type = "shape", kind = "Shake", attrs = { Delay = 0.5, Magnitude = 1.6, Duration = 0.45, Roughness = 10 } },
+			{ type = "light", brightness = 3, range = 18, color = "p", flash = 0.1, delay = 0.5 },
 		},
 	},
 	{
@@ -7593,7 +7945,7 @@ kit("soul_release", hitSpark("center", 10, 0.35), weight(0.8, nil, 0.35))
 kit("shockwave", { hardRing(Vector3.new(0, -1.8, 0), 30, 0.28) })
 kit("energy_blast", hitSpark("center", 8))
 kit("impact_v4", weight(0.6))
-kit("ground_slam_v4", weight(1))
+kit("ground_slam_v4", weight(1, nil, 0.5))
 kit("slash_v4", weight(0.3, nil, 0.06))
 -- no hit-stop on Bloom Strike: it pauses the shells' clock but not the particles' emit
 -- delays, which would pull its beats apart; the punch and shake carry the weight
@@ -7632,7 +7984,7 @@ return Presets
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="11">
+      <Item class="ModuleScript" referent="12">
         <Properties>
           <string name="Name">Strings</string>
           <string name="Source"><![CDATA[--!strict
@@ -7961,11 +8313,11 @@ return Strings
         </Properties>
       </Item>
     </Item>
-    <Item class="Folder" referent="12">
+    <Item class="Folder" referent="13">
       <Properties>
         <string name="Name">UI</string>
       </Properties>
-      <Item class="ModuleScript" referent="13">
+      <Item class="ModuleScript" referent="14">
         <Properties>
           <string name="Name">App</string>
           <string name="Source"><![CDATA[--!nonstrict
@@ -9729,7 +10081,7 @@ return App
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="14">
+      <Item class="ModuleScript" referent="15">
         <Properties>
           <string name="Name">Components</string>
           <string name="Source"><![CDATA[--!strict
@@ -10427,7 +10779,7 @@ return C
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="15">
+      <Item class="ModuleScript" referent="16">
         <Properties>
           <string name="Name">Theme</string>
           <string name="Source"><![CDATA[--!strict
