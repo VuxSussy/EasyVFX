@@ -7,7 +7,20 @@ comes second. Phát, 2026-10-24: "focus less on the individual art itself and ba
 ```bash
 python3 tools/evfx grammar [preset ...]   # every layer: its role and numbers, and what breaks the grammar
 python3 tools/evfx study [--write]        # what openly published Roblox effects do, per role
+python3 tools/evfx serve                  # the local studio: http://127.0.0.1:8765
 ```
+
+## The studio
+
+`evfx serve` runs a local page (127.0.0.1 only) for each effect that has a beat sheet. It shows:
+- the effect looping, at real speed or 4× slower;
+- its layers in the grammar's numbers, with every out-of-range value marked;
+- the knobs from `tools/evfx/variants.py`: `vary`, `drag`, `size`, `life`, `count` and `exits`.
+
+Move the knobs and press Render to see a variant beside the effect as built, with the changed numbers highlighted.
+Keep or Drop appends the pick, with its knobs and the measures they moved, to `tools/evfx/picks/<preset>.json`.
+Those files are the calibration evidence that sets the ranges. The studio never edits a preset. Its pages are the
+templates in `tools/evfx/web`, for anyone to extend.
 
 ## Layers and roles
 
@@ -53,6 +66,22 @@ source. So every helper, default and multiplier is already applied.
 | `solid` | how opaque it gets at most |
 | `light` | `LightEmission` (1 is additive, 0 normal) |
 | `z` | `ZOffset` |
+| `exit` | how it leaves: `cut` (gone while still seen), `fade`, `shrink`, `dissolve` (a one-shot flipbook eroding away, read from the texture's own frames) or `disperse` (fades while it grows: smoke, an air gust) |
+| `tail` | share of its life spent leaving |
+| `leave` | seconds it takes to leave |
+| `pop` | how much of it is still visible on its last frame (0 clean, 1 vanishes whole) |
+| `end` | seconds after the start that its last particle is gone |
+
+**Exits** (Phát, 2026-10-24: "they just disappear so abruptly ... a flash and quick, an air gust and slowly"). Each
+role lists the ways it may leave (`exits`) and ranges for `leave`, `tail`, `pop` and `end`:
+- a core cuts or fades in a frame or two;
+- shards shrink;
+- base shapes dissolve over at least 0.12 s;
+- dust lingers to 0.8 s or later and fades;
+- volume and ground disperse over 0.4–2 s.
+
+The v4 hits broke these rules: their rings, base and smoke dissolved in about 4 frames, then sat blank for the last
+30% of their life, and everything was gone by 0.65 s.
 
 Sizes are in bodies rather than relative to the effect, because effects are made to sit on a character. It also
 lets an effect with no base layer compare with one that has.

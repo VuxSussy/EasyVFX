@@ -20,6 +20,14 @@ that don't depend on how big the effect is, so a sword hit and a meteor compare:
     solid     how opaque it gets at most (1 - lowest transparency)
     light     LightEmission (1 additive, 0 normal)
     z         ZOffset
+    exit      how it leaves: cut (gone while still seen), fade, shrink, dissolve (a
+              one-shot flipbook eroding away) or disperse (fades while it grows: smoke,
+              an air gust)
+    tail      share of its life spent leaving (fading or shrinking to nothing)
+    leave     seconds it takes to leave: a flash goes in a frame or two, a gust slowly
+    pop       how much of it is still visible on its last frame (0 clean, 1 vanishes
+              whole: the abrupt end)
+    end       seconds after the effect starts that its last particle is gone
 
 Sizes are in bodies, not over the effect's own size: effects are made to sit on a
 character, and it lets open effects without a base layer compare. grammar.json holds, per
@@ -34,7 +42,7 @@ import os
 HERE = os.path.dirname(os.path.abspath(__file__))
 GRAMMAR = os.path.join(HERE, "grammar.json")
 BODY = 5.0
-MEASURES = ("count", "delay", "life", "vary", "stop", "reach", "spread", "size", "grow", "fade", "solid", "light", "z")
+MEASURES = ("count", "delay", "life", "vary", "stop", "reach", "spread", "size", "grow", "fade", "solid", "light", "z", "exit", "tail", "leave", "pop", "end")
 
 
 def load():
@@ -98,13 +106,74 @@ def fade_point(transparency):
     return 1.0
 
 
+_FLIP = {}
+
+
+def flip_profile(texture, flipbook):
+    """Alpha of each cell of a one-shot flipbook texture, over its brightest cell, or
+    None when the texture isn't one of ours."""
+    key = (texture, flipbook)
+    if key not in _FLIP:
+        from . import core
+
+        grid = {"Grid2x2": 2, "Grid4x4": 4, "Grid8x8": 8}.get(flipbook or "")
+        name = (texture or "").split("://")[-1]
+        path = os.path.join(core.GENERATED, name + ".png")
+        if not grid or not os.path.exists(path):
+            _FLIP[key] = None
+        else:
+            import numpy as np
+            from PIL import Image
+
+            a = np.asarray(Image.open(path).convert("RGBA"), np.float32)[..., 3]
+            h, w = a.shape
+            cells = [float(a[r * h // grid : (r + 1) * h // grid, c * w // grid : (c + 1) * w // grid].mean()) for r in range(grid) for c in range(grid)]
+            top = max(cells) or 1.0
+            _FLIP[key] = [x / top for x in cells]
+    return _FLIP[key]
+
+
+def dissolve_of(profile):
+    """A one-shot flipbook's exit from its cells: (tail, pop, the share of life it is
+    still visible)."""
+    n = len(profile)
+    peak = max(range(n), key=lambda i: profile[i])
+    gone = next((i for i in range(peak, n) if profile[i] < 0.1), n - 1)
+    return round((gone - peak) / n, 3), round(profile[-1], 3), round(gone / n, 3)
+
+
+def exit_of(transparency, size):
+    """How a particle leaves: its exit type, the share of life spent leaving, and how
+    visible it still is at its last moment (opacity x size against its peak)."""
+    peak = max(k[1] for k in size) or 1e-6
+    opacity_end = 1 - transparency[-1][1]
+    size_end = size[-1][1] / peak
+    pop = round(max(0.0, opacity_end) * size_end, 3)
+    # leaving starts at the last moment it was fully there: lowest transparency, largest size
+    t_solid = max(k[0] for k in transparency if k[1] <= min(x[1] for x in transparency) + 0.05)
+    t_big = max(k[0] for k in size if k[1] >= peak * 0.95)
+    fading = opacity_end < 0.5
+    shrinking = size_end < 0.35
+    start = min(t_solid if fading else 1.0, t_big if shrinking else 1.0)
+    tail = round(1 - start, 3) if (fading or shrinking) else 0.0
+    if pop > 0.35:
+        kind = "cut"
+    elif fading and size[-1][1] >= 1.15 * max(1e-6, size[0][1]) and tail >= 0.4:
+        kind = "disperse"
+    elif fading:
+        kind = "fade"
+    else:
+        kind = "shrink"
+    return kind, tail, pop
+
+
 def particle(b, frame_time):
     """A burst emitter's raw numbers, before scaling."""
     life = sum(b["lifetime"]) / 2
     speed = sum(abs(x) for x in b["speed"]) / 2
     sizes = [k[1] for k in b["size"]]
     accel = math.sqrt(sum(a * a for a in b["accel"]))
-    return {
+    row = {
         "name": b["name"],
         "kind": "particle",
         "count": b["count"],
@@ -120,9 +189,18 @@ def particle(b, frame_time):
         "solid": round(1 - min(k[1] for k in b["transparency"]), 3),
         "light": b["lightEmission"],
         "z": b["zOffset"],
+        "end": round(b["frame"] * frame_time + max(b["lifetime"]), 3),
         "texture": b.get("texture", ""),
         "facing": b.get("orientation"),
     }
+    kind, tail, pop = exit_of(b["transparency"], b["size"])
+    profile = flip_profile(b.get("texture"), b.get("flipbook")) if b.get("flipMode") == "OneShot" else None
+    if profile and kind == "cut":
+        tail, flip_pop, seen = dissolve_of(profile)
+        kind, pop = "dissolve", round(flip_pop * pop, 3)
+        row["end"] = round(b["frame"] * frame_time + max(b["lifetime"]) * seen, 3)
+    row.update(exit=kind, tail=tail, pop=pop, leave=round(tail * life, 3))
+    return row
 
 
 def layers(timeline, roles=None, grammar=None):
@@ -195,9 +273,12 @@ def judge(rows, grammar=None, spec=None):
         role = g["roles"].get(r["role"])
         if not role:
             continue
+        exits = role.get("exits")
+        if exits and r.get("exit") and r["exit"] not in exits:
+            out.append({"sev": 2, "layer": r["name"], "rule": f"{r['role']}.exit", "said": f"leaves by {r['exit']} (pop {r.get('pop')})", "want": " or ".join(exits)})
         for key, (lo, hi) in role["ranges"].items():
             v = r.get(key)
-            if v is None:
+            if v is None or isinstance(v, str):
                 continue
             if lo is not None and v < lo:
                 out.append({"sev": 2, "layer": r["name"], "rule": f"{r['role']}.{key}", "said": f"{key} {v} is under {lo}", "want": f"{lo}-{hi}"})
@@ -224,7 +305,7 @@ def judge(rows, grammar=None, spec=None):
     return out
 
 
-COLUMNS = ("role", "count", "delay", "life", "vary", "stop", "reach", "spread", "size", "grow", "fade", "solid", "light", "z")
+COLUMNS = ("role", "count", "delay", "life", "vary", "stop", "reach", "spread", "size", "grow", "solid", "light", "z", "exit", "tail", "leave", "pop", "end")
 
 
 def table(rows, found):

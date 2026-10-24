@@ -573,6 +573,21 @@
       "sha256": "840533bbe2b52a38ddf2938cd5683a415f33f99309a687a1c835a6c30a6663b1",
       "use": "soft depth discs behind a sigil"
     },
+    "shape_comic_burst": {
+      "id": "shape/comic_burst",
+      "kind": "shape",
+      "size": [
+        512,
+        512
+      ],
+      "grid": 1,
+      "frames": 1,
+      "role": "base",
+      "upload": true,
+      "rgb": "white",
+      "sha256": "45bccf130242f803e0cf1c3e95628d570898d1bc6adbb7c8c5032d31480aeb85",
+      "use": "comic starburst splat with an outline (cel hits)"
+    },
     "shape_core_flash": {
       "id": "shape/core_flash",
       "kind": "shape",
@@ -618,6 +633,21 @@
       "sha256": "529013aecfe1dc1ae25fa7e36f54d00678b8eae3c716cd2e8f8c2dea290a4190",
       "use": "frame-one radial spikes of a heavy hit (additive)"
     },
+    "shape_halftone_disc": {
+      "id": "shape/halftone_disc",
+      "kind": "shape",
+      "size": [
+        512,
+        512
+      ],
+      "grid": 1,
+      "frames": 1,
+      "role": "volume",
+      "upload": true,
+      "rgb": "white",
+      "sha256": "eeb7d8e7360b912bd0bc132703a42fe530ac5bcf618fdd026797e5bcaa5f7023",
+      "use": "halftone-dot glow, the printed anime look"
+    },
     "shape_hollow_ring": {
       "id": "shape/hollow_ring",
       "kind": "shape",
@@ -632,6 +662,21 @@
       "rgb": "white",
       "sha256": "d6755da54e38eaf599deb5e79ed00145d6b84d86152fb467f02f46cea4edda69",
       "use": "orbit rings around a sigil"
+    },
+    "shape_impact_spikes": {
+      "id": "shape/impact_spikes",
+      "kind": "shape",
+      "size": [
+        512,
+        512
+      ],
+      "grid": 1,
+      "frames": 1,
+      "role": "core",
+      "upload": true,
+      "rgb": "white",
+      "sha256": "bd8d678cb8b5da92fc789e6baea5284074f2668b9709f8f4c04b98db7e0dd681",
+      "use": "radial spike burst around a hollow centre: frame one of a hard hit"
     },
     "shape_ink_stroke": {
       "id": "shape/ink_stroke",
@@ -648,6 +693,21 @@
       "sha256": "02ce3502e04afb2eff696e7761905d5a084731346544d44ec9bad1be0d28f6f4",
       "use": "the black ink slash accent (normal blend, tinted black)"
     },
+    "shape_saw_ring": {
+      "id": "shape/saw_ring",
+      "kind": "shape",
+      "size": [
+        512,
+        512
+      ],
+      "grid": 1,
+      "frames": 1,
+      "role": "base",
+      "upload": true,
+      "rgb": "white",
+      "sha256": "0a48cd3637268d302b3418f08869f0f06a75177985a657c34039daa4c5ef93ac",
+      "use": "ring of outward shards: a sharp circle impact"
+    },
     "shape_star8": {
       "id": "shape/star8",
       "kind": "shape",
@@ -662,6 +722,21 @@
       "rgb": "white",
       "sha256": "cfcfc7c369ed58bad65e5e71ad8db06dad2d7e4f6ad2b6ca97f52b854594c7c5",
       "use": "8-point flare of a heavy hit (Bloom Strike)"
+    },
+    "shape_vortex_ring": {
+      "id": "shape/vortex_ring",
+      "kind": "shape",
+      "size": [
+        512,
+        512
+      ],
+      "grid": 1,
+      "frames": 1,
+      "role": "base",
+      "upload": true,
+      "rgb": "white",
+      "sha256": "089326232baee77e7e57fd0f395bcba4c8816a576f8d5b6c50adb2411888e173",
+      "use": "spiral vortex ring for a charge or suction (spin with RotSpeed)"
     },
     "sheet_bolt_variants": {
       "id": "sheet/bolt_variants",
@@ -723,6 +798,21 @@
       "sha256": "6ff58ae31422ba1ef0bf44232741786e2f64c903c62449d390605d539d7d89ce",
       "use": "flat rock debris instead of plain blocks (FlipbookStartRandom, framerate 0)"
     },
+    "sheet_star_set": {
+      "id": "sheet/star_set",
+      "kind": "sheet",
+      "size": [
+        512,
+        512
+      ],
+      "grid": 4,
+      "frames": 16,
+      "role": "core",
+      "upload": true,
+      "rgb": "white",
+      "sha256": "51d83ad1d031a6dc0f95a5737ffd63c6202bfedf65dcb65e46789da15a445b71",
+      "use": "star and sparkle variants, one per particle"
+    },
     "source_fbm": {
       "id": "source/fbm",
       "kind": "source",
@@ -767,6 +857,21 @@
       "rgb": "white",
       "sha256": "29f701c0fdd399bcaaf00ba20e21d628dda859a9600e3290c9040dc73cae9b79",
       "use": "tiling Worley edges: cracked ground, ice"
+    },
+    "strip_comb_fringe": {
+      "id": "strip/comb_fringe",
+      "kind": "strip",
+      "size": [
+        1024,
+        256
+      ],
+      "grid": 1,
+      "frames": 1,
+      "role": "sparks",
+      "upload": true,
+      "rgb": "white",
+      "sha256": "6a81ab31bfe208f773a27d60b3f59509752d5f651a19c1dcc9b157abb73d1f3e",
+      "use": "hanging streak comb that frays a beam's edge (scroll it)"
     },
     "strip_dome_glow": {
       "id": "strip/dome_glow",
@@ -813,6 +918,21 @@
       "sha256": "e7d0a4f3ef89e9b144785f513777a062d6e82ae067e3a9769e44d59962164370",
       "use": "fire beams and trails that scroll"
     },
+    "strip_helix_strands": {
+      "id": "strip/helix_strands",
+      "kind": "strip",
+      "size": [
+        1024,
+        256
+      ],
+      "grid": 1,
+      "frames": 1,
+      "role": "sparks",
+      "upload": true,
+      "rgb": "white",
+      "sha256": "70ee7ecc0d429a5abe91741e43e3be1d0e783a2971fc67082f0dada74f8f0989",
+      "use": "strands twisting around a beam (scroll it)"
+    },
     "strip_lightning_fringe": {
       "id": "strip/lightning_fringe",
       "kind": "strip",
@@ -842,6 +962,21 @@
       "rgb": "white",
       "sha256": "c2d84051d761397d428fc6cb90ba4f338078aaafa6bfc452b7bfd4f310f8d09a",
       "use": "vertical streaks for a pillar shell (u around, v up)"
+    },
+    "strip_pulse_bars": {
+      "id": "strip/pulse_bars",
+      "kind": "strip",
+      "size": [
+        1024,
+        256
+      ],
+      "grid": 1,
+      "frames": 1,
+      "role": "base",
+      "upload": true,
+      "rgb": "white",
+      "sha256": "80f3c7af3172b68ff7fb23b357b262b58027c55f0d5ad47e499005b77bee98bb",
+      "use": "bars pulsing down a beam (scroll it fast)"
     },
     "strip_wind_stroke": {
       "id": "strip/wind_stroke",

@@ -970,3 +970,160 @@ def dome_glow(p, rng, size):
     grain = lib.normalize(lib.perlin((h, w), (4, 8), seed))
     body = (1 - lib.smooth(0.55, 1.0, down)) * (1 - p["grain"] + p["grain"] * grain)
     return np.clip(body, 0, 1) * (1 - lib.smooth(1 - 10.0 / h, 1 - 4.5 / h, np.abs(y)))
+
+
+# ================================================================== the beam showcase set
+# Shapes read off a paid plugin's palette in Twist VFX's beam tutorial (docs/refs/
+# twist-beam.md); drawn from scratch here, nothing of theirs is used.
+
+
+@recipe("impact_spikes", spikes=30, inner=0.3, reach=0.96, width=0.09)
+def impact_spikes(p, rng, size):
+    """A radial spike burst around a hollow centre: tapered spikes of uneven length and
+    width, a thin inner ring. The frame-one shape of a hard impact."""
+    u, v = lib.grid(size)
+    r, a = lib.polar(u, v)
+    n = int(p["spikes"])
+    angles, _ = lib.rng_angles(_seed(rng), n, 0.45)
+    lengths = rng.uniform(0.45, 1.0, n) * (p["reach"] - p["inner"])
+    widths = rng.uniform(0.5, 1.2, n) * p["width"]
+    alpha = np.zeros_like(u)
+    for ang, ln, wd in zip(angles, lengths, widths):
+        da = np.angle(np.exp(1j * (a - ang)))
+        t = np.clip((r - p["inner"]) / max(ln, 1e-3), 0, 1)
+        half = wd * (1 - t) ** 1.4 / np.maximum(r, 0.05)
+        spike = (np.abs(da) < half) * (r > p["inner"]) * (t < 1)
+        alpha = np.maximum(alpha, spike * (1 - 0.35 * t))
+    ring = np.exp(-((r - p["inner"]) / 0.012) ** 2) * 0.8
+    return np.clip(np.maximum(alpha, ring), 0, 1) * lib.vignette(u, v, 0.92, 0.99)
+
+
+@recipe("vortex_ring", arms=6, radius=0.6, width=0.2, twist=2.4)
+def vortex_ring(p, rng, size):
+    """A swirling vortex ring: arms that spiral in toward the centre, brightest on the
+    ring and streaky along the swirl. Spun with RotSpeed, it reads as a suction or charge."""
+    u, v = lib.grid(size)
+    r, a = lib.polar(u, v)
+    phase = a * p["arms"] + p["twist"] * np.log(np.maximum(r, 1e-3)) * p["arms"]
+    arms = (0.5 + 0.5 * np.cos(phase)) ** 3
+    band = np.exp(-(((r - p["radius"]) / p["width"]) ** 2))
+    grain = lib.normalize(lib.perlin(u.shape, (24, 3), _seed(rng)))
+    return np.clip(arms * band * (0.6 + 0.4 * grain) * 1.3, 0, 1) * lib.vignette(u, v, 0.9, 0.99)
+
+
+@recipe("saw_ring", teeth=18, radius=0.62, depth=0.22, line=0.03)
+def saw_ring(p, rng, size):
+    """A ring of shards pointing outward (a sharp circle impact): a thin band whose outer
+    edge is saw-toothed, teeth of uneven height, with a soft glow inside."""
+    u, v = lib.grid(size)
+    r, a = lib.polar(u, v)
+    n = int(p["teeth"])
+    k = (a / (2 * np.pi) * n) % 1.0
+    idx = np.floor((a % (2 * np.pi)) / (2 * np.pi) * n).astype(int) % n
+    heights = rng.uniform(0.45, 1.0, n)[idx]
+    outer = p["radius"] + p["depth"] * heights * (1 - np.abs(k * 2 - 1)) ** 1.6
+    inner = p["radius"] - p["line"]
+    band = lib.aa(np.maximum(inner - r, r - outer), size)
+    glow = 0.35 * np.exp(-(((r - p["radius"] + 0.08) / 0.12) ** 2))
+    return np.clip(np.maximum(band, glow), 0, 1) * lib.vignette(u, v, 0.92, 0.99)
+
+
+@recipe("comic_burst", points=13, outer=0.92, inner=0.55, outline=0.035)
+def comic_burst(p, rng, size):
+    """A comic-book starburst splat: jagged points of uneven reach, solid inside, with a
+    separate outline just outside it. The cel 'POW' of a cartoon hit."""
+    u, v = lib.grid(size)
+    n = int(p["points"]) * 2
+    angles, _ = lib.rng_angles(_seed(rng), n, 0.25)
+    radii = [rng.uniform(0.82, 1.0) * p["outer"] if i % 2 == 0 else rng.uniform(0.85, 1.1) * p["inner"] for i in range(n)]
+    pts = [(float(np.cos(t) * q), float(np.sin(t) * q)) for t, q in zip(np.sort(angles), radii)]
+    d = lib.polygon(u, v, pts)
+    fill = lib.aa(d + p["outline"] * 1.6, size)
+    line = lib.aa(np.abs(d) - p["outline"] * 0.5, size)
+    return np.clip(np.maximum(fill * 0.9, line), 0, 1) * lib.vignette(u, v, 0.94, 0.995)
+
+
+@recipe("halftone_disc", cells=24, radius=0.92, power=1.3)
+def halftone_disc(p, rng, size):
+    """A halftone glow: a grid of dots whose size follows a radial falloff, the printed
+    anime look of a soft glow without a gradient."""
+    u, v = lib.grid(size)
+    n = int(p["cells"])
+    gu, gv = (u + 1) / 2 * n, (v + 1) / 2 * n
+    cu, cv = (np.floor(gu) + 0.5) / n * 2 - 1, (np.floor(gv) + 0.5) / n * 2 - 1
+    level = np.clip(1 - np.sqrt(cu * cu + cv * cv) / p["radius"], 0, 1) ** p["power"]
+    du, dv = (gu % 1) - 0.5, (gv % 1) - 0.5
+    d = np.sqrt(du * du + dv * dv) - 0.52 * np.sqrt(level)
+    return np.clip(0.5 - d * n / 1.2, 0, 1) * (level > 0.02)
+
+
+@recipe("star_set", count=16)
+def star_set(p, rng, size):
+    """Star and sparkle variants, one per frame: long thin 4-points, fat 4-points, 6- and
+    8-points, an outlined 5-point, tiny twinkles with a halo."""
+    u, v = lib.grid(size)
+    r, _ = lib.polar(u, v)
+    cells = []
+    for k in range(int(p["count"])):
+        kind = k % 6
+        phase = rng.uniform(0, np.pi / 4) if kind in (2, 3) else 0.0
+        if kind == 0:
+            d = lib.sd_star(u, v, 4, 0.95, 0.035, phase)
+        elif kind == 1:
+            d = lib.sd_star(u, v, 4, 0.8, 0.16, phase)
+        elif kind == 2:
+            d = lib.sd_star(u, v, 6, 0.85, 0.12, phase)
+        elif kind == 3:
+            d = np.minimum(lib.sd_star(u, v, 4, 0.92, 0.05), lib.sd_star(u, v, 4, 0.55, 0.05, np.pi / 4))
+        elif kind == 4:
+            d = np.abs(lib.sd_star(u, v, 5, 0.8, 0.36, -np.pi / 2)) - 0.03
+        else:
+            d = lib.sd_star(u, v, 4, 0.5, 0.025, phase)
+        shape = lib.aa(d, size)
+        halo = np.exp(-((r / (0.18 if kind == 5 else 0.28)) ** 2)) * (0.7 if kind == 5 else 0.45)
+        cells.append(np.clip(np.maximum(shape, halo), 0, 1) * lib.vignette(u, v, 0.9, 0.99))
+    return cells
+
+
+@recipe("comb_fringe", teeth=46, reach=0.85)
+def comb_fringe(p, rng, size):
+    """A hanging comb of streaks from the top edge, of uneven length with soft tips (an
+    icicle or energy drip). Tiles along its length; as a beam's edge it frays the beam."""
+    x, y, w, h = _strip_grid(size)
+    down = (y + 1) / 2
+    n = int(p["teeth"])
+    lengths = lib.noise1(w, n // 4, _seed(rng)) * 0.6 + 0.25
+    cols = lib.normalize(lib.perlin((h, w), (1, n), _seed(rng))) ** 1.6
+    reach = np.clip(lengths[None, :] * p["reach"] + 0.15 * cols, 0.05, 1)
+    body = (1 - lib.smooth(reach * 0.55, reach, down)) * (0.35 + 0.65 * cols)
+    root = np.exp(-(((down - 0.09) / 0.05) ** 2))
+    body = body * lib.smooth(0.04, 0.09, down)
+    return np.clip(np.maximum(body, root), 0, 1) * (1 - lib.smooth(1 - 10.0 / h, 1 - 4.5 / h, np.abs(y)))
+
+
+@recipe("helix_strands", strands=3, turns=3, amp=0.55, width=0.07)
+def helix_strands(p, rng, size):
+    """Strands that twist around a beam: sine strands out of phase, thicker and brighter
+    where they swing toward the camera. Tiles along its length; scroll it for a spiral."""
+    x, y, w, h = _strip_grid(size)
+    alpha = np.zeros_like(x)
+    n = int(p["strands"])
+    for k in range(n):
+        ph = 2 * np.pi * (x * p["turns"] + k / n)
+        centre = p["amp"] * np.sin(ph)
+        near = 0.5 + 0.5 * np.cos(ph)
+        wd = p["width"] * (0.55 + 0.75 * near)
+        alpha = np.maximum(alpha, np.exp(-(((y - centre) / wd) ** 2)) * (0.45 + 0.55 * near))
+    return np.clip(alpha, 0, 1) * _edges(y)
+
+
+@recipe("pulse_bars", bars=10, width=0.18, core=0.08)
+def pulse_bars(p, rng, size):
+    """Bright bars across a beam at a steady beat, with a thin core line through them.
+    Scrolled fast along a beam it reads as energy pulsing down it. Tiles along its length."""
+    x, y, w, h = _strip_grid(size)
+    beat = (x * p["bars"]) % 1.0
+    bar = np.exp(-(((beat - 0.5) / (p["width"] / 2)) ** 2))
+    across = np.exp(-((y / 0.55) ** 2))
+    core = np.exp(-((y / p["core"]) ** 2)) * 0.7
+    return np.clip(np.maximum(bar * across, core), 0, 1) * _edges(y)

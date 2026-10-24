@@ -327,6 +327,14 @@ def a_slow_soft_core_breaks_the_grammar():
     assert "core.life" in rules, rules
 
 
+@check
+def exits_read_cut_fade_shrink_and_disperse():
+    assert grammar.exit_of([[0, 0], [1, 0]], [[0, 1], [1, 2]])[0] == "cut"
+    assert grammar.exit_of([[0, 0], [0.5, 0], [1, 1]], [[0, 1], [1, 1]]) == ("fade", 0.5, 0.0)
+    assert grammar.exit_of([[0, 0], [1, 0]], [[0, 1], [1, 0]])[0] == "shrink"
+    assert grammar.exit_of([[0, 0.2], [0.3, 0.3], [1, 1]], [[0, 1], [1, 2]])[0] == "disperse"
+
+
 def run():
     failed = 0
     for fn in CHECKS:
