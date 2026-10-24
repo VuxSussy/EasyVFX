@@ -1,30 +1,220 @@
 {
  "note": "CC0 packs imported by tools/texgen/cc0.py into pack/cc0 (Phát, 2026-10-24: CC0 may ship). Download each pack into .cache/cc0/<folder>, then run `python tools/texgen cc0`.",
  "packs": {
-  "kenney_particles": {"folder": "kenney_particle-pack", "title": "Particle Pack", "author": "Kenney", "url": "https://kenney.nl/assets/particle-pack"},
-  "kenney_smoke": {"folder": "kenney_smoke-particles", "title": "Smoke Particles", "author": "Kenney", "url": "https://kenney.nl/assets/smoke-particles"},
-  "kenney_lights": {"folder": "kenney_light-masks-1.0", "title": "Light Masks", "author": "Kenney", "url": "https://kenney.nl/assets/light-masks"},
-  "kenney_foliage": {"folder": "kenney_foliage-sprites", "title": "Foliage Sprites", "author": "Kenney", "url": "https://kenney.nl/assets/foliage-sprites"},
-  "iche": {"folder": "brackeys_vfx_bundle/brackeys_vfx_bundle", "title": "Brackeys VFX Bundle: flipbooks", "author": "Thomas Iché (via Brackeys)", "url": "https://brackeysgames.itch.io/brackeys-vfx-bundle"},
-  "codemanu": {"folder": "brackeys_vfx_bundle/brackeys_vfx_bundle", "title": "Brackeys VFX Bundle: pre-drawn sheets", "author": "CodeManu (via Brackeys)", "url": "https://brackeysgames.itch.io/brackeys-vfx-bundle"},
-  "picster": {"folder": "rpicster", "title": "Godot particle and VFX textures", "author": "Picster", "url": "https://github.com/RPicster/Godot-particle-and-vfx-textures"}
+  "kenney_particles": {
+   "folder": "kenney_particle-pack",
+   "title": "Particle Pack",
+   "author": "Kenney",
+   "url": "https://kenney.nl/assets/particle-pack"
+  },
+  "kenney_smoke": {
+   "folder": "kenney_smoke-particles",
+   "title": "Smoke Particles",
+   "author": "Kenney",
+   "url": "https://kenney.nl/assets/smoke-particles"
+  },
+  "kenney_lights": {
+   "folder": "kenney_light-masks-1.0",
+   "title": "Light Masks",
+   "author": "Kenney",
+   "url": "https://kenney.nl/assets/light-masks"
+  },
+  "kenney_foliage": {
+   "folder": "kenney_foliage-sprites",
+   "title": "Foliage Sprites",
+   "author": "Kenney",
+   "url": "https://kenney.nl/assets/foliage-sprites"
+  },
+  "iche": {
+   "folder": "brackeys_vfx_bundle/brackeys_vfx_bundle",
+   "title": "Brackeys VFX Bundle: flipbooks",
+   "author": "Thomas Iché (via Brackeys)",
+   "url": "https://brackeysgames.itch.io/brackeys-vfx-bundle"
+  },
+  "codemanu": {
+   "folder": "brackeys_vfx_bundle/brackeys_vfx_bundle",
+   "title": "Brackeys VFX Bundle: pre-drawn sheets",
+   "author": "CodeManu (via Brackeys)",
+   "url": "https://brackeysgames.itch.io/brackeys-vfx-bundle"
+  },
+  "picster": {
+   "folder": "rpicster",
+   "title": "Godot particle and VFX textures",
+   "author": "Picster",
+   "url": "https://github.com/RPicster/Godot-particle-and-vfx-textures"
+  }
  },
  "rules": [
-  {"pack": "kenney_particles", "glob": "PNG (Transparent)/*.png", "kind": "shape", "size": 512, "rgb": "white", "prefix": "kp", "role": "base",
-   "roles": {"smoke": "volume", "star": "glint", "spark": "shards", "trace": "shards", "muzzle": "glint", "flare": "glint", "window": "glow", "light": "glow", "dirt": "debris", "scorch": "ground", "scratch": "dark"},
-   "use": "Kenney's particle sprites: circles, dirt, fire, flames, light, magic, muzzle flashes, scorches, scratches, slashes, smoke, sparks, stars, symbols, traces, twirls, windows"},
-  {"pack": "kenney_smoke", "glob": "PNG/Black smoke/*.png", "kind": "sequence-folder", "name": "black_smoke", "frames": 16, "size": 1024, "rgb": "luma", "prefix": "ks", "role": "volume", "as": "sheet", "use": "dark smoke puffs, one variant per particle (normal blend)"},
-  {"pack": "kenney_smoke", "glob": "PNG/White puff/*.png", "kind": "sequence-folder", "name": "white_puff", "frames": 16, "size": 1024, "rgb": "luma", "prefix": "ks", "role": "volume", "as": "sheet", "use": "white smoke puffs, one variant per particle"},
-  {"pack": "kenney_smoke", "glob": "PNG/Explosion/*.png", "kind": "sequence-folder", "name": "explosion", "frames": 16, "size": 1024, "rgb": "source", "prefix": "ks", "role": "base", "use": "a cartoon explosion, frame by frame (OneShot)"},
-  {"pack": "kenney_smoke", "glob": "PNG/Flash/*.png", "kind": "sequence-folder", "name": "flash", "frames": 16, "size": 1024, "rgb": "source", "prefix": "ks", "role": "core", "use": "a cartoon flash, frame by frame (OneShot)"},
-  {"pack": "kenney_smoke", "glob": "PNG/Fart/*.png", "kind": "sequence-folder", "name": "gas", "frames": 16, "size": 1024, "rgb": "luma", "prefix": "ks", "role": "volume", "use": "a gas cloud puffing out, frame by frame (OneShot)"},
-  {"pack": "kenney_lights", "glob": "Transparent/*.png", "kind": "shape", "size": 256, "rgb": "white", "prefix": "lm", "role": "ground",
-   "roles": {"cone": "glow", "fan": "glow", "streaks": "glow", "window": "ground", "circle": "glow", "foliage": "dark"},
-   "use": "Kenney's light masks: cones, fans, circles, windows, streaks, canopy shadows (god rays, gobo decals)"},
-  {"pack": "kenney_foliage", "glob": "PNG/Flat/*.png", "kind": "shape", "size": 256, "rgb": "luma", "prefix": "leaf", "role": "dust", "use": "leaf and grass sprites for petals and drifting leaves"},
-  {"pack": "iche", "glob": "flipbooks/*.tga", "skip": ["fire_*", "explosion_0*", "flame_*"], "kind": "sheet-grid", "size": 1024, "rgb": "luma", "prefix": "fb", "role": "volume", "use": "Thomas Iché's smoke and cloud flipbooks (8x8, 64 frames)"},
-  {"pack": "iche", "glob": "flipbooks/*.tga", "skip": ["*smoke*", "cloud_*"], "kind": "sheet-grid", "size": 1024, "rgb": "source", "prefix": "fb", "role": "base", "use": "Thomas Iché's fire, flame and explosion flipbooks (8x8, 64 frames)"},
-  {"pack": "codemanu", "glob": "predrawn/*.png", "kind": "sheet-grid", "frames": 16, "size": 1024, "rgb": "source", "prefix": "cm", "role": "base", "use": "CodeManu's hand-drawn hits, rings, vortex, charge and streaks, resampled to 16 frames"},
-  {"pack": "picster", "glob": "textures/1024/alpha/*.png", "kind": "shape", "size": 512, "rgb": "white", "prefix": "rp", "role": "glow", "use": "Picster's spotlights and effect textures"}
+  {
+   "pack": "kenney_particles",
+   "glob": "PNG (Transparent)/*.png",
+   "kind": "shape",
+   "size": 512,
+   "rgb": "white",
+   "prefix": "kp",
+   "role": "base",
+   "roles": {
+    "smoke": "volume",
+    "star": "glint",
+    "spark": "shards",
+    "trace": "shards",
+    "muzzle": "glint",
+    "flare": "glint",
+    "window": "glow",
+    "light": "glow",
+    "dirt": "debris",
+    "scorch": "ground",
+    "scratch": "dark"
+   },
+   "use": "Kenney's particle sprites: circles, dirt, fire, flames, light, magic, muzzle flashes, scorches, scratches, slashes, smoke, sparks, stars, symbols, traces, twirls, windows"
+  },
+  {
+   "pack": "kenney_smoke",
+   "glob": "PNG/Black smoke/*.png",
+   "kind": "sequence-folder",
+   "name": "black_smoke",
+   "frames": 16,
+   "size": 1024,
+   "rgb": "luma",
+   "prefix": "ks",
+   "role": "volume",
+   "as": "sheet",
+   "use": "dark smoke puffs, one variant per particle (normal blend)",
+   "edgeFade": true
+  },
+  {
+   "pack": "kenney_smoke",
+   "glob": "PNG/White puff/*.png",
+   "kind": "sequence-folder",
+   "name": "white_puff",
+   "frames": 16,
+   "size": 1024,
+   "rgb": "luma",
+   "prefix": "ks",
+   "role": "volume",
+   "as": "sheet",
+   "use": "white smoke puffs, one variant per particle",
+   "edgeFade": true
+  },
+  {
+   "pack": "kenney_smoke",
+   "glob": "PNG/Explosion/*.png",
+   "kind": "sequence-folder",
+   "name": "explosion",
+   "frames": 16,
+   "size": 1024,
+   "rgb": "source",
+   "prefix": "ks",
+   "role": "base",
+   "use": "a cartoon explosion, frame by frame (OneShot)",
+   "edgeFade": true
+  },
+  {
+   "pack": "kenney_smoke",
+   "glob": "PNG/Flash/*.png",
+   "kind": "sequence-folder",
+   "name": "flash",
+   "frames": 16,
+   "size": 1024,
+   "rgb": "source",
+   "prefix": "ks",
+   "role": "core",
+   "use": "a cartoon flash, frame by frame (OneShot)",
+   "edgeFade": true
+  },
+  {
+   "pack": "kenney_smoke",
+   "glob": "PNG/Fart/*.png",
+   "kind": "sequence-folder",
+   "name": "gas",
+   "frames": 16,
+   "size": 1024,
+   "rgb": "luma",
+   "prefix": "ks",
+   "role": "volume",
+   "use": "a gas cloud puffing out, frame by frame (OneShot)",
+   "edgeFade": true
+  },
+  {
+   "pack": "kenney_lights",
+   "glob": "Transparent/*.png",
+   "kind": "shape",
+   "size": 256,
+   "rgb": "white",
+   "prefix": "lm",
+   "role": "ground",
+   "roles": {
+    "cone": "glow",
+    "fan": "glow",
+    "streaks": "glow",
+    "window": "ground",
+    "circle": "glow",
+    "foliage": "dark"
+   },
+   "use": "Kenney's light masks: cones, fans, circles, windows, streaks, canopy shadows (god rays, gobo decals)"
+  },
+  {
+   "pack": "kenney_foliage",
+   "glob": "PNG/Flat/*.png",
+   "kind": "shape",
+   "size": 256,
+   "rgb": "luma",
+   "prefix": "leaf",
+   "role": "dust",
+   "use": "leaf and grass sprites for petals and drifting leaves"
+  },
+  {
+   "pack": "iche",
+   "glob": "flipbooks/*.tga",
+   "skip": [
+    "fire_*",
+    "explosion_0*",
+    "flame_*"
+   ],
+   "kind": "sheet-grid",
+   "size": 1024,
+   "rgb": "luma",
+   "prefix": "fb",
+   "role": "volume",
+   "use": "Thomas Iché's smoke and cloud flipbooks (8x8, 64 frames)",
+   "edgeFade": true
+  },
+  {
+   "pack": "iche",
+   "glob": "flipbooks/*.tga",
+   "skip": [
+    "*smoke*",
+    "cloud_*"
+   ],
+   "kind": "sheet-grid",
+   "size": 1024,
+   "rgb": "source",
+   "prefix": "fb",
+   "role": "base",
+   "use": "Thomas Iché's fire, flame and explosion flipbooks (8x8, 64 frames)",
+   "edgeFade": true
+  },
+  {
+   "pack": "codemanu",
+   "glob": "predrawn/*.png",
+   "kind": "sheet-grid",
+   "frames": 16,
+   "size": 1024,
+   "rgb": "source",
+   "prefix": "cm",
+   "role": "base",
+   "use": "CodeManu's hand-drawn hits, rings, vortex, charge and streaks, resampled to 16 frames",
+   "edgeFade": true
+  },
+  {
+   "pack": "picster",
+   "glob": "textures/1024/alpha/*.png",
+   "kind": "shape",
+   "size": 512,
+   "rgb": "white",
+   "prefix": "rp",
+   "role": "glow",
+   "use": "Picster's spotlights and effect textures"
+  }
  ]
 }

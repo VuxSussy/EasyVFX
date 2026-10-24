@@ -27,7 +27,7 @@ that don't depend on how big the effect is, so a sword hit and a meteor compare:
     leave     seconds it takes to leave: a flash goes in a frame or two, a gust slowly
     pop       how much of it is still visible on its last frame (0 clean, 1 vanishes
               whole: the abrupt end)
-    end       seconds after the effect starts that its last particle is gone
+    end       seconds from its own start until its last particle is gone
 
 Sizes are in bodies, not over the effect's own size: effects are made to sit on a
 character, and it lets open effects without a base layer compare. grammar.json holds, per
@@ -189,7 +189,7 @@ def particle(b, frame_time):
         "solid": round(1 - min(k[1] for k in b["transparency"]), 3),
         "light": b["lightEmission"],
         "z": b["zOffset"],
-        "end": round(b["frame"] * frame_time + max(b["lifetime"]), 3),
+        "end": round(max(b["lifetime"]), 3),
         "texture": b.get("texture", ""),
         "facing": b.get("orientation"),
     }
@@ -198,7 +198,7 @@ def particle(b, frame_time):
     if profile and kind == "cut":
         tail, flip_pop, seen = dissolve_of(profile)
         kind, pop = "dissolve", round(flip_pop * pop, 3)
-        row["end"] = round(b["frame"] * frame_time + max(b["lifetime"]) * seen, 3)
+        row["end"] = round(max(b["lifetime"]) * seen, 3)
     row.update(exit=kind, tail=tail, pop=pop, leave=round(tail * life, 3))
     return row
 

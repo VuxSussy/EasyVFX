@@ -11,7 +11,7 @@
   "glint": {
    "job": "a crisp flare, star or ray fan on the hit, or a telegraph before it",
    "ranges": {"life": [0.03, 0.2], "count": [1, 3], "size": [0.5, 2.5], "reach": [0, 0.1], "light": [0.5, 1], "tail": [0.3, 1.0], "pop": [0, 0.3], "end": [0.05, 0.3], "leave": [0.02, 0.15]},
-   "exits": ["fade", "shrink"],
+   "exits": ["fade", "shrink", "disperse"],
    "source": "plan §4a and the references; open star sprites linger 0.5-1.5 s and spread wide, which is the dust role here; exits: Phát 2026-10-24 (a flash leaves fast, an air gust slowly; nothing vanishes whole) and Lotus's slow calm tail",
    "open": {"n": 10, "life": [0.506, 1.487], "vary": [1.594, 4.752], "stop": [0.277, 0.475], "reach": [0.28, 6.326], "spread": [180.0, 360.0], "size": [0.101, 2.053], "fade": [0.35, 1.0], "solid": [0.604, 1.0], "light": [0.15, 1.0]}
   },
@@ -70,13 +70,20 @@
    "exits": ["fade", "disperse", "dissolve"],
    "source": "Lotus's ground ring and swirl; Frigid's frost sigil; exits: Phát 2026-10-24 (a flash leaves fast, an air gust slowly; nothing vanishes whole) and Lotus's slow calm tail",
    "open": {}
+  },
+  "tell": {
+   "job": "a small cue in the wind-up that hands off to the hit: it gathers or glints, then is gone by the hit (motion bible: telegraph)",
+   "exits": ["fade", "shrink", "disperse", "cut"],
+   "ranges": {"size": [0.05, 4.0], "life": [0.1, 0.6], "leave": [0.02, 0.3], "light": [0.5, 1]},
+   "source": "the motion bible's telegraph and wind-up; Frigid's wind arcs and needle glints",
+   "open": {}
   }
  },
  "names": {"Core": "core", "SparkBall": "core", "Seed": "core", "Flare": "glint", "Rays": "glint", "Star8": "glint", "Cross4": "glint", "Twinkles": "dust", "Base": "base", "Ring": "base", "Crescents": "base", "FlowerSigil": "base", "RingStroke": "base", "Volume": "volume", "Bloom": "glow", "SlashSmoke": "volume", "Bokeh": "glow", "Halo": "dark", "DarkHalo": "dark", "Ink": "dark", "Grass": "dark", "Shards": "shards", "LineBurst": "shards", "MotionStreaks": "shards", "Tendrils": "shards", "BaseSparks": "shards", "Rocks": "debris", "Embers": "dust", "GoldDust": "dust", "Petals": "dust", "OrbitRings": "dust", "Floor": "ground", "DustRing": "ground", "GroundRing": "ground", "GroundSwirl": "ground"},
  "structure": {
   "depthOrder": ["dark", "volume", "glow", "base", "debris", "shards", "dust", "glint", "core"],
   "beatLayers": [3, 6],
-  "_depthOrder": "ZOffset should not decrease along this list (dark lowest, the core on top); ground and shells are not ordered by ZOffset",
+  "_depthOrder": "ZOffset should not decrease along this list (dark lowest, the core on top); ground, tell and shells are not ordered by ZOffset",
   "_beatLayers": "layers one beat stacks (Lotus: 4 to 9 per beat; a short hit 3 to 6)"
  },
  "openSources": [

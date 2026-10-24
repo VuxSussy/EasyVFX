@@ -4,6 +4,17 @@ All notable changes to EasyVFX are listed here. Versions follow [Semantic Versio
 
 ## [Unreleased]
 
+### Ground Slam (v4), rebuilt on its beat sheet
+- `ground_slam_v4` fires at the press. A Tell (a tightening gold ring, a glint, rising motes) carries Cleave's 0.5 s
+  wind-up, the 2-frame hit and the hit-stop land at 0.5 s, and each layer leaves its own way. The blast is a CC0
+  explosion flipbook. The smoke is a CC0 smoke flipbook that disperses over about 1.4 s, the dust ring fades out, and
+  the embers linger. It now runs 1.95 s, against 0.65 s before. `evfx grammar` finds nothing out of range (24 at the
+  first pass). `evfx beats` leaves only dials.
+- The judges learnt from it: the beat judge reads past the recorded frames to the last particle's death; a layer's
+  `end` counts from its own start; and a new `tell` role covers wind-up cues that hand off to the hit.
+- `texgen cc0` fades each flipbook cell out at its edge, so frames that grow to fill their cell (Iché's smoke) never
+  show its straight edges.
+
 ### The CC0 library
 - `pack/cc0`: 327 CC0 textures from Kenney (particles, smoke, light masks, foliage), the Brackeys VFX Bundle (Thomas
   Iché's flipbooks, CodeManu's hand-drawn sheets) and Picster, imported and normalized by `texgen cc0`

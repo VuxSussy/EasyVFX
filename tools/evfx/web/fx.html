@@ -25,6 +25,7 @@ h2 { font: 600 13px var(--display); text-transform: uppercase; letter-spacing: 0
 .stages { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
 figure { margin: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; min-width: 0; }
 figure img { display: block; width: 100%; aspect-ratio: 3 / 2; object-fit: cover; background: #000; }
+figure img[hidden], .empty[hidden] { display: none; }
 figcaption { padding: 10px 12px; display: flex; justify-content: space-between; gap: 8px; font-size: 14px; }
 figcaption span { font: 12px var(--mono); color: var(--dim); }
 .empty { display: grid; place-items: center; aspect-ratio: 3 / 2; color: var(--dim); font-size: 14px; padding: 16px; text-align: center; }

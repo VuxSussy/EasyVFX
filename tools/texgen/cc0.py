@@ -9,7 +9,8 @@ the pack convention:
     luma    grey shading in RGB, alpha kept: smoke and foliage keep their form
     source  the pack's own colour, alpha kept (fire, coloured hand-drawn hits)
 
-Animations become Roblox flipbooks. Roblox plays only 4, 16 or 64 frames, so a sequence is
+Animations become Roblox flipbooks; with "edgeFade", each cell fades out at its edge so frames
+that fill their cell never show its straight edges. Roblox plays only 4, 16 or 64 frames, so a sequence is
 resampled in time to the nearest of those (frames dropped or held, never blended) and
 packed into a 2x2, 4x4 or 8x8 grid. Every texture keeps its source, author, licence and
 original path in pack/cc0/manifest.json.
@@ -101,16 +102,29 @@ def resample(frames, n):
     return [frames[i] for i in idx]
 
 
-def atlas(frames, side):
+def _edge_fade(n, start=0.78, end=0.98):
+    """A round fade to zero at a cell's edge, so frames that grow to fill their cell (Iché's
+    smoke, late explosion frames) don't show the cell's straight edges."""
+    y, x = np.mgrid[0:n, 0:n].astype(np.float32)
+    r = np.sqrt(((x + 0.5) / n * 2 - 1) ** 2 + ((y + 0.5) / n * 2 - 1) ** 2)
+    t = np.clip((r - start) / (end - start), 0, 1)
+    return 1 - t * t * (3 - 2 * t)
+
+
+def atlas(frames, side, fade=False):
     n = len(frames)
     grid = GRIDS[n]
     cell = side // grid
+    ring = _edge_fade(cell) if fade else None
     sheet = np.zeros((side, side, 4), np.float32)
     for i, f in enumerate(frames):
         f = _square(f)
         img = Image.fromarray((np.clip(f, 0, 1) * 255).astype(np.uint8), "RGBA").resize((cell, cell), Image.LANCZOS)
         r, c = divmod(i, grid)
-        sheet[r * cell : (r + 1) * cell, c * cell : (c + 1) * cell] = np.asarray(img, np.float32) / 255
+        f = np.asarray(img, np.float32) / 255
+        if ring is not None:
+            f[..., 3] *= ring
+        sheet[r * cell : (r + 1) * cell, c * cell : (c + 1) * cell] = f
     return sheet, grid
 
 
@@ -169,7 +183,7 @@ def run(dry=False):
                         raise SystemExit(f"texgen cc0: {key} has no grid in its name")
                     seq = [normalize(c, rule["rgb"]) for c in cells(_load(paths[0]), cols, rows)]
                 n = rule.get("frames") or _frames_for(len(seq))
-                rgba, grid = atlas(resample(seq, n), rule["size"])
+                rgba, grid = atlas(resample(seq, n), rule["size"], rule.get("edgeFade", False))
                 frames = n
             role = next((r for stem, r in rule.get("roles", {}).items() if _slug(key).startswith(stem)), rule["role"])
             entry = {
