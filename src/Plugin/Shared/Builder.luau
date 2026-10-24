@@ -10,6 +10,7 @@
 
 local Presets = require(script.Parent.Presets)
 local Custom = require(script.Parent.Custom)
+local Curves = require(script.Parent.Curves)
 
 local Builder = {}
 
@@ -195,7 +196,7 @@ local function numberSequence(spec: any, mul: number, minValue: number?, maxValu
 		return NumberSequence.new(v)
 	end
 	local points = {}
-	for _, kp in spec :: { { number } } do
+	for _, kp in Curves.keypoints(spec) do
 		local v = kp[2] * mul
 		if minValue then
 			v = math.max(minValue, v)
@@ -374,10 +375,15 @@ LayerBuilders.particles = function(ctx, key, layer)
 	e.FlipbookMode = enumItem(Enum.ParticleFlipbookMode, layer.flipMode, Enum.ParticleFlipbookMode.OneShot) :: any
 	e.FlipbookStartRandom = layer.flipRandom == true
 	e.Color = colorSequence(layer.color, params)
-	e.Size = numberSequence(layer.size or 1, params.size, 0)
-	e.Transparency = numberSequence(layer.transparency or 0, 1, 0, 1)
+	-- a layer's exit (Curves.EXITS) reshapes how it leaves: transparency, size, lifetime
+	local size, transparency, lifeMul = layer.size or 1, layer.transparency or 0, 1
+	if layer.exit then
+		transparency, size, lifeMul = Curves.exit(layer.exit, transparency, size)
+	end
+	e.Size = numberSequence(size, params.size, 0)
+	e.Transparency = numberSequence(transparency, 1, 0, 1)
 	e.Squash = numberSequence(layer.squash or 0, 1, -3, 3)
-	e.Lifetime = range(layer.lifetime, params.lifetime, 1)
+	e.Lifetime = range(layer.lifetime, params.lifetime * lifeMul, 1)
 	e.Speed = range(layer.speed, params.speed * math.sqrt(params.size), 5)
 	local spread = layer.spread or { 0, 0 }
 	e.SpreadAngle = Vector2.new(spread[1], spread[2])

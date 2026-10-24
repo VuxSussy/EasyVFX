@@ -1,0 +1,315 @@
+{
+ "about": "The VFX reference catalogue (docs/refs/README.md). Links, credits, tags and our own short notes only: media stays in .cache/refs/inbox/<local>, never in this public repo. licence: cc0 (may ship, see docs/cc0-library.md) or reference (study only). target: how close it is to SE370's look (stylized shapes with realistic touches).",
+ "refs": [
+  {
+   "id": "r001",
+   "title": "Simonschreibt News #25 (VFX picks)",
+   "creator": "Simon Schreibt",
+   "url": "https://simonschreibt.de/?na=view&id=33",
+   "kind": "newsletter",
+   "licence": "reference",
+   "local": "001-simonschreibt-newsletter-33",
+   "tags": [
+    "picks"
+   ],
+   "target": "mixed",
+   "notes": "Six recommended pieces: a comic/print-style stylized boom, a beam teleport impact worth frame-stepping, fire tentacles, Path of Exile 2 ghost tentacles, a VFX reel, a punchy purple snake summon, a water splash paint study.",
+   "links": [
+    "https://www.artstation.com/artwork/BkQKWz",
+    "https://www.artstation.com/artwork/EzKzGv",
+    "https://www.artstation.com/artwork/L4bDNv",
+    "https://www.artstation.com/artwork/oJlJxz",
+    "https://www.youtube.com/watch?v=AT5VeQZtaGQ",
+    "https://www.artstation.com/artwork/mAdvq9",
+    "https://www.artstation.com/artwork/3EPonE"
+   ]
+  },
+  {
+   "id": "r002",
+   "title": "Game Art Tricks (97 articles)",
+   "creator": "Simon Schreibt",
+   "url": "https://simonschreibt.de/game-art-tricks/",
+   "kind": "article-series",
+   "licence": "reference",
+   "local": "002-simonschreibt-game-art-tricks",
+   "tags": [
+    "technique",
+    "layering",
+    "textures",
+    "smoke",
+    "fire",
+    "explosion",
+    "glow"
+   ],
+   "target": "technique",
+   "notes": "How shipped games fake their effects. All 97 are noted locally (notes.md); the 15 most useful for stylized Roblox VFX are listed in `most_useful`.",
+   "most_useful": [
+    {
+     "title": "Battlefront II: Layered Explosion",
+     "url": "https://simonschreibt.de/gat/battlefront-ii-layered-explosion/",
+     "why": "matched smoke and fire layers from one flipbook: the base of an explosion kit"
+    },
+    {
+     "title": "Fallout 4: The Mushroom Case",
+     "url": "https://simonschreibt.de/gat/fallout-4-the-mushroom-case/",
+     "why": "one grey looping billow coloured over lifetime; the fire-to-smoke handoff"
+    },
+    {
+     "title": "GTA V: Underestimated Glow",
+     "url": "https://simonschreibt.de/gat/gta-v-underestimated-glow/",
+     "why": "glow as a painted texture layer, not a bloom setting; twin counter-rotating glare cards"
+    },
+    {
+     "title": "Pokemon: Rapidash",
+     "url": "https://simonschreibt.de/gat/pokemon-rapidash/",
+     "why": "stylized fire needs separate layers for volume and for silhouette (chunky tongues)"
+    },
+    {
+     "title": "Tomb Raider: Lara's Hot Secrets",
+     "url": "https://simonschreibt.de/gat/tomb-raider-laras-hot-secrets/",
+     "why": "moving fire as a ribbon plus particles spawned by distance; crossfaded loops"
+    },
+    {
+     "title": "Stylized VFX in RIME",
+     "url": "https://simonschreibt.de/gat/stylized-vfx-in-rime/",
+     "why": "erosion baked into smoke flipbooks, light painted in; fades that read as smoke"
+    },
+    {
+     "title": "Diablo 3: Wings of Angels",
+     "url": "https://simonschreibt.de/gat/diablo-3-wings-of-angels/",
+     "why": "the Beam streamer recipe: scrolling strips, wide to narrow, tip fade, offset speeds"
+    },
+    {
+     "title": "GTA V: The Wormy Fountain",
+     "url": "https://simonschreibt.de/gat/gta-v-wormy-fountain/",
+     "why": "continuous streams as camera-facing beams"
+    },
+    {
+     "title": "Company of Heroes: Flamethrower",
+     "url": "https://simonschreibt.de/gat/company-of-heroes-flamethrower/",
+     "why": "sprayed effects: beam body, velocity-aligned sparks, a landing layer where it hits"
+    },
+    {
+     "title": "Zelda: The Bling-Bling Offset",
+     "url": "https://simonschreibt.de/gat/zelda-the-bling-bling-offset/",
+     "why": "ZOffset toward the camera to stop clipping, away for auras"
+    },
+    {
+     "title": "Jedi: Fallen Order: Splishy Splashy",
+     "url": "https://simonschreibt.de/gat/jedi-fallen-order-splishy-splashy/",
+     "why": "a water kit of body, droplets and mist, chosen by scale"
+    },
+    {
+     "title": "The Divine Fire",
+     "url": "https://simonschreibt.de/gat/divine-fire/",
+     "why": "lead-in, loop and lead-out phases for state effects (burning, buffs)"
+    },
+    {
+     "title": "Zelda Wind Waker: Hyrule Travel Guide",
+     "url": "https://simonschreibt.de/gat/zelda-wind-waker-hyrule-travel-guide/",
+     "why": "cartoon smoke as a family of swirl puffs, one per occasion"
+    },
+    {
+     "title": "Binding of Isaac: Composition",
+     "url": "https://simonschreibt.de/gat/binding-of-isaac-composition/",
+     "why": "readability tiers: gameplay effects out-contrast ambient ones"
+    },
+    {
+     "title": "Cel Shading",
+     "url": "https://simonschreibt.de/gat/cell-shading/",
+     "why": "outlines for the anime side, painted into textures or as inverted-hull shells"
+    }
+   ]
+  },
+  {
+   "id": "r003",
+   "title": "#VFXFriday community reel",
+   "creator": "VFX Apprentice community",
+   "url": "https://bsky.app/profile/vfxapprentice.bsky.social/post/3mqck2kpgls2p",
+   "kind": "clip",
+   "licence": "reference",
+   "local": "003-bsky-vfxapprentice-3mqck2kpgls2p",
+   "tags": [
+    "impact",
+    "slash",
+    "orb",
+    "water",
+    "magic-circle",
+    "pillar"
+   ],
+   "target": "close",
+   "notes": "A red star burst; a slash into red spikes and cartoon smoke; Spellcasters concepts (purple orb, tsunami, rock wave); a purple magic circle rising into a spiral pillar."
+  },
+  {
+   "id": "r004",
+   "title": "Last Flag: Lumberjack Ancestral Spirit Attack, Archer Healing Arrow, Spectral Shot (concepts)",
+   "creator": "Geoffrey Amesse, Dardo Studios",
+   "url": "https://dardostudios.com",
+   "kind": "images",
+   "licence": "reference",
+   "local": "004-last-flag-concepts",
+   "tags": [
+    "dome",
+    "starburst",
+    "ground-ring",
+    "ink",
+    "projectile",
+    "heal",
+    "element-variants"
+   ],
+   "target": "anchor",
+   "notes": "The style anchor. Flat painted shapes with hard edges; a dome or arc silhouette with a spiky starburst inside; ground rings and splashes; one element colour per variant; black ink strokes as accents; leaves and chunky debris as dust; glowing character rims; vortex portals."
+  },
+  {
+   "id": "r005",
+   "title": "Professional VFX Portfolio class reel",
+   "creator": "VFX Apprentice students (Antonio Manzi, Axel Mortensen, Ian Boyle, Daryna Masiahina, others)",
+   "url": "https://bsky.app/profile/vfxapprentice.bsky.social/post/3mwecmjolas2r",
+   "kind": "clip",
+   "licence": "reference",
+   "local": "005-bsky-vfxapprentice-3mwecmjolas2r",
+   "tags": [
+    "slash",
+    "impact-frame",
+    "ink",
+    "beam",
+    "rune-circle",
+    "ice"
+   ],
+   "target": "close",
+   "notes": "Stylized slashes with black ink accents, a magenta smear and a starburst impact frame, then a red full-screen impact silhouette (Axel Mortensen); a ground crack into a gold rune circle; a charge into a red laser; a white flash with a rainbow-fringed ring."
+  },
+  {
+   "id": "r007",
+   "title": "Before and after: comet projectile",
+   "creator": "VFX Apprentice students",
+   "url": "https://bsky.app/profile/vfxapprentice.bsky.social/post/3mxsc6e4n2f2t",
+   "kind": "clip",
+   "licence": "reference",
+   "local": "007-bsky-vfxapprentice-3mxsc6e4n2f2t",
+   "tags": [
+    "before-after",
+    "projectile"
+   ],
+   "target": "lesson",
+   "notes": "Great over good: one comet silhouette instead of competing lines and a hard core; one warm palette; a soft bright head; faint blue and pink fringes along the trail; residual streaks as it leaves."
+  },
+  {
+   "id": "r008",
+   "title": "Before and after: braziers",
+   "creator": "VFX Apprentice students",
+   "url": "https://bsky.app/profile/vfxapprentice.bsky.social/post/3mxsh7g6hoa2q",
+   "kind": "clip",
+   "licence": "reference",
+   "local": "008-bsky-vfxapprentice-3mxsh7g6hoa2q",
+   "tags": [
+    "before-after",
+    "fire",
+    "smoke"
+   ],
+   "target": "lesson",
+   "notes": "Great over good: a neutral stage instead of coloured spill; a white-hot core inside the coloured flame; dark smoke wisps rising above it; cleaner contrast."
+  },
+  {
+   "id": "r009",
+   "title": "Before and after: fire pillar",
+   "creator": "VFX Apprentice students",
+   "url": "https://bsky.app/profile/vfxapprentice.bsky.social/post/3mxsdx637pa2q",
+   "kind": "clip",
+   "licence": "reference",
+   "local": "009-bsky-vfxapprentice-3mxsdx637pa2q",
+   "tags": [
+    "before-after",
+    "fire",
+    "ground",
+    "timing"
+   ],
+   "target": "lesson",
+   "notes": "Great over good: the fire spreads into a wide ground ring and resolves sooner, instead of a tall busy pillar with chaotic spray; it ends calm with a scorch, debris and a few embers."
+  },
+  {
+   "id": "r010",
+   "title": "Stylized Fire Pit",
+   "creator": "Daryll Española",
+   "url": "https://www.artstation.com/artwork/oAq83O",
+   "kind": "clip",
+   "licence": "reference",
+   "local": "010-bsky-vfxapprentice-3mxphyeww432b",
+   "tags": [
+    "fire",
+    "ground-decal",
+    "smoke",
+    "sparks",
+    "loop",
+    "burst"
+   ],
+   "target": "anchor",
+   "notes": "The exact mix to aim for: a hex-cracked glowing ground decal; a burst of chunky stylized flame tongues with soft dark smoke, sparks and a red ground glow; then a small steady fire loops on the cracks."
+  },
+  {
+   "id": "r011",
+   "title": "Elemental Projectile Study",
+   "creator": "Iris Sebirot",
+   "url": "https://www.artstation.com/artwork/P6lbvB",
+   "kind": "clip",
+   "licence": "reference",
+   "local": "011-bsky-vfxapprentice-3mxfnmcfpcj22",
+   "tags": [
+    "projectile",
+    "fire",
+    "water",
+    "ribbons",
+    "smoke"
+   ],
+   "target": "anchor",
+   "notes": "Fire and water projectiles: a white-hot core grading through the element's colours to a dark smoky tail; ribbon strands curling off the body; sparks; a coloured light cast on the floor. Hand-painted shapes with soft volumetric shading."
+  },
+  {
+   "id": "r012",
+   "title": "Lotus",
+   "creator": "Plebarae",
+   "url": "https://youtu.be/0aWTYOV8VtA",
+   "kind": "clip",
+   "licence": "reference",
+   "local": "../clip1",
+   "tags": [
+    "layering",
+    "beats",
+    "study-only"
+   ],
+   "target": "study",
+   "notes": "Dissected in docs/refs/dissection-lotus-frigid.md and lotus-layers.md."
+  },
+  {
+   "id": "r013",
+   "title": "Frigid Rush",
+   "creator": "Hazaze",
+   "url": "https://youtu.be/2fwT64lFtao",
+   "kind": "clip",
+   "licence": "reference",
+   "local": "../clip2",
+   "tags": [
+    "timing",
+    "flash",
+    "frost"
+   ],
+   "target": "good",
+   "notes": "Dissected in docs/refs/dissection-lotus-frigid.md."
+  },
+  {
+   "id": "r014",
+   "title": "How to Make a Simple Beam Effect",
+   "creator": "Twist VFX",
+   "url": "https://www.youtube.com/watch?v=1swzmhdnylI",
+   "kind": "clip",
+   "licence": "reference",
+   "local": "../clip3",
+   "tags": [
+    "beam",
+    "palette"
+   ],
+   "target": "technique",
+   "notes": "Dissected in docs/refs/twist-beam.md."
+  }
+ ]
+}
