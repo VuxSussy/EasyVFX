@@ -55,7 +55,7 @@ def check(entry, rgba):
         what = "each frame" if kind == "sequence" else "size"
         fails.append(f"{what} {fw}x{fh}: both sides must be powers of two, at most 1024")
     rgb_kind = entry.get("rgb")
-    if rgb_kind not in ("spectrum", "luma") and (rgba[..., :3] != 255).any():
+    if rgb_kind not in ("spectrum", "luma", "ramp") and (rgba[..., :3] != 255).any():
         fails.append("RGB is not white: the shape belongs in alpha")
     if rgb_kind == "luma" and ((rgba[..., 0] != rgba[..., 1]) | (rgba[..., 1] != rgba[..., 2])).any():
         fails.append("rgb is luma but the RGB isn't grey (R, G and B must match)")

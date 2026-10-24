@@ -105,7 +105,7 @@ def render(tex_id, seed=None, size=None, **edits):
     else:
         frames = 1
     alpha = np.clip(np.asarray(out, np.float32), 0, 1)
-    if rgb is None or e.get("rgb") not in ("spectrum", "luma"):
+    if rgb is None or e.get("rgb") not in ("spectrum", "luma", "ramp"):
         rgb = np.ones(alpha.shape + (3,), np.float32)
     rgba = np.concatenate([np.clip(rgb, 0, 1), alpha[..., None]], -1)
     rgba = np.round(rgba * 255).astype(np.uint8)

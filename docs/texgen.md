@@ -27,8 +27,10 @@ python3 tools/texgen build shape/godray_fan --seed 9 --set rays=40 -o /tmp/fan.p
 | `pack/generated/` | the built PNGs and `manifest.json` (kind, size, grid, role, sha256, upload) for the ledger script |
 
 Ids are `<family>/<name>`; the file is `<family>_<name>.png`. Uploaded textures stay in `pack/textures`; a v4 name
-may not clash with one there. Every texture is white RGB with the shape in alpha. The one exception is
-`art/fringe_ring`, whose bank entry says `"rgb": "spectrum"`, since the rainbow is the point.
+may not clash with one there. Every texture is white RGB with the shape in alpha, unless its bank entry says otherwise:
+- `"rgb": "spectrum"` (`art/fringe_ring`, since the rainbow is the point);
+- `"rgb": "luma"` (grey bands to tint);
+- `"rgb": "ramp"` (a baked palette, used with a white tint).
 
 ## Checks
 
@@ -44,6 +46,46 @@ may not clash with one there. Every texture is white RGB with the shape in alpha
 `selftest` checks the primitives' maths, plants one bad case per rule (each must fail with its reason), renders every
 recipe small and checks it, and checks the flame loop's last frame flows into its first. `tools/check.sh` and CI run
 `selftest` and `check --fresh`.
+
+## Stylized generators
+
+The target look is stylized: hard-edged painted shapes in a few flat value bands, with soft realistic touches (the
+fire pit and projectile dissections in `docs/refs`, and the Valorant muzzle flashes). Phát picked each default from
+variants, 2026-10-24.
+
+![Stylized generators](texgen/stylized.png)
+
+| Id | Recipe | What it is |
+|---|---|---|
+| `flip/flame_stylized` | `flame_stylized` | a looping flame in three bands (rim, body, core), stepped on twos |
+| `flip/flame_stylized_smooth` | `flame_stylized` | the same flame with all 64 frames |
+| `flip/flame_stylized_ink` | `flame_stylized` | the same flame with a thin dark-red ink line |
+| `art/ground_cracks` | `ground_cracks` | glowing Voronoi cracks: small cells in the middle, larger outward; hot thick lines that thin to red |
+| `flip/ground_cracks_spread` | `ground_cracks` | the cracks spreading out from the centre with a hot front, then holding |
+| `sheet/brush_flicks` | `brush_flicks` | 16 hard-edged strokes (flick, thorn, comma, crescent, lick) in grey bands, to tint |
+| `sheet/brush_flicks_ink` | `brush_flicks` | the same strokes in the fire ramp with an ink line |
+| `flip/smoke_cel` | `smoke_cel` | a cel-shaded puff of round lobes in two tones; it swells, drifts and breaks up through big holes |
+| `strip/beam_hooks` | `beam_hooks` | one beam streak whose edges are bitten by wide curled hooks; it tiles along U |
+
+- **Flame:** a sim (`tools/texgen/sim.py` `flame_loop`, baked into `pack/sim/flame_loop.npz` by
+  `.venv-sim/bin/python tools/texgen/sim.py flame_loop -o pack/sim/flame_loop.npz`) moves the tongues; the recipe
+  shapes them. Its knobs:
+  - `base`: a knot of heat at the bottom;
+  - `wide`: stretches the flame sideways;
+  - `tips`: pulls the tongues into tapered points;
+  - `kink`: bends the tongues into brush flicks;
+  - `core_drop`: sinks the core;
+  - `ink`: adds an outline.
+
+  Tip sharpness goes with the element: fire keeps 0.16, lightning goes sharper, water softer.
+- **Cracks:** additive. The cells are `radial` or `hex`. `drop` breaks edges off toward the rim, and `pool` fills the
+  centre cell.
+- **Smoke:** every noise field is fixed for the whole flipbook and only thresholds move, so it never flickers. Tint it
+  dark for fire smoke, pale for dust.
+- **Beams:** Phát's rule is that a beam's taper and its slowing come from the Beam's properties (`Width0`, `Width1`,
+  `Transparency`, `TextureSpeed`), not the texture. So `beam_hooks` keeps an even width and tiles. The streak is the
+  clear gap, centred, between dark bands that wrap across the strip's top and bottom. The hooks on the two edges are
+  staggered, so the streak never closes.
 
 ## In evfx
 
