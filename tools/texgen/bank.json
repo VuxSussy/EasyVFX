@@ -59,6 +59,16 @@
     "sheet/star_set": {"recipe": "star_set", "kind": "sheet", "size": 512, "grid": 4, "seed": 86, "role": "core", "use": "star and sparkle variants, one per particle"},
     "strip/comb_fringe": {"recipe": "comb_fringe", "kind": "strip", "size": 1024, "seed": 87, "role": "sparks", "use": "hanging streak comb that frays a beam's edge (scroll it)"},
     "strip/helix_strands": {"recipe": "helix_strands", "kind": "strip", "size": 1024, "seed": 88, "role": "sparks", "use": "strands twisting around a beam (scroll it)"},
-    "strip/pulse_bars": {"recipe": "pulse_bars", "kind": "strip", "size": 1024, "seed": 89, "role": "base", "use": "bars pulsing down a beam (scroll it fast)"}
+    "strip/pulse_bars": {"recipe": "pulse_bars", "kind": "strip", "size": 1024, "seed": 89, "role": "base", "use": "bars pulsing down a beam (scroll it fast)"},
+
+    "flip/flame_stylized": {"recipe": "flame_stylized", "kind": "flipbook", "size": 1024, "grid": 4, "seed": 91, "rgb": "ramp", "role": "base", "use": "a looping stylized flame in three hard bands on a solid base, tapered tips, stepped on twos (Loop, 12 fps, white tint)"},
+    "flip/flame_stylized_smooth": {"recipe": "flame_stylized", "kind": "flipbook", "size": 1024, "grid": 8, "seed": 92, "rgb": "ramp", "params": {"frames": 64}, "role": "base", "use": "the same flame with every sim frame (Loop, 24-48 fps)"},
+    "flip/flame_stylized_ink": {"recipe": "flame_stylized", "kind": "flipbook", "size": 1024, "grid": 4, "seed": 93, "rgb": "ramp", "params": {"ink": 2}, "role": "base", "use": "the stepped flame with a thin dark-red ink outline, the hand-drawn look (Loop, 12 fps, white tint)"},
+    "art/ground_cracks": {"recipe": "ground_cracks", "kind": "decal", "size": 1024, "seed": 94, "rgb": "ramp", "role": "ground", "use": "glowing ground cracks under a fire: Voronoi cells growing outward, hot at the centre (additive decal or flat particle, white tint)"},
+    "flip/ground_cracks_spread": {"recipe": "ground_cracks", "kind": "flipbook", "size": 1024, "grid": 4, "seed": 94, "rgb": "ramp", "params": {"frames": 16}, "role": "ground", "use": "the same cracks spreading out from the centre with a hot leading edge, then holding (OneShot, about 0.5 s, then swap to art/ground_cracks)"},
+    "sheet/brush_flicks": {"recipe": "brush_flicks", "kind": "sheet", "size": 1024, "grid": 4, "seed": 95, "rgb": "luma", "role": "shards", "use": "16 hard-edged painted strokes (flick, thorn, comma, crescent, lick) in two grey bands, to tint: shards, licks, peels, slash accents"},
+    "sheet/brush_flicks_ink": {"recipe": "brush_flicks", "kind": "sheet", "size": 1024, "grid": 4, "seed": 95, "rgb": "ramp", "params": {"palette": "fire", "ink": 2}, "role": "shards", "use": "the same strokes in the fire ramp with a thin dark ink line, the Valorant thorn look (white tint, normal blend)"},
+    "flip/smoke_cel": {"recipe": "smoke_cel", "kind": "flipbook", "size": 1024, "grid": 4, "seed": 97, "rgb": "luma", "role": "volume", "use": "a cel-shaded cartoon smoke puff in two grey tones that swells, drifts and breaks up through big holes; tint dark for fire smoke, pale for dust (OneShot, normal blend)"},
+    "strip/beam_hooks": {"recipe": "beam_hooks", "kind": "strip", "size": 1024, "seed": 98, "role": "base", "use": "one streak for a beam, its edges bitten by wide curled hooks, tiling along U to scroll (TextureSpeed); taper with Width0/Width1 and slow it with the Beam's properties, not the texture"}
   }
 }

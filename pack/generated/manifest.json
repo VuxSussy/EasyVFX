@@ -92,6 +92,21 @@
       "sha256": "7e6c5d079be44aaff913c5e133cddef4f2dba12413adf17b7a9e2797fbc5846d",
       "use": "a rainbow-fringe ring, the world-space chromatic fake (keep its colour: white tint)"
     },
+    "art_ground_cracks": {
+      "id": "art/ground_cracks",
+      "kind": "decal",
+      "size": [
+        1024,
+        1024
+      ],
+      "grid": 1,
+      "frames": 1,
+      "role": "ground",
+      "upload": true,
+      "rgb": "ramp",
+      "sha256": "197f30bc835898670ca6e0e5f49bca828b7ec016b8bea22eedb226d9a16d290c",
+      "use": "glowing ground cracks under a fire: Voronoi cells growing outward, hot at the centre (additive decal or flat particle, white tint)"
+    },
     "art_ground_flame": {
       "id": "art/ground_flame",
       "kind": "decal",
@@ -227,6 +242,51 @@
       "sha256": "daa8835b601e4c963627b4dd29ac4a37209ccb20908de2f41ef17f87bad8d1e6",
       "use": "a ground dust ring from above (OneShot, flat, normal blend)"
     },
+    "flip_flame_stylized": {
+      "id": "flip/flame_stylized",
+      "kind": "flipbook",
+      "size": [
+        1024,
+        1024
+      ],
+      "grid": 4,
+      "frames": 16,
+      "role": "base",
+      "upload": true,
+      "rgb": "ramp",
+      "sha256": "a217e4bab3c42c69f228fdfc545ccfb47cd931e8f1b4c36a93625f13b739a4bb",
+      "use": "a looping stylized flame in three hard bands on a solid base, tapered tips, stepped on twos (Loop, 12 fps, white tint)"
+    },
+    "flip_flame_stylized_ink": {
+      "id": "flip/flame_stylized_ink",
+      "kind": "flipbook",
+      "size": [
+        1024,
+        1024
+      ],
+      "grid": 4,
+      "frames": 16,
+      "role": "base",
+      "upload": true,
+      "rgb": "ramp",
+      "sha256": "5c2b4606501125f12e7190a62ab387ba040a5db94130b28a2397d777e783c42e",
+      "use": "the stepped flame with a thin dark-red ink outline, the hand-drawn look (Loop, 12 fps, white tint)"
+    },
+    "flip_flame_stylized_smooth": {
+      "id": "flip/flame_stylized_smooth",
+      "kind": "flipbook",
+      "size": [
+        1024,
+        1024
+      ],
+      "grid": 8,
+      "frames": 64,
+      "role": "base",
+      "upload": true,
+      "rgb": "ramp",
+      "sha256": "3b2960302b26cdddc92b939ddb09e762ed9518e19dfbd52b4f6c5e0c70473b9c",
+      "use": "the same flame with every sim frame (Loop, 24-48 fps)"
+    },
     "flip_flame_tongue": {
       "id": "flip/flame_tongue",
       "kind": "flipbook",
@@ -241,6 +301,21 @@
       "rgb": "white",
       "sha256": "977d0d864284b59c79e8613e29b4c2b6da9b3688c92bcd100360945f8527dae7",
       "use": "a looping flame tongue (Loop)"
+    },
+    "flip_ground_cracks_spread": {
+      "id": "flip/ground_cracks_spread",
+      "kind": "flipbook",
+      "size": [
+        1024,
+        1024
+      ],
+      "grid": 4,
+      "frames": 16,
+      "role": "ground",
+      "upload": true,
+      "rgb": "ramp",
+      "sha256": "b979e1a54db4beb009edc4898e0cf688d0b49911ad99ae5dc6416f4a05658d92",
+      "use": "the same cracks spreading out from the centre with a hot leading edge, then holding (OneShot, about 0.5 s, then swap to art/ground_cracks)"
     },
     "flip_shock_ring": {
       "id": "flip/shock_ring",
@@ -271,6 +346,21 @@
       "rgb": "white",
       "sha256": "97a1a9394ad95ca3a0a1f3229faad99d98dfcfc042bd0d79f6d9715f07217c7c",
       "use": "a crescent slash eroding from its tail (OneShot, VelocityPerpendicular, Emit 4)"
+    },
+    "flip_smoke_cel": {
+      "id": "flip/smoke_cel",
+      "kind": "flipbook",
+      "size": [
+        1024,
+        1024
+      ],
+      "grid": 4,
+      "frames": 16,
+      "role": "volume",
+      "upload": true,
+      "rgb": "luma",
+      "sha256": "7cb43ae7300034b2e95a8575ffdd8c75278fe7c85d1fb3e91c60ee1eaa70d770",
+      "use": "a cel-shaded cartoon smoke puff in two grey tones that swells, drifts and breaks up through big holes; tint dark for fire smoke, pale for dust (OneShot, normal blend)"
     },
     "flip_smoke_puff": {
       "id": "flip/smoke_puff",
@@ -753,6 +843,36 @@
       "sha256": "eb572d196cf57219c68fa155bc15a4f3a707a385d7d659020a33372e7a6ffbfc",
       "use": "lightning bolts, one random variant per particle"
     },
+    "sheet_brush_flicks": {
+      "id": "sheet/brush_flicks",
+      "kind": "sheet",
+      "size": [
+        1024,
+        1024
+      ],
+      "grid": 4,
+      "frames": 16,
+      "role": "shards",
+      "upload": true,
+      "rgb": "luma",
+      "sha256": "a2bc7f4180223427d292e115256352b170c7f1d1bfa89578603257e7bf712ddd",
+      "use": "16 hard-edged painted strokes (flick, thorn, comma, crescent, lick) in two grey bands, to tint: shards, licks, peels, slash accents"
+    },
+    "sheet_brush_flicks_ink": {
+      "id": "sheet/brush_flicks_ink",
+      "kind": "sheet",
+      "size": [
+        1024,
+        1024
+      ],
+      "grid": 4,
+      "frames": 16,
+      "role": "shards",
+      "upload": true,
+      "rgb": "ramp",
+      "sha256": "19d115ebbfe9fc92a6f12ddeabac2865d758f160721a8197cd6a1b6f63c2e799",
+      "use": "the same strokes in the fire ramp with a thin dark ink line, the Valorant thorn look (white tint, normal blend)"
+    },
     "sheet_embers": {
       "id": "sheet/embers",
       "kind": "sheet",
@@ -857,6 +977,21 @@
       "rgb": "white",
       "sha256": "29f701c0fdd399bcaaf00ba20e21d628dda859a9600e3290c9040dc73cae9b79",
       "use": "tiling Worley edges: cracked ground, ice"
+    },
+    "strip_beam_hooks": {
+      "id": "strip/beam_hooks",
+      "kind": "strip",
+      "size": [
+        1024,
+        256
+      ],
+      "grid": 1,
+      "frames": 1,
+      "role": "base",
+      "upload": true,
+      "rgb": "white",
+      "sha256": "40cddf4d06f590ff64aa5639c83941655945940cf6315533ce50be91332cf6a7",
+      "use": "one streak for a beam, its edges bitten by wide curled hooks, tiling along U to scroll (TextureSpeed); taper with Width0/Width1 and slow it with the Beam's properties, not the texture"
     },
     "strip_comb_fringe": {
       "id": "strip/comb_fringe",

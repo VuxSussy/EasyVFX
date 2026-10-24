@@ -4,6 +4,21 @@ All notable changes to EasyVFX are listed here. Versions follow [Semantic Versio
 
 ## [Unreleased]
 
+### Stylized generators (step 3)
+- `flame_stylized`: a looping flame from a fluid sim, cut into three hard value bands, with:
+  - a solid base;
+  - a wider fit;
+  - tapered, kinked tips;
+  - a lower core;
+  - an optional ink line.
+
+  Bank ids: `flip/flame_stylized`, `_smooth` and `_ink`. The sim is baked into `pack/sim/flame_loop.npz`.
+- `ground_cracks`: glowing Voronoi cracks under a fire, as a still decal and as a flipbook that spreads from the centre.
+- `brush_flicks`: hard-edged painted strokes that taper to needle points, in two bands, grey or fire with an ink line.
+- `smoke_cel`: a cel-shaded two-tone smoke puff that swells, drifts and breaks up without flickering.
+- `beam_hooks`: a tiling beam streak with curled hook teeth on its edges. The taper comes from the Beam's properties.
+- texgen allows `"rgb": "ramp"`, a baked palette.
+
 ### References, and the timing foundation
 - `docs/refs/catalog.json`: the VFX reference catalogue, with links, credits, licences, tags, how close each is to
   SE370's look, and our own notes. Media stays local. New dissections:

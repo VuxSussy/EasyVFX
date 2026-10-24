@@ -8,7 +8,8 @@ output's width in pixels (a frame's width for flipbooks and sheets). Coordinates
 from lib.grid: u and v run -1..1 across a square texture, v pointing down.
 
 Every texture is white with its shape in alpha (the pack convention); only a recipe
-whose bank entry says `"rgb": "spectrum"` may return colour.
+whose bank entry says `"rgb": "spectrum"`, `"luma"` or `"ramp"` may return colour. `ramp` bakes
+a palette in (stylized fire: a cream core, an orange body, a red rim), tinted white in Roblox.
 """
 
 import math
@@ -1127,3 +1128,668 @@ def pulse_bars(p, rng, size):
     across = np.exp(-((y / 0.55) ** 2))
     core = np.exp(-((y / p["core"]) ** 2)) * 0.7
     return np.clip(np.maximum(bar * across, core), 0, 1) * _edges(y)
+
+
+# ================================================================== stylized fire
+# The target mix (docs/refs/dissection-fire-pit.md): chunky flame tongues in a few hard value
+# bands, from a fluid sim so they move like fire (tools/texgen/sim.py `flame_loop`, baked into
+# pack/sim). The sim gives the motion; the bands give the painted look.
+
+import os as _os
+
+_SIM = _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))), "pack", "sim")
+PALETTES = {
+    "fire": [(0.80, 0.16, 0.07), (1.0, 0.52, 0.10), (1.0, 0.93, 0.66)],
+    "magic": [(0.42, 0.10, 0.80), (0.75, 0.35, 1.0), (0.97, 0.88, 1.0)],
+    "frost": [(0.10, 0.35, 0.85), (0.40, 0.75, 1.0), (0.92, 0.98, 1.0)],
+    "poison": [(0.20, 0.45, 0.08), (0.50, 0.85, 0.15), (0.92, 1.0, 0.72)],
+}
+
+
+def _sim_frames(name):
+    path = _os.path.join(_SIM, name + ".npz")
+    if not _os.path.exists(path):
+        raise SystemExit(f"texgen: {path} is missing; bake it: .venv-sim/bin/python tools/texgen/sim.py {name} -o {path}")
+    z = np.load(path)
+    return z["heat"].astype(np.float32) / 255 * float(z["scale"])
+
+
+def _blur_f(a, r):
+    from PIL import Image, ImageFilter
+
+    top = max(1e-6, float(a.max()))
+    img = Image.fromarray(np.clip(a / top * 255, 0, 255).astype(np.uint8))
+    return np.asarray(img.filter(ImageFilter.GaussianBlur(r)), np.float32) / 255 * top
+
+
+def _bilinear(a, x, y):
+    H, W = a.shape
+    x = np.clip(x, 0, W - 1.001)
+    y = np.clip(y, 0, H - 1.001)
+    x0, y0 = np.floor(x).astype(int), np.floor(y).astype(int)
+    fx, fy = x - x0, y - y0
+    return (a[y0, x0] * (1 - fx) * (1 - fy) + a[y0, x0 + 1] * fx * (1 - fy)
+            + a[y0 + 1, x0] * (1 - fx) * fy + a[y0 + 1, x0 + 1] * fx * fy)
+
+
+def _flame_fit(heat, size, wide, margin, edge, room):
+    """One crop for every frame (so the flame doesn't jump), sat on the cell's bottom margin
+    and centred; `wide` > 1 stretches it sideways, `room` leaves space above."""
+    lit = heat > edge * 0.8
+    rows = np.nonzero(lit.any(axis=(0, 2)))[0]
+    cols = np.nonzero(lit.any(axis=(0, 1)))[0]
+    hgt = (rows.max() - rows.min()) * (1 + 2 * margin)
+    wid = (cols.max() - cols.min()) * (1 + 2 * margin)
+    side = max(hgt, wid * wide) * (1 + room)
+    cx = (cols.min() + cols.max()) / 2
+    y0 = rows.max() + side * margin - side
+    yy, xx = np.mgrid[0:size, 0:size].astype(np.float32)
+    sy = y0 + (yy + 0.5) / size * side
+    sx = cx + ((xx + 0.5) / size - 0.5) * side / wide
+    return [_bilinear(h, sx, sy) for h in heat]
+
+
+def _pull_tips(h, length, keep=0.55, every=3):
+    """Drags each tongue upward while it narrows a pixel a side every `every` rows, so the
+    sim's rounded tops become tapered points."""
+    k = int(length * h.shape[0])
+    if k < 1:
+        return h
+    d = keep ** (1 / k)
+    out, cur = h.copy(), h
+    for i in range(k):
+        cur = np.roll(cur, -1, axis=0) * d
+        cur[-1] = 0
+        if i % every == 0:
+            cur = np.minimum(cur, np.minimum(np.roll(cur, 1, axis=1), np.roll(cur, -1, axis=1)))
+        out = np.maximum(out, cur)
+    return _blur_f(out, 0.8 * h.shape[0] / 256)
+
+
+def _kink(h, u, v, phase, amp, freq=2.2):
+    """Bends the field sideways, more toward the top, with a wave that travels up as the
+    loop plays: brush-flick curls in the tongues."""
+    up = np.clip((0.85 - v) / 1.7, 0, 1) ** 1.5
+    dx = amp * up * (np.sin(2 * np.pi * freq * v + phase * 2) + 0.5 * np.sin(2 * np.pi * freq * 2.3 * v - phase * 3 + 1.3))
+    n = h.shape[0]
+    yy, xx = np.mgrid[0:n, 0:n].astype(np.float32)
+    return _bilinear(h, xx + dx * n / 2, yy)
+
+
+def _band(h, t, px):
+    """A hard band edge, anti-aliased over `px` pixels of the field's own slope."""
+    gy, gx = np.gradient(h)
+    g = np.sqrt(gx * gx + gy * gy) + 1e-5
+    return np.clip((h - t) / (g * px) + 0.5, 0, 1)
+
+
+@recipe("flame_stylized", frames=16, edge=0.12, body=0.24, core=0.42, blur=2.4, palette="fire", margin=0.06, sim="flame_loop",
+        wide=1.25, base=0.30, tips=0.16, kink=0.035, core_drop=0.06, ink=0.0)
+def flame_stylized(p, rng, size):
+    """A looping flame in hard value bands (Phát's picks, 2026-10-24, from the Valorant muzzle
+    flashes and the fire pit). A sim's heat (tongues that lick, merge and split) is fit once
+    for every frame, softened, then shaped:
+      base       a soft mound of heat added at the bottom, so the tongues grow out of a knot
+      wide       stretches the flame sideways (it read thin at 1)
+      tips       how far each tongue is pulled into a tapered point (cell heights; 0 is off).
+                 Per element: fire 0.16; sharper for lightning, softer for water
+      kink       a travelling sideways bend, more toward the top: brush-flick curls
+      core_drop  sinks the cream core toward the base (cell heights)
+      ink        a dark outline this many pixels wide at 256 px a cell (0 is off; 2 is F)
+    then cut at three heights into a rim, a body and a core, each a flat colour with a 1 px
+    edge. `frames` 16 steps the 64-frame sim on fours (12 a second gives a 1.3 s loop, the
+    on-twos look); 64 keeps every frame."""
+    heat = _sim_frames(p["sim"])
+    step = max(1, heat.shape[0] // int(p["frames"]))
+    heat = heat[::step][: int(p["frames"])]
+    n = len(heat)
+    pal = PALETTES[p["palette"]]
+    u, v = lib.grid(size)
+    px = size / 256
+    out = []
+    for j, h in enumerate(_flame_fit(heat, size, p["wide"], p["margin"], p["edge"], 0.04)):
+        h = _blur_f(h, p["blur"] * size / 192)
+        phase = 2 * np.pi * j / n
+        if p["base"] > 0:
+            breathe = 1 + 0.05 * np.sin(phase)
+            h = h + p["base"] * np.exp(-1.6 * ((u / (0.40 * breathe)) ** 2 + ((v - 0.74) / 0.20) ** 2))
+        # cool toward the top of the cell, so tongues end before the edge
+        h = h * lib.smooth(-0.97, -0.45, v)
+        h = _pull_tips(h, p["tips"])
+        if p["kink"] > 0:
+            h = _kink(h, u, v, phase, p["kink"])
+        rim, body = _band(h, p["edge"], 1.0), _band(h, p["body"], 1.0)
+        s = int(p["core_drop"] * size)
+        hc = np.roll(h, s, axis=0)
+        hc[:s] = 0
+        layers = [(rim, pal[0]), (body, pal[1]), (_band(hc, p["core"], 1.0) * body, pal[2])]
+        alpha = rim
+        if p["ink"] > 0:
+            from PIL import Image, ImageFilter
+
+            r = max(1, int(round(p["ink"] * px))) * 2 + 1
+            grown = Image.fromarray((rim * 255).astype(np.uint8)).filter(ImageFilter.MaxFilter(r)).filter(ImageFilter.GaussianBlur(0.6 * px))
+            alpha = np.maximum(np.asarray(grown, np.float32) / 255, rim)
+            ink = tuple(c * 0.28 for c in pal[0])
+            layers.insert(0, (alpha, ink))
+        rgb = np.zeros((size, size, 3), np.float32)
+        for m, c in layers:
+            rgb = rgb * (1 - m[..., None]) + np.array(c, np.float32) * m[..., None]
+        out.append({"alpha": alpha * lib.vignette(u, v, 0.94, 0.995), "rgb": rgb})
+    return out
+
+
+# ================================================================== ground cracks
+# The fire pit's glowing cracks (docs/refs/dissection-fire-pit.md, f12 on): Voronoi cells seen
+# from above, small at the centre and growing outward, hot thick lines in the middle thinning
+# to red at the rim, some segments broken off, a soft glow around the lines.
+
+
+def _crack_points(layout, rng, cells):
+    """Feature points in -1..1: `radial` rings that grow outward (the fire pit's cells), or a
+    jittered `hex` lattice (hexagonal cells)."""
+    if layout == "hex":
+        step = 2.0 / cells
+        pts = []
+        for row in range(-cells - 1, cells + 2):
+            for col in range(-cells - 1, cells + 2):
+                x = (col + 0.5 * (row % 2)) * step
+                y = row * step * 0.866
+                pts.append((x + rng.normal(0, step * 0.08), y + rng.normal(0, step * 0.08)))
+        return np.array(pts, np.float32)
+    pts = [(rng.normal(0, 0.02), rng.normal(0, 0.02))]
+    radius, count = 0.17, 5
+    while radius < 1.35:
+        phase = rng.uniform(0, 2 * np.pi)
+        for k in range(count):
+            a = phase + 2 * np.pi * (k + rng.uniform(-0.3, 0.3)) / count
+            r = radius * rng.uniform(0.88, 1.12)
+            pts.append((r * np.cos(a), r * np.sin(a)))
+        radius *= 1.0 + 3.0 / cells
+        count = int(count * 1.25) + 1
+    return np.array(pts, np.float32)
+
+
+def _voronoi_edges(u, v, pts):
+    """True distance to the nearest cell edge, and a hash per edge (so whole segments can drop
+    out): for the nearest point p1, the closest bisector with any other point."""
+    d2 = np.stack([(u - x) ** 2 + (v - y) ** 2 for x, y in pts])
+    i1 = np.argmin(d2, axis=0)
+    p1 = pts[i1]
+    edge = np.full(u.shape, 9.0, np.float32)
+    other = np.zeros(u.shape, np.int64)
+    for j, (x, y) in enumerate(pts):
+        dx, dy = x - p1[..., 0], y - p1[..., 1]
+        ln = np.sqrt(dx * dx + dy * dy) + 1e-6
+        mx, my = (x + p1[..., 0]) / 2, (y + p1[..., 1]) / 2
+        d = ((mx - u) * dx + (my - v) * dy) / ln
+        d = np.where(i1 == j, 9.0, d)
+        closer = d < edge
+        edge = np.where(closer, d, edge)
+        other = np.where(closer, j, other)
+    lo, hi = np.minimum(i1, other), np.maximum(i1, other)
+    key = (lo * 7919 + hi * 104729) % 1000 / 1000.0
+    return edge, key.astype(np.float32), i1
+
+
+@recipe("ground_cracks", layout="radial", cells=5, line=0.024, taper=0.75, drop=0.55, warp=0.035, glow=0.4,
+        pool=0.0, reach=0.92, palette="fire", frames=0)
+def ground_cracks(p, rng, size):
+    """Glowing ground cracks seen from above, for a flat decal (additive):
+      layout   `radial` cells that grow outward (the fire pit) or `hex` cells
+      cells    how many cells across (more is finer)
+      line     the line's half-width at the centre; `taper` thins it toward the rim
+      drop     how many edges break off toward the rim (0 keeps every edge)
+      warp     how much the lines wobble
+      glow     a soft halo around the lines, for the light they cast
+      pool     fills the centre cell with a hot glow (0 is off)
+      reach    the cracks' radius
+      frames   0 is one still texture; 16 spreads the cracks out from the centre, hot at the
+               leading edge, then settles
+    Each line has two bands across its width, a hot middle and a red edge, and its heat falls
+    from the palette's core at the centre to its rim colour at the edge."""
+    u, v = lib.grid(size)
+    seed = _seed(rng)
+    du = (lib.fbm(u.shape, 4, 4, seed=seed) - 0.5) * 2
+    dv = (lib.fbm(u.shape, 4, 4, seed=seed + 7) - 0.5) * 2
+    wu, wv = u + du * p["warp"], v + dv * p["warp"]
+    r = np.sqrt(u * u + v * v)
+    pts = _crack_points(p["layout"], rng, int(p["cells"]))
+    edge, key, cell = _voronoi_edges(wu, wv, pts)
+    t = np.clip(r / p["reach"], 0, 1)
+    vary = 0.5 + 1.0 * lib.fbm(u.shape, 6, 3, seed=seed + 3)
+    w = p["line"] * (1 - p["taper"] * t) * vary
+    px = 2.0 / size
+    keep = lib.smooth(-0.08, 0.08, key - p["drop"] * lib.smooth(0.25, 1.0, t))
+    # the outer ends thin to points rather than fade
+    w = w * (1 - lib.smooth(0.6, 1.0, t))
+    fade = 1 - lib.smooth(0.85, 1.0, t)
+    line = np.clip((w - edge) / px + 0.5, 0, 1) * keep * fade
+    hot = np.clip((w * 0.35 - edge) / px + 0.5, 0, 1) * keep * fade * lib.smooth(0.75, 0.2, t)
+    if p["pool"] > 0:
+        pool = (cell == 0) * lib.smooth(0.0, 0.05, edge) * p["pool"]
+        line, hot = np.maximum(line, pool), np.maximum(hot, pool)
+    pal = PALETTES[p["palette"]]
+    # additive in game, so the colours sit darker and more saturated than they read
+    heat = ((1 - t) ** 1.5)[..., None]
+    red, orange, cream = (np.array(c, np.float32) for c in pal)
+    body = orange * 0.85 * heat + red * 0.8 * (1 - heat)
+    core = cream * heat + orange * (1 - heat)
+    lit = np.maximum(line, hot)
+    halo = _blur_f(lit, 6 * size / 512) * p["glow"] * 2
+    rgb = red * 0.75 * np.ones(u.shape + (3,), np.float32)
+    rgb = rgb * (1 - line[..., None]) + body * line[..., None]
+    rgb = rgb * (1 - hot[..., None]) + core * hot[..., None]
+    vig = lib.vignette(u, v, 0.94, 0.995)
+    if int(p["frames"]) <= 0:
+        return {"alpha": np.clip(np.maximum(lit, halo), 0, 1) * vig, "rgb": rgb}
+    out = []
+    n = int(p["frames"])
+    for k in range(n):
+        s = k / (n - 1)
+        front = float(lib.ease_out(min(1.0, s / 0.55), 2.2)) * 1.08
+        shown = 1 - lib.smooth(front - 0.06, front, t)
+        lead = np.exp(-(((t - front) / 0.08) ** 2)) * (s < 0.6)
+        a = np.clip(np.maximum(lit, halo) * shown, 0, 1)
+        c = rgb + (np.array(pal[2], np.float32) - rgb) * (lead * lit)[..., None]
+        out.append({"alpha": a * vig, "rgb": c})
+    return out
+
+
+# ================================================================== stylized brush flicks
+# The Valorant muzzle-flash language (inbox 012): hard-edged painted strokes that taper to
+# needle points, bend once like a brush flick, in flat value bands, sometimes with an ink line.
+# Not the dry ZZZ brush above: these are clean, for shards, licks, peels and slash accents.
+
+PALETTES["mono"] = [(0.55, 0.55, 0.55), (0.8, 0.8, 0.8), (1.0, 1.0, 1.0)]
+
+_FLICKS = ("flick", "thorn", "comma", "crescent", "lick")
+
+
+def _flick_path(kind, rng):
+    """A stroke's control points in -1..1 (it runs bottom-left to top-right) and its pressure:
+    (attack, release, swell, power)."""
+    j = lambda s=0.08: rng.uniform(-s, s)
+    if kind == "flick":  # a C-curve that whips into a needle
+        return [(-0.8 + j(), 0.6 + j()), (-0.2 + j(), 0.5 + j()), (0.35 + j(), 0.05 + j()), (0.75 + j(), -0.8 + j())], (0.12, 0.35, 0.3, 1.6)
+    if kind == "thorn":  # almost straight, one kink, needle at both ends
+        k = rng.uniform(0.35, 0.6)
+        return [(-0.85, 0.75), (-0.85 + 1.7 * k + j(0.15), 0.75 - 1.5 * k + j(0.15)), (0.85, -0.8)], (0.3, 0.55, 0.2, 1.2)
+    if kind == "comma":  # a fat head that curls into a thin tail: a peeling flame ribbon
+        return [(-0.35 + j(), 0.75 + j()), (0.75 + j(), 0.45 + j()), (0.8 + j(), -0.75 + j()), (-0.4 + j(), -0.8 + j()), (-0.6 + j(), -0.15 + j())], (0.04, 0.2, 0.5, 1.3)
+    if kind == "crescent":  # a swoosh, needle at both ends, widest in the middle
+        return [(-0.85, 0.35 + j()), (-0.3 + j(), -0.55 + j()), (0.45 + j(), -0.45 + j()), (0.85, 0.3 + j())], (0.45, 0.55, 0.0, 1.4)
+    # lick: an S-shaped flame tongue rising to a point
+    return [(-0.05 + j(), 0.85), (-0.55 + j(), 0.25 + j()), (0.45 + j(), -0.2 + j()), (0.1 + j(), -0.88)], (0.05, 0.3, 0.45, 1.5)
+
+
+@recipe("brush_flicks", count=16, width=0.16, core=0.38, offset=0.3, hot=0.7, ink=0.0, palette="mono")
+def brush_flicks(p, rng, size):
+    """A sheet of hard-edged painted strokes, cycling through five shapes: `flick`, `thorn`,
+    `comma`, `crescent` and `lick`. Each tapers to needle points, has a 1 px edge and two
+    flat bands: a core band along the spine, shifted `offset` toward the inside of the curve
+    (the painted look) and gone by `hot` along the stroke (the head is hot, the tail cools),
+    in a body colour.
+      width    the widest half-width
+      core     the core band's share of the width
+      ink      a dark outline this many pixels wide at 256 px a cell (0 is off)
+      palette  `mono` (greys, to tint in Roblox) or a fire/magic/frost/poison ramp"""
+    u, v = lib.grid(size)
+    pal = PALETTES[p["palette"]]
+    px = 2.0 / size
+    cells = []
+    for k in range(int(p["count"])):
+        kind = _FLICKS[k % len(_FLICKS)]
+        ctrl, (attack, release, swell, power) = _flick_path(kind, rng)
+        pts = lib.bezier(ctrl, 120)
+        w = p["width"] * rng.uniform(0.7, 1.15) * (0.6 if kind == "thorn" else 1.0)
+        # round caps: the fat end is rounded, the tapered end still comes to a point
+        d, s, across = lib.stroke(u, v, pts, lambda t: w * lib.taper(t, attack, release, swell, power) + 1e-4)
+        body = np.clip(-d / px + 0.5, 0, 1)
+        if kind == "thorn":
+            # two short barbs off the spine, swept toward the tip, like the thorn vines
+            for at in rng.choice(np.arange(0.25, 0.75, 0.05), 2, replace=False):
+                i = int(at * (len(pts) - 1))
+                tx, ty = pts[min(i + 1, len(pts) - 1)] - pts[max(i - 1, 0)]
+                tl = math.hypot(tx, ty) + 1e-6
+                nx, ny = -ty / tl * rng.choice([-1, 1]), tx / tl
+                length = rng.uniform(0.18, 0.3)
+                tip = (pts[i][0] + (nx * 0.8 + tx / tl * 0.6) * length, pts[i][1] + (ny * 0.8 + ty / tl * 0.6) * length)
+                bd, _, _ = lib.stroke(u, v, [tuple(pts[i]), tip], [w * 0.55, 1e-4])
+                body = np.maximum(body, np.clip(-bd / px + 0.5, 0, 1))
+        # which side is the inside of the curve: the side the control polygon bends toward
+        mid = np.mean(np.asarray(ctrl, np.float32), axis=0)
+        a, b = np.asarray(ctrl[0], np.float32), np.asarray(ctrl[-1], np.float32)
+        side = 1.0 if (b[0] - a[0]) * (mid[1] - a[1]) - (b[1] - a[1]) * (mid[0] - a[0]) > 0 else -1.0
+        band = np.abs(across - side * p["offset"]) - p["core"]
+        width_px = np.maximum(-d, 0) / np.maximum(1 - np.abs(across), 1e-3)
+        core = np.clip(-band * width_px / px + 0.5, 0, 1) * body * (1 - lib.smooth(p["hot"] - 0.15, p["hot"], s))
+        layers = [(body, pal[1]), (core, pal[2])]
+        alpha = body
+        if p["ink"] > 0:
+            from PIL import Image, ImageFilter
+
+            r = max(1, int(round(p["ink"] * size / 256))) * 2 + 1
+            grown = Image.fromarray((body * 255).astype(np.uint8)).filter(ImageFilter.MaxFilter(r)).filter(ImageFilter.GaussianBlur(0.6 * size / 256))
+            alpha = np.maximum(np.asarray(grown, np.float32) / 255, body)
+            layers.insert(0, (alpha, tuple(c * 0.28 for c in pal[0])))
+        rgb = np.zeros((size, size, 3), np.float32)
+        for m, c in layers:
+            rgb = rgb * (1 - m[..., None]) + np.array(c, np.float32) * m[..., None]
+        cells.append({"alpha": alpha * lib.vignette(u, v, 0.92, 0.99), "rgb": rgb})
+    return cells
+
+
+# ================================================================== stylized smoke
+# The fire pit's smoke, painted: a cartoon puff of round lobes, cel-shaded in two hard tones,
+# that swells, drifts and then breaks up through large holes. Every noise field is fixed for the
+# whole flipbook and only thresholds move, so frames never jump (the flickering CC0 smoke).
+
+
+@recipe("smoke_cel", frames=16, lobes=8, grow=0.45, drift=0.2, light=135, shadow=0.68, split=0.04, hold=0.35,
+        ease=1.4, ink=0.0)
+def smoke_cel(p, rng, size):
+    """A cel-shaded smoke puff for a normal-blend layer, in greys to tint (a dark tint gives
+    the fire pit's dark smoke, a pale one a dust puff).
+      lobes    how many round lobes make the puff
+      grow     how much the lobes swell over the life; `drift` how far they spread apart
+      light    where the light comes from, degrees (135 is top-left)
+      shadow   the shadow tone (1 is the lit tone)
+      split    where the lit tone gives way to shadow (0 is half lit; higher is more shadow)
+      hold     the share of the life before the puff starts to break up; `ease` its pace
+      ink      a dark outline this many pixels wide at 256 px a cell (0 is off)
+    Each lobe is a dome; the puff's height is the highest dome, its normal lights it, and the
+    light is cut into two flat tones with a 1 px edge. The break-up erodes through a fixed
+    field of big blobs from the outside in, so it opens holes and thins rather than flickers."""
+    u, v = lib.grid(size)
+    seed = _seed(rng)
+    n = int(p["lobes"])
+    # a small middle lobe and a ring of lobes around it, so the outline stays bumpy
+    ang = np.linspace(0, 2 * np.pi, n, endpoint=False) + rng.uniform(-0.3, 0.3, n) + rng.uniform(0, 2 * np.pi)
+    rad = rng.uniform(0.14, 0.26, n)
+    rad[0] = 0.0
+    base = np.stack([rad * np.cos(ang), rad * np.sin(ang) * 0.8 - 0.04], -1)
+    radii = rng.uniform(0.12, 0.19, n)
+    radii[0] = 0.2
+    wob_u = (lib.fbm(u.shape, 4, 3, seed=seed) - 0.5) * 0.05
+    wob_v = (lib.fbm(u.shape, 4, 3, seed=seed + 1) - 0.5) * 0.05
+    blobs = lib.fbm(u.shape, 3, 3, seed=seed + 2)
+    la = np.radians(p["light"])
+    lx, ly, lz = np.cos(la) * 0.7, -np.sin(la) * 0.7, 0.71
+    px = 2.0 / size
+    frames = []
+    count = _frames(p)
+    for k in range(count):
+        t = k / max(1, count - 1)
+        g = float(lib.ease_out(t, 2.5))
+        scale = 0.62 + p["grow"] * g
+        centres = base * (1 + p["drift"] / 0.28 * g) + np.array([0, -0.08 * g])
+        height = np.full(u.shape, -1.0, np.float32)
+        for (cx, cy), r0 in zip(centres, radii):
+            r = r0 * scale
+            q = ((u + wob_u - cx) ** 2 + (v + wob_v - cy) ** 2) / (r * r)
+            height = np.maximum(height, np.sqrt(np.clip(1 - q, 0, 1)) * r - np.clip(q - 1, 0, None) * r)
+        body = np.clip(height / px + 0.5, 0, 1)
+        gy, gx = np.gradient(np.maximum(height, 0), px)
+        norm = np.sqrt(gx * gx + gy * gy + 1)
+        lit = (-gx * lx - gy * ly + lz) / norm
+        tone = np.clip((lit - 0.5 - p["split"]) / 0.03 + 0.5, 0, 1)
+        shade = p["shadow"] + (1 - p["shadow"]) * tone
+        # break up: from `hold`, big holes open from the outside in
+        amount = float(lib.ease_in(max(0.0, (t - p["hold"]) / (1 - p["hold"])), p["ease"]))
+        r_all = np.sqrt(u * u + (v + 0.05) ** 2) / (0.75 * scale + 1e-3)
+        field = 0.6 * blobs + 0.4 * (1 - np.clip(r_all, 0, 1))
+        # the field runs about 0.3 at the rim to 1 in the middle: start biting at the rim
+        keep = np.clip((field - (0.3 + 0.72 * amount)) / 0.02 + 0.5, 0, 1) if amount > 0 else 1.0
+        alpha = body * keep
+        rgb = np.repeat(shade[..., None], 3, -1).astype(np.float32)
+        if p["ink"] > 0:
+            from PIL import Image, ImageFilter
+
+            rr = max(1, int(round(p["ink"] * size / 256))) * 2 + 1
+            grown = np.asarray(Image.fromarray((alpha * 255).astype(np.uint8)).filter(ImageFilter.MaxFilter(rr)), np.float32) / 255
+            rgb = rgb * alpha[..., None] + 0.12 * (1 - alpha[..., None])
+            alpha = np.maximum(grown, alpha)
+        if k == count - 1:
+            alpha = alpha * 0
+        frames.append({"alpha": alpha * lib.vignette(u, v, 0.9, 0.98), "rgb": rgb})
+    return frames
+
+
+# ================================================================== stylized smoke
+# The fire pit's smoke, painted: a cartoon puff of round lobes, cel-shaded in two hard tones,
+# that swells, drifts and then breaks up through large holes. Every noise field is fixed for the
+# whole flipbook and only thresholds move, so frames never jump (the flickering CC0 smoke).
+
+
+@recipe("smoke_cel", frames=16, lobes=8, grow=0.45, drift=0.2, light=135, shadow=0.68, split=0.04, hold=0.35,
+        ease=1.4, ink=0.0)
+def smoke_cel(p, rng, size):
+    """A cel-shaded smoke puff for a normal-blend layer, in greys to tint (a dark tint gives
+    the fire pit's dark smoke, a pale one a dust puff).
+      lobes    how many round lobes make the puff
+      grow     how much the lobes swell over the life; `drift` how far they spread apart
+      light    where the light comes from, degrees (135 is top-left)
+      shadow   the shadow tone (1 is the lit tone)
+      split    where the lit tone gives way to shadow (0 is half lit; higher is more shadow)
+      hold     the share of the life before the puff starts to break up; `ease` its pace
+      ink      a dark outline this many pixels wide at 256 px a cell (0 is off)
+    Each lobe is a dome; the puff's height is the highest dome, its normal lights it, and the
+    light is cut into two flat tones with a 1 px edge. The break-up erodes through a fixed
+    field of big blobs from the outside in, so it opens holes and thins rather than flickers."""
+    u, v = lib.grid(size)
+    seed = _seed(rng)
+    n = int(p["lobes"])
+    # a small middle lobe and a ring of lobes around it, so the outline stays bumpy
+    ang = np.linspace(0, 2 * np.pi, n, endpoint=False) + rng.uniform(-0.3, 0.3, n) + rng.uniform(0, 2 * np.pi)
+    rad = rng.uniform(0.14, 0.26, n)
+    rad[0] = 0.0
+    base = np.stack([rad * np.cos(ang), rad * np.sin(ang) * 0.8 - 0.04], -1)
+    radii = rng.uniform(0.12, 0.19, n)
+    radii[0] = 0.2
+    wob_u = (lib.fbm(u.shape, 4, 3, seed=seed) - 0.5) * 0.05
+    wob_v = (lib.fbm(u.shape, 4, 3, seed=seed + 1) - 0.5) * 0.05
+    blobs = lib.fbm(u.shape, 3, 3, seed=seed + 2)
+    la = np.radians(p["light"])
+    lx, ly, lz = np.cos(la) * 0.7, -np.sin(la) * 0.7, 0.71
+    px = 2.0 / size
+    frames = []
+    count = _frames(p)
+    for k in range(count):
+        t = k / max(1, count - 1)
+        g = float(lib.ease_out(t, 2.5))
+        scale = 0.62 + p["grow"] * g
+        centres = base * (1 + p["drift"] / 0.28 * g) + np.array([0, -0.08 * g])
+        height = np.full(u.shape, -1.0, np.float32)
+        for (cx, cy), r0 in zip(centres, radii):
+            r = r0 * scale
+            q = ((u + wob_u - cx) ** 2 + (v + wob_v - cy) ** 2) / (r * r)
+            height = np.maximum(height, np.sqrt(np.clip(1 - q, 0, 1)) * r - np.clip(q - 1, 0, None) * r)
+        body = np.clip(height / px + 0.5, 0, 1)
+        gy, gx = np.gradient(np.maximum(height, 0), px)
+        norm = np.sqrt(gx * gx + gy * gy + 1)
+        lit = (-gx * lx - gy * ly + lz) / norm
+        tone = np.clip((lit - 0.5 - p["split"]) / 0.03 + 0.5, 0, 1)
+        shade = p["shadow"] + (1 - p["shadow"]) * tone
+        # break up: from `hold`, big holes open from the outside in
+        amount = float(lib.ease_in(max(0.0, (t - p["hold"]) / (1 - p["hold"])), p["ease"]))
+        r_all = np.sqrt(u * u + (v + 0.05) ** 2) / (0.75 * scale + 1e-3)
+        field = 0.6 * blobs + 0.4 * (1 - np.clip(r_all, 0, 1))
+        # the field runs about 0.3 at the rim to 1 in the middle: start biting at the rim
+        keep = np.clip((field - (0.3 + 0.72 * amount)) / 0.02 + 0.5, 0, 1) if amount > 0 else 1.0
+        alpha = body * keep
+        rgb = np.repeat(shade[..., None], 3, -1).astype(np.float32)
+        if p["ink"] > 0:
+            from PIL import Image, ImageFilter
+
+            rr = max(1, int(round(p["ink"] * size / 256))) * 2 + 1
+            grown = np.asarray(Image.fromarray((alpha * 255).astype(np.uint8)).filter(ImageFilter.MaxFilter(rr)), np.float32) / 255
+            rgb = rgb * alpha[..., None] + 0.12 * (1 - alpha[..., None])
+            alpha = np.maximum(grown, alpha)
+        if k == count - 1:
+            alpha = alpha * 0
+        frames.append({"alpha": alpha * lib.vignette(u, v, 0.9, 0.98), "rgb": rgb})
+    return frames
+
+
+# ================================================================== jagged beam heads
+# Phát, 2026-10-24: a beam's taper and its slowing belong to the Beam's properties (Width0,
+# Width1, Transparency, the curve), not the texture. So this is a band of even width, and only
+# its head is shaped: a jagged blade like a chainsaw's, as in the Valorant muzzle streaks.
+
+
+def _saw_profile(at, period, depth, rng, slant):
+    """Teeth along `at` (pixels): each tooth ramps up over its period and drops sharply
+    (`slant` 1 points them one way, -1 the other, 0 makes them even triangles); every tooth
+    has its own depth."""
+    k = np.floor(at / period).astype(int)
+    f = at / period - k
+    if slant > 0:
+        tooth = f
+    elif slant < 0:
+        tooth = 1 - f
+    else:
+        tooth = 1 - np.abs(2 * f - 1)
+    sizes = rng.uniform(0.45, 1.0, 512)
+    return tooth * depth * sizes[k % 512]
+
+
+@recipe("beam_saw", tip_teeth=5, tip_depth=0.5, side_teeth=0, side_depth=0.13, head=0.35, slant=1, width=0.72,
+        core=0.45, ink=0.0, palette="mono")
+def beam_saw(p, rng, size):
+    """A beam texture of even width whose head (the strip's right end, U = 1) is a jagged blade:
+      tip_teeth   pointed teeth across the end (0 cuts it straight); `tip_depth` how deep they
+                  bite, as a share of the strip's height
+      side_teeth  sawteeth along both edges over the head, like a chainsaw (0 is off);
+                  `side_depth` their bite, `head` the share of the length they cover, `slant`
+                  which way they lean (1, -1, or 0 for even triangles)
+      width       the band's half-height; `core` the core band's share, inset along the same
+                  outline so it follows the teeth
+      ink         a dark outline this many pixels wide (0 is off)
+    The tail (U = 0) is cut straight: fade it with the Beam's Transparency."""
+    x, y, w, h = _strip_grid(size)
+    X, Y = x * w, y * h / 2
+    H0 = p["width"] * h / 2
+    end = w - 6.0
+    dist = []
+    # the tip: a jagged end, teeth of uneven length
+    if int(p["tip_teeth"]) > 0:
+        n = int(p["tip_teeth"])
+        ys = np.linspace(-H0, H0, 2 * n + 1)
+        ys[1:-1] += rng.uniform(-0.25, 0.25, 2 * n - 1) * (2 * H0 / (2 * n))
+        bite = p["tip_depth"] * h
+        xs = np.where(np.arange(2 * n + 1) % 2 == 1, end - rng.uniform(0.0, 0.35, 2 * n + 1) * bite, end - bite)
+        tip_x = np.interp(Y, ys, xs)
+    else:
+        tip_x = np.full_like(Y, end)
+    # the edges: sawteeth over the head
+    half = np.full_like(X, H0)
+    if int(p["side_teeth"]) > 0:
+        span = p["head"] * w
+        period = span / int(p["side_teeth"])
+        # the teeth grow from nothing where the head starts to full bite at the tip
+        inhead = np.clip((X - (end - span)) / span, 0, 1) ** 0.8
+        top = _saw_profile(end - X, period, p["side_depth"] * h, rng, p["slant"])
+        bottom = _saw_profile(end - X + period * 0.5, period, p["side_depth"] * h, rng, p["slant"])
+        half = np.where(Y < 0, H0 - top * inhead, H0 - bottom * inhead)
+    d = np.maximum(np.abs(Y) - half, X - tip_x)
+    d = np.maximum(d, 2.0 - X)
+    body = np.clip(-d + 0.5, 0, 1)
+    core = np.clip(-(d + (1 - p["core"]) * H0) + 0.5, 0, 1)
+    pal = PALETTES[p["palette"]]
+    layers = [(body, pal[1]), (core, pal[2])]
+    alpha = body
+    if p["ink"] > 0:
+        from PIL import Image, ImageFilter
+
+        r = max(1, int(round(p["ink"]))) * 2 + 1
+        grown = np.asarray(Image.fromarray((body * 255).astype(np.uint8)).filter(ImageFilter.MaxFilter(r)).filter(ImageFilter.GaussianBlur(0.6)), np.float32) / 255
+        alpha = np.maximum(grown * (X > 1.0), body)
+        layers.insert(0, (alpha, tuple(c * 0.28 for c in pal[0])))
+    rgb = np.zeros((h, w, 3), np.float32)
+    for m, c in layers:
+        rgb = rgb * (1 - m[..., None]) + np.array(c, np.float32) * m[..., None]
+    return {"alpha": alpha, "rgb": rgb}
+
+
+# ================================================================== hooked beam streaks
+# Phát's beam reference, 2026-10-24 (a hand-painted streak texture, reference only): bands of
+# uneven width that run along the beam with wavy edges, and curled hook teeth along the edges
+# like a chainsaw's, each a rounded lobe on a narrow neck that curls back, with a soft halo.
+# The beam's taper and slowing belong to its properties (Width0, Width1, Transparency,
+# TextureSpeed), not the texture, so the bands keep their width and the strip tiles.
+
+
+def _wave(x, w, rng, amp, terms=3):
+    """A smooth wobble that tiles over w pixels."""
+    out = np.zeros_like(x)
+    for m in range(1, terms + 1):
+        out += rng.uniform(0.4, 1.0) / m * np.sin(2 * np.pi * m * x / w + rng.uniform(0, 2 * np.pi))
+    return out * amp
+
+
+@recipe("beam_hooks", bands=1, width=0.27, wobble=0.035, hooks=2, hook=0.17, long=2.2, halo=12)
+def beam_hooks(p, rng, size):
+    """One streak along a beam (Phát: one per texture, not three in one), tiling along its
+    length (U), for TextureSpeed to scroll. The streak is the clear gap between dark bands
+    (the white of the reference), centred, and the bands' hooks bite into its edges:
+      bands   dark bands (1, wrapping across the top and bottom); `width` its half-height (share of the
+              strip's height), `wobble` how far its centre and edges wander
+      hooks   hook teeth per edge along the strip; `hook` how far they reach in (share of the
+              height), `long` how much longer than that they run along the edge
+      halo    a soft falloff into the streak around each hook, pixels
+    Each hook is a lobe pushed out from the edge on a narrow neck, with a bite taken out of
+    one side so it curls back toward its band, as a brush flick would leave it."""
+    W, H = size, size // 4
+    y, x = np.mgrid[0:H, 0:W].astype(np.float32)
+    shape = np.zeros((H, W), np.float32)
+    hooks_only = np.zeros((H, W), np.float32)
+    n = int(p["bands"])
+    span = H
+    for b in range(n):
+        # the band sits on the strip's top and bottom edge, wrapping, so the clear streak
+        # between bands (the beam) is centred and nothing is cut where it crosses the edge
+        centre = span * b / n + _wave(x, W, rng, p["wobble"] * H)
+        half = p["width"] * H * rng.uniform(0.9, 1.1) * (1 + _wave(x, W, rng, 0.12))
+        dy = ((y - centre + H / 2) % H) - H / 2
+        d = np.abs(dy) - half  # signed distance to the band, pixels
+        teeth = np.full((H, W), 1e6, np.float32)
+        r = p["hook"] * H
+        count = int(p["hooks"])
+        start = rng.uniform(0, W)
+        # a hook reaches about its own size out: keep the streak open between the two edges
+        clear = H - 2 * p["width"] * H * 1.1
+        for side in (-1.0, 1.0):
+            # the bottom edge's hooks sit halfway between the top edge's, as in the reference
+            offset = 0.0 if side < 0 else 0.5
+            xs = (np.arange(count) + offset + rng.uniform(-0.15, 0.15, count)) * W / count + start
+            for x0 in xs:
+                rr = min(r * rng.uniform(0.8, 1.2), clear * 0.62)
+                curl = rng.choice([-1.0, 1.0])
+                a = ((x - x0 + W / 2) % W) - W / 2  # along the edge, wrapped so it tiles
+                o = (dy - side * half) * side  # outward from the edge
+                # a lobe long along the edge, sunk into it, joined with a fillet
+                ln = rr * p["long"]
+                lobe = ((a / ln) ** 2 + ((o - rr * 0.42) / (rr * 0.58)) ** 2 - 1) * rr * 0.55
+                k = rr * 0.35
+                h = np.clip(0.5 + 0.5 * (d - lobe) / k, 0, 1)
+                d = d * (1 - h) + lobe * h - k * h * (1 - h)
+                # a thin slit under one end frees it from the band, so that end curls back
+                slit = (1 - ((a - curl * ln * 0.75) / (ln * 0.4)) ** 2 - ((o - rr * 0.02) / (rr * 0.09)) ** 2) * rr * 0.09
+                d = np.maximum(d, slit)
+                teeth = np.minimum(teeth, lobe)
+        shape = np.maximum(shape, np.clip(-d + 0.5, 0, 1))
+        hooks_only = np.maximum(hooks_only, np.clip(-teeth + 0.5, 0, 1) * np.clip(-d + 0.5, 0, 1))
+    shape = np.maximum(shape, hooks_only)
+    def blur_wrap(a, r):
+        # blurs across the strip's left and right ends too, so it still tiles
+        pad = int(r * 4) + 2
+        return _blur_f(np.pad(a, ((0, 0), (pad, pad)), mode="wrap"), r)[:, pad:-pad]
+
+    halo = blur_wrap(hooks_only, p["halo"] * size / 1024) * 0.9
+    edge = blur_wrap(shape, 1.5 * size / 1024)
+    solid = np.maximum(np.maximum(shape, edge), halo)
+    # the beam is the gap, not the band (Phát): the clear streak, bitten by the hooks
+    alpha = 1 - solid
+    fade = 1 - lib.smooth(0.9, 0.99, np.abs(y / H * 2 - 1))
+    return alpha * fade
