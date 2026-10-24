@@ -2,15 +2,117 @@
  "preset": "ground_slam_v4",
  "status": "approved 2026-10-24",
  "note": "Frames are 60 fps from the effect's start. It fires at the press, 0.5 s before the hit, so a tell carries Cleave's wind-up; the hit is f30 and the recovery ends f78.",
- "move": {"from": "BasicHeavy.Cleave", "windup": 0.5, "active": 0.1, "recovery": 0.7, "style": "Heavy", "fire": -0.5},
+ "story": "A heavy two-handed slam. As Cleave winds up, a gold ring tightens on the ground under the blade and motes rise toward it: the ground gathering itself. At the hit everything compresses into one white frame on the impact point, then the ground answers: floor streaks race out, a cone of air is thrown up, rocks and shards burst out and fall, and a hand-drawn blast flares. Then it settles: thin smoke spreads out, slows and thins away, the dust ring widens and fades, and a few embers drift long after the swing has recovered.",
+ "move": {
+  "from": "BasicHeavy.Cleave",
+  "windup": 0.5,
+  "active": 0.1,
+  "recovery": 0.7,
+  "style": "Heavy",
+  "fire": -0.5
+ },
  "beats": [
-  {"name": "Tell", "from": 0, "to": 30, "shape": "gold glint, gathering", "palette": ["gold"],
-   "layers": {"ground": ["TellRing"], "main": ["TellGlint"], "dust": ["TellMotes"]}, "roles": {"TellRing": "tell", "TellGlint": "tell", "TellMotes": "tell"}},
-  {"name": "Hit", "from": 30, "to": 32, "flash": true, "hit": true, "shape": "core flash", "palette": ["gold"],
-   "layers": {"back": ["Halo"], "main": ["Core", "Flare"], "line": ["Rays"]}, "ref": "lotus:dome"},
-  {"name": "Slam", "from": 30, "to": 54, "shape": "ground burst", "palette": ["gold"],
-   "layers": {"ground": ["Floor", "Ring"], "main": ["mesh_cone", "Blast", "Shards"], "dust": ["Rocks"]}, "roles": {"Ring": "ground", "Blast": "base"}, "ref": "frigid:contact"},
-  {"name": "Settle", "from": 33, "to": 78, "shape": "dust volume, calm", "palette": ["gold"],
-   "layers": {"ground": ["DustRing"], "back": ["Volume"], "dust": ["Embers"]}, "ref": "lotus:tail"}
+  {
+   "name": "Tell",
+   "from": 0,
+   "to": 30,
+   "shape": "gold glint, gathering",
+   "palette": [
+    "gold"
+   ],
+   "layers": {
+    "ground": [
+     "TellRing"
+    ],
+    "main": [
+     "TellGlint"
+    ],
+    "dust": [
+     "TellMotes"
+    ]
+   },
+   "roles": {
+    "TellRing": "tell",
+    "TellGlint": "tell",
+    "TellMotes": "tell"
+   },
+   "intent": "a gold ring tightens on the ground and motes rise into it: the wind-up gathers"
+  },
+  {
+   "name": "Hit",
+   "from": 30,
+   "to": 32,
+   "flash": true,
+   "hit": true,
+   "shape": "core flash",
+   "palette": [
+    "gold"
+   ],
+   "layers": {
+    "back": [
+     "Halo"
+    ],
+    "main": [
+     "Core",
+     "Flare"
+    ],
+    "line": [
+     "Rays"
+    ]
+   },
+   "ref": "lotus:dome",
+   "intent": "everything compresses into one white frame on the impact point"
+  },
+  {
+   "name": "Slam",
+   "from": 30,
+   "to": 54,
+   "shape": "ground burst",
+   "palette": [
+    "gold"
+   ],
+   "layers": {
+    "ground": [
+     "Floor",
+     "Ring"
+    ],
+    "main": [
+     "mesh_cone",
+     "Blast",
+     "Shards"
+    ],
+    "dust": [
+     "Rocks"
+    ]
+   },
+   "roles": {
+    "Ring": "ground",
+    "Blast": "base"
+   },
+   "ref": "frigid:contact",
+   "intent": "the ground answers: streaks race out, air and rocks are thrown up and out, a blast flares"
+  },
+  {
+   "name": "Settle",
+   "from": 33,
+   "to": 78,
+   "shape": "dust volume, calm",
+   "palette": [
+    "gold"
+   ],
+   "layers": {
+    "ground": [
+     "DustRing"
+    ],
+    "back": [
+     "Volume"
+    ],
+    "dust": [
+     "Embers"
+    ]
+   },
+   "ref": "lotus:tail",
+   "intent": "smoke spreads out, slows and thins away; the dust ring widens and fades; embers linger"
+  }
  ]
 }

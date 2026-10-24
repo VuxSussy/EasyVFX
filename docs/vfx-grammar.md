@@ -86,6 +86,38 @@ The v4 hits broke these rules: their rings, base and smoke dissolved in about 4 
 Sizes are in bodies rather than relative to the effect, because effects are made to sit on a character. It also
 lets an effect with no base layer compare with one that has.
 
+## Curves and exits
+
+A layer's `size`, `transparency` and `squash` (and a trail's width) can be a **named-ease curve** instead of
+hand-written keypoints (`src/Plugin/Shared/Curves.luau`):
+
+```lua
+transparency = { from = 0, to = 1, ease = "inCubic", hold = 0.5, envelope = 0.05 }
+```
+
+- **`hold`:** the share of the life before the curve starts moving. "Hold, then fade" is one line.
+- **Eases:** `linear`; `in`, `out` and `inOut` × `Sine`, `Quad`, `Cubic`, `Quart`, `Expo`, `Circ`, `Back`; `steps4` to
+  `steps12` for the on-twos look.
+- **How it builds:** the builder samples a curve into at most 20 keypoints, Roblox's limit. Raw keypoint lists and
+  numbers still work, so every existing preset builds exactly as before.
+
+A layer's **`exit`** picks how it leaves, by role:
+
+| Exit | For | What it does |
+|---|---|---|
+| `flashCut` | core | holds, then gone fast in its last 40% |
+| `snapShrink` | shards | holds its peak size, then shrinks to nothing |
+| `holdFade` | base, glint, dark, dust | holds half its life, then fades (`inCubic`) |
+| `gustDisperse` | volume, ground | thins slowly from 30% while it grows 1.35×, and lives 1.5× longer |
+| `sinkFade` | debris | solid until its last 15%, then fades |
+
+## One clock per effect
+
+Every delayed emit, light or beam pulse, shell and shape of a play now runs on the runtime's effect driver. A
+hit-stop pauses all of it together and also freezes the live particles (`TimeScale` 0), then gives back each
+emitter's own time scale. This fixes the old desync, where a hit-stop paused shells but not particle delays. An
+effect's root may carry `VFX_TimeScale` (0.05–4) to play the whole effect slower or faster.
+
 ## Where the ranges come from
 
 `tools/evfx/grammar.json` gives each role a range for each measure, a `source` saying why, and `open`: the middle 70%

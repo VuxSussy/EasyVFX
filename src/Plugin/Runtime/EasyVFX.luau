@@ -117,12 +117,28 @@ type Anim = {
 	start: (() -> ())?,
 	step: (alpha: number, dt: number) -> (),
 	finish: (() -> ())?,
+	scale: number,
 }
 
 local active: { Anim } = {}
+-- The effect clock: every delayed emit, pulse and animation of a play runs on this driver,
+-- so a hit-stop or an effect's VFX_TimeScale moves all of it together (docs/vfx-grammar.md,
+-- "Curves and exits"). playScale is the time scale of the play being set up; addAnim takes it.
+local playScale = 1
+-- Emitters of plays still running, so a hit-stop can freeze their particles too.
+local liveEmitters: { [ParticleEmitter]: boolean } = setmetatable({}, { __mode = "k" }) :: any
 local driverRunning = false
 -- Hit-stop: while os.clock() < frozenUntil every running effect holds its frame.
 local frozenUntil = 0
+
+-- True while an instance is still in the game. Reading a destroyed one is safe in Roblox
+-- (Parent is nil) but raises in some hosts, so the effect clock's callbacks ask this.
+local function alive(inst: Instance): boolean
+	local ok, parent = pcall(function()
+		return inst.Parent
+	end)
+	return ok and parent ~= nil
+end
 
 local function finishAnim(a: Anim)
 	if a.finish then
@@ -147,7 +163,7 @@ local function runDriver()
 			local i = 1
 			while i <= #active do
 				local a = active[i]
-				a.t += dt
+				a.t += dt * a.scale
 				local keep = true
 				if a.t >= a.delay then
 					if not a.started then
@@ -197,6 +213,7 @@ local function addAnim(
 		start = start,
 		step = step,
 		finish = finish,
+		scale = playScale,
 	})
 	runDriver()
 end
@@ -1538,6 +1555,27 @@ end
 function EasyVFX.HitStop(seconds: number)
 	local length = math.clamp(seconds, 0, 0.3)
 	frozenUntil = math.max(frozenUntil, os.clock() + length)
+	-- particles freeze with the driver; each emitter's own time scale comes back after
+	for e in liveEmitters do
+		if alive(e) then
+			if e:GetAttribute("VFX_BaseTimeScale") == nil then
+				e:SetAttribute("VFX_BaseTimeScale", e.TimeScale)
+			end
+			e.TimeScale = 0
+		end
+	end
+	task.delay(length, function()
+		if os.clock() + 1e-3 < frozenUntil then
+			return -- a later hit-stop is still holding; it restores them
+		end
+		for e in liveEmitters do
+			local base = alive(e) and e:GetAttribute("VFX_BaseTimeScale")
+			if type(base) == "number" then
+				e.TimeScale = base
+				e:SetAttribute("VFX_BaseTimeScale", nil)
+			end
+		end
+	end)
 	for track in hitStopTracks do
 		if track.IsPlaying then
 			local speed = track.Speed
@@ -1788,16 +1826,16 @@ local function pulse(inst: Instance, delay: number, duration: number)
 		end)
 		return
 	end
-	task.delay(delay, function()
-		if pulseTokens[inst] == token and inst.Parent then
+	addAnim(delay, 0.016, function()
+		if pulseTokens[inst] == token and alive(inst) then
 			setOn(inst, true)
 		end
-	end)
-	task.delay(delay + duration, function()
-		if pulseTokens[inst] == token and inst.Parent then
+	end, function() end)
+	addAnim(delay + duration, 0.016, function()
+		if pulseTokens[inst] == token and alive(inst) then
 			setOn(inst, false)
 		end
-	end)
+	end, function() end)
 end
 
 -- Your own Blender/Studio mesh: a hidden template part that gets copied and animated.
@@ -1977,6 +2015,8 @@ function EasyVFX.PlayLocal(target: Instance | string, at: CFrame?): number
 		rng = Random.new(),
 		ignore = ignore,
 	}
+	local timeScale = root:GetAttribute("VFX_TimeScale")
+	playScale = if type(timeScale) == "number" then math.clamp(timeScale, 0.05, 4) else 1
 
 	-- Re-roll random tilts so HD slashes swing at a new angle every time.
 	for _, d in root:GetDescendants() do
@@ -2001,15 +2041,19 @@ function EasyVFX.PlayLocal(target: Instance | string, at: CFrame?): number
 		local delay = num(d, "EmitDelay", 0)
 		local duration = d:GetAttribute("EmitDuration")
 		if d:IsA("ParticleEmitter") then
+			liveEmitters[d] = true
+			if playScale ~= 1 then
+				d.TimeScale = playScale
+			end
 			local count = d:GetAttribute("EmitCount")
 			if type(count) == "number" and count > 0 then
 				local n = math.max(1, math.floor(count * ctx.quality + 0.5))
 				if delay > 0 then
-					task.delay(delay, function()
-						if d.Parent then
+					addAnim(delay, 0.016, function()
+						if alive(d) then
 							d:Emit(n)
 						end
-					end)
+					end, function() end)
 				else
 					d:Emit(n)
 				end

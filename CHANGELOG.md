@@ -4,6 +4,18 @@ All notable changes to EasyVFX are listed here. Versions follow [Semantic Versio
 
 ## [Unreleased]
 
+### References, and the timing foundation
+- `docs/refs/catalog.json`: the VFX reference catalogue, with links, credits, licences, tags, how close each is to
+  SE370's look, and our own notes. Media stays local. New dissections:
+  - the Stylized Fire Pit (`dissection-fire-pit.md`): a 4-frame ignition, a burst and rise of about 0.4 s, then a calm
+    loop, with 9 layer kits named;
+  - the Elemental Projectile Study (`dissection-projectile-study.md`).
+- Curves: `size`, `transparency` and `squash` can be named-ease curves with a `hold` (`Shared/Curves.luau`). Exits
+  per role: `flashCut`, `snapShrink`, `holdFade`, `gustDisperse`, `sinkFade`. Existing presets build unchanged.
+- One clock per effect: delayed emits and pulses run on the effect driver, so a hit-stop pauses everything and
+  freezes live particles. `VFX_TimeScale` sets an effect's speed.
+- Beat sheets tell each effect's story, start to end, with an intent line per beat.
+
 ### Smoke that disperses, and flipbooks that don't flicker
 - The slam's smoke flickered: its CC0 flipbook (Iché's `explosion_smoke_01`) isn't a sequence, so its frames jump
   (steadiness 1.6, where smooth smoke is 0.05). The import also scaled each frame's brightness separately. Now

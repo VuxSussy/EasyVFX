@@ -2,13 +2,80 @@
  "preset": "impact_v4",
  "status": "approved 2026-10-24",
  "note": "Frames are 60 fps from the effect's start, which is the hit.",
- "move": {"from": "BasicHeavy.Barge", "windup": 0.08, "active": 0.08, "recovery": 0.3, "style": "Brawler", "fire": 0},
+ "story": "A punchy shoulder barge. At contact a 2-frame white core pops with rays and a dark halo behind it; a ring bursts outward from the hit and line bursts fly and stop; then a few embers rise and fade.",
+ "move": {
+  "from": "BasicHeavy.Barge",
+  "windup": 0.08,
+  "active": 0.08,
+  "recovery": 0.3,
+  "style": "Brawler",
+  "fire": 0
+ },
  "beats": [
-  {"name": "Hit", "from": 0, "to": 2, "flash": true, "hit": true, "shape": "core flash", "palette": ["gold"],
-   "layers": {"back": ["Halo"], "main": ["Core", "Flare"], "line": ["Rays"]}, "ref": "lotus:flare"},
-  {"name": "Burst", "from": 2, "to": 20, "shape": "burst ring", "palette": ["gold"],
-   "layers": {"back": ["Ink"], "main": ["Base", "Ring"], "line": ["LineBurst", "Shards"]}, "ref": "frigid:contact"},
-  {"name": "Tail", "from": 5, "to": 36, "shape": "embers", "palette": ["gold"],
-   "layers": {"dust": ["Embers"]}, "ref": "frigid:fade"}
+  {
+   "name": "Hit",
+   "from": 0,
+   "to": 2,
+   "flash": true,
+   "hit": true,
+   "shape": "core flash",
+   "palette": [
+    "gold"
+   ],
+   "layers": {
+    "back": [
+     "Halo"
+    ],
+    "main": [
+     "Core",
+     "Flare"
+    ],
+    "line": [
+     "Rays"
+    ]
+   },
+   "ref": "lotus:flare",
+   "intent": "a white core pops for 2 frames over a dark halo"
+  },
+  {
+   "name": "Burst",
+   "from": 2,
+   "to": 20,
+   "shape": "burst ring",
+   "palette": [
+    "gold"
+   ],
+   "layers": {
+    "back": [
+     "Ink"
+    ],
+    "main": [
+     "Base",
+     "Ring"
+    ],
+    "line": [
+     "LineBurst",
+     "Shards"
+    ]
+   },
+   "ref": "frigid:contact",
+   "intent": "a ring bursts out from the hit; lines shoot out and stop"
+  },
+  {
+   "name": "Tail",
+   "from": 5,
+   "to": 36,
+   "shape": "embers",
+   "palette": [
+    "gold"
+   ],
+   "layers": {
+    "dust": [
+     "Embers"
+    ]
+   },
+   "ref": "frigid:fade",
+   "intent": "a few embers rise and fade"
+  }
  ]
 }

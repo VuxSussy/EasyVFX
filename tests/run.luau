@@ -1110,6 +1110,67 @@ do
 	holder:Destroy()
 end
 
+print("== Curves: named eases, holds and exits")
+do
+	local Curves = H.require("Shared/Curves")
+	local near = function(a: number, b: number)
+		return math.abs(a - b) < 1e-3
+	end
+	check(near(Curves.at({ from = 0, to = 1, ease = "linear" }, 0.5), 0.5), "linear curve is halfway at half life")
+	check(near(Curves.at({ from = 0, to = 1, hold = 0.5, ease = "linear" }, 0.4), 0), "a hold keeps the start value")
+	check(near(Curves.at({ from = 0, to = 1, hold = 0.5, ease = "linear" }, 0.75), 0.5), "after the hold it eases over the rest")
+	check(Curves.at({ from = 0, to = 1, ease = "inCubic" }, 0.5) < 0.2, "inCubic starts slow")
+	check(Curves.at({ from = 0, to = 1, ease = "outCubic" }, 0.5) > 0.8, "outCubic starts fast")
+	check(Curves.at({ from = 0, to = 1, ease = "outBack" }, 0.7) > 1, "outBack overshoots")
+	check(near(Curves.at({ from = 0, to = 1, ease = "steps4" }, 0.3), 0.25), "steps4 steps in quarters")
+	check(Curves.ease("bogus") == nil, "an unknown ease is refused")
+	local kps = Curves.keypoints({ from = 0, to = 1, hold = 0.4, ease = "inCubic", envelope = 0.1 })
+	check(#kps <= 20 and kps[1][1] == 0 and kps[#kps][1] == 1, "keypoints span the life within Roblox's 20")
+	check(kps[2][1] >= 0.4 - 1e-6 and kps[2][2] == 0, "keypoints keep the hold")
+	check(kps[3][3] == 0.1, "keypoints carry the envelope")
+	local raw = { { 0, 2 }, { 1, 0 } }
+	check(Curves.keypoints(raw) == raw, "raw keypoint lists pass through unchanged")
+	local t, size, life = Curves.exit("gustDisperse", { { 0, 0.3 }, { 1, 0.3 } }, 4)
+	check(near(Curves.at(t, 0), 0.3) and near(Curves.at(t, 1), 1), "an exit fades from the layer's own start to gone")
+	check(near(Curves.at(size, 1), 4 * 1.35) and life == 1.5, "gustDisperse grows and lives longer")
+	local _, shrink = Curves.exit("snapShrink", 0, { { 0, 1 }, { 0.5, 2 }, { 1, 2 } })
+	check(near(Curves.at(shrink, 0.2), 2) and near(Curves.at(shrink, 1), 0), "snapShrink holds its peak, then shrinks to nothing")
+	-- a layer with a curve and an exit builds
+	local folder = roblox.Instance.new("Folder")
+	local ok = pcall(function()
+		local root = Builder.create(Builder.defaultParams("impact"), {
+			cframe = roblox.CFrame.new(),
+			size = roblox.Vector3.new(4, 4, 4),
+			parent = folder,
+		})
+		root:Destroy()
+	end)
+	check(ok, "presets still build with curves wired in")
+	-- the effect clock: a hit-stop freezes live particles too, and gives them back after
+	do
+		local part = roblox.Instance.new("Part")
+		part.Parent = H.workspace
+		local root = Builder.create(Builder.defaultParams("impact"), {
+			cframe = roblox.CFrame.new(),
+			size = roblox.Vector3.new(4, 4, 4),
+			parent = part,
+		})
+		EasyVFX.Play(root)
+		EasyVFX.HitStop(0.1)
+		local frozen, total = 0, 0
+		for _, d in H.workspace:GetDescendants() do
+			if d:IsA("ParticleEmitter") then
+				total += 1
+				if d.TimeScale == 0 then
+					frozen += 1
+				end
+			end
+		end
+		check(total > 0 and frozen > 0, "a hit-stop freezes the live particles (" .. frozen .. " of " .. total .. ")")
+		part:Destroy()
+	end
+end
+
 print("== Server mode forwards to clients")
 H.setMode("server")
 do

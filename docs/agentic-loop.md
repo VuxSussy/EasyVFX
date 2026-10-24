@@ -90,6 +90,10 @@ its own 60 fps timelines (`EVFX_FPS=60`, cached in `.cache/evfx/timeline/hd-60`)
   as the preset names its emitters, or `mesh_<name>` for a shell;
 - `ref`, the reference beat it learns from, such as `lotus:flare`.
 
+Every sheet also tells the effect's **story**: one paragraph, from start to end, of what happens, phase by phase.
+For example: auras converge on the skill point, compress, explode and fly, then settle. Each beat carries an
+**`intent`** line in the same words. The story is agreed first, and the beats, layers and timing are built from it.
+
 `move` ties the sheet to the SE370 move the effect plays on: `windup`, `active` and `recovery` in seconds from the
 game's content (`src/content/Forms`), its `style`, optional `keywords`, and `fire`, the seconds from the hit to the
 effect's start (negative fires during the wind-up).
