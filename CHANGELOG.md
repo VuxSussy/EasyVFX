@@ -4,6 +4,35 @@ All notable changes to EasyVFX are listed here. Versions follow [Semantic Versio
 
 ## [Unreleased]
 
+### Smoke that disperses, and flipbooks that don't flicker
+- The slam's smoke flickered: its CC0 flipbook (Iché's `explosion_smoke_01`) isn't a sequence, so its frames jump
+  (steadiness 1.6, where smooth smoke is 0.05). The import also scaled each frame's brightness separately. Now
+  `texgen cc0` scales a sequence as a whole and scores every flipbook's steadiness (`jumpy` over 0.15). The grammar
+  flags a smoke, glow, ground or dust layer playing a jumpy flipbook (`steady`), and a volume must spread, slow and
+  thin (`grow`, `stop`, `solid`).
+- `ground_slam_v4` now uses steady textures: Iché's wispy smoke for the volume, with 8 thin puffs that burst out,
+  slow under drag, keep spreading and thin away over 1.4–2.2 s, and CodeManu's hand-drawn explosion for the blast.
+  Smoke jitter went from 0.229 to 0.003, and the grammar finds 0 issues.
+- The plan gains an agent chain for VFX (beat director, layer designer, curve tuner, describer and checker), after
+  Gerardo Schiavone's generative workflow.
+
+### Ground Slam (v4), rebuilt on its beat sheet
+- `ground_slam_v4` fires at the press. A Tell (a tightening gold ring, a glint, rising motes) carries Cleave's 0.5 s
+  wind-up, the 2-frame hit and the hit-stop land at 0.5 s, and each layer leaves its own way. The blast is a CC0
+  explosion flipbook. The smoke is a CC0 smoke flipbook that disperses over about 1.4 s, the dust ring fades out, and
+  the embers linger. It now runs 1.95 s, against 0.65 s before. `evfx grammar` finds nothing out of range (24 at the
+  first pass). `evfx beats` leaves only dials.
+- The judges learnt from it: the beat judge reads past the recorded frames to the last particle's death; a layer's
+  `end` counts from its own start; and a new `tell` role covers wind-up cues that hand off to the hit.
+- `texgen cc0` fades each flipbook cell out at its edge, so frames that grow to fill their cell (Iché's smoke) never
+  show its straight edges.
+
+### The CC0 library
+- `pack/cc0`: 327 CC0 textures from Kenney (particles, smoke, light masks, foliage), the Brackeys VFX Bundle (Thomas
+  Iché's flipbooks, CodeManu's hand-drawn sheets) and Picster, imported and normalized by `texgen cc0`
+  (`tools/texgen/cc0.json`). Each one keeps its source, author and licence in `pack/cc0/manifest.json`. Animations are
+  resampled to Roblox's 4, 16 or 64 frames. `evfx` draws them, and nothing is uploaded yet (docs/cc0-library.md).
+
 ### The beam showcase shapes
 - Nine texgen recipes drawn from the shape vocabulary of a paid plugin's palette in Twist VFX's beam tutorial
   (`docs/refs/twist-beam.md`; nothing of theirs is used): `shape/impact_spikes`, `shape/vortex_ring`, `shape/saw_ring`,

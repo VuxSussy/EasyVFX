@@ -607,8 +607,9 @@ do
 		end
 	end
 	holder:Destroy()
-	-- every texture the HD layers ask for exists in pack/textures; ones without a
-	-- built-in ID yet (not uploaded) are skipped cleanly
+	-- every texture the HD layers ask for exists in pack/textures, pack/generated (library
+	-- v4) or pack/cc0 (the CC0 packs); ones without a built-in ID yet (not uploaded) are
+	-- skipped cleanly
 	local fs = require("@lune/fs")
 	local pending = {}
 	for _, preset in Presets.List do
@@ -616,7 +617,10 @@ do
 			local key = layer.pack or layer.beamPack
 			if key then
 				local file = key .. ".png"
-				check(fs.isFile("pack/textures/" .. file) or fs.isFile("pack/generated/" .. file), preset.id .. " texture file " .. key)
+				check(
+					fs.isFile("pack/textures/" .. file) or fs.isFile("pack/generated/" .. file) or fs.isFile("pack/cc0/" .. file),
+					preset.id .. " texture file " .. key
+				)
 				if not Defaults[key] then
 					pending[key] = true
 				end

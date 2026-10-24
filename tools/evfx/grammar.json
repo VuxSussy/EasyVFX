@@ -3,35 +3,35 @@
  "roles": {
   "core": {
    "job": "the white-hot centre of the hit, on for 2 to 6 frames, on top",
-   "ranges": {"life": [0.03, 0.1], "count": [1, 2], "size": [0.4, 1.6], "reach": [0, 0.1], "light": [1, 1], "end": [0.03, 0.12], "leave": [0.0, 0.05]},
+   "ranges": {"life": [0.03, 0.1], "count": [1, 2], "size": [0.4, 1.6], "reach": [0, 0.1], "light": [1, 1], "end": [0.03, 0.12], "leave": [0.0, 0.05], "steady": [0, 0.8]},
    "exits": ["cut", "fade"],
    "source": "life from Lotus, Frigid (2-frame flashes) and Genshin (2-3 frame peaks); open effects hold their glows 0.2-0.9 s, which reads as a glow, not a core; exits: Phát 2026-10-24 (a flash leaves fast, an air gust slowly; nothing vanishes whole) and Lotus's slow calm tail",
    "open": {"n": 4, "life": [0.107, 0.786], "vary": [1.0, 1.33], "reach": [0.0, 0.735], "spread": [0.0, 360.0], "size": [0.276, 1.435], "fade": [0.45, 1.0], "solid": [0.966, 1.0], "light": [0.15, 0.617]}
   },
   "glint": {
    "job": "a crisp flare, star or ray fan on the hit, or a telegraph before it",
-   "ranges": {"life": [0.03, 0.2], "count": [1, 3], "size": [0.5, 2.5], "reach": [0, 0.1], "light": [0.5, 1], "tail": [0.3, 1.0], "pop": [0, 0.3], "end": [0.05, 0.3], "leave": [0.02, 0.15]},
-   "exits": ["fade", "shrink"],
+   "ranges": {"life": [0.03, 0.2], "count": [1, 3], "size": [0.5, 2.5], "reach": [0, 0.1], "light": [0.5, 1], "tail": [0.3, 1.0], "pop": [0, 0.3], "end": [0.05, 0.3], "leave": [0.02, 0.15], "steady": [0, 0.8]},
+   "exits": ["fade", "shrink", "disperse"],
    "source": "plan §4a and the references; open star sprites linger 0.5-1.5 s and spread wide, which is the dust role here; exits: Phát 2026-10-24 (a flash leaves fast, an air gust slowly; nothing vanishes whole) and Lotus's slow calm tail",
    "open": {"n": 10, "life": [0.506, 1.487], "vary": [1.594, 4.752], "stop": [0.277, 0.475], "reach": [0.28, 6.326], "spread": [180.0, 360.0], "size": [0.101, 2.053], "fade": [0.35, 1.0], "solid": [0.604, 1.0], "light": [0.15, 1.0]}
   },
   "base": {
    "job": "the one readable silhouette of the beat: a flipbook, a ring, a shell",
-   "ranges": {"count": [1, 4], "size": [1.0, 4.0], "life": [0.15, 2.0], "tail": [0.3, 1.0], "pop": [0, 0.3], "leave": [0.12, 0.6]},
+   "ranges": {"count": [1, 4], "size": [1.0, 4.0], "life": [0.15, 2.0], "tail": [0.3, 1.0], "pop": [0, 0.3], "leave": [0.12, 0.6], "steady": [0, 0.8]},
    "exits": ["fade", "shrink", "disperse", "dissolve"],
    "source": "open rings live 0.2-0.5 s; plan §4a; exits: Phát 2026-10-24 (a flash leaves fast, an air gust slowly; nothing vanishes whole) and Lotus's slow calm tail",
    "open": {"n": 7, "life": [0.195, 0.525], "vary": [1.0, 1.703], "reach": [0.001, 1.92], "spread": [0.0, 117.0], "size": [0.01, 3.659], "grow": [0.45, 1.0], "fade": [0.855, 1.0], "solid": [0.994, 1.0], "light": [0.0, 1.0]}
   },
   "volume": {
-   "job": "fullness behind the base: smoke, glow, a wider spread",
-   "ranges": {"count": [1, 8], "size": [0.3, 1.5], "life": [0.3, 3.5], "solid": [0.2, 0.8], "light": [0, 0.3], "vary": [1.2, 6], "tail": [0.5, 1.0], "pop": [0, 0.15], "end": [0.8, 3.0], "leave": [0.4, 2.0]},
+   "job": "fullness behind the base: smoke that spreads out, slows and thins away (disperses), never pops or pumps",
+   "ranges": {"count": [1, 8], "size": [0.3, 1.5], "life": [0.3, 3.5], "solid": [0.2, 0.65], "light": [0, 0.3], "vary": [1.2, 6], "tail": [0.5, 1.0], "pop": [0, 0.15], "end": [0.8, 3.0], "leave": [0.4, 2.0], "steady": [0, 0.15], "grow": [1.6, 4.0], "stop": [0.2, 1.5]},
    "exits": ["disperse", "fade", "dissolve"],
-   "source": "open smoke: 0.2-3.5 s, LightEmission 0-0.16, lifetimes vary up to 6x; exits: Phát 2026-10-24 (a flash leaves fast, an air gust slowly; nothing vanishes whole) and Lotus's slow calm tail",
+   "source": "open smoke: 0.2-3.5 s, LightEmission 0-0.16, lifetimes vary up to 6x; exits: Phát 2026-10-24 (a flash leaves fast, an air gust slowly; nothing vanishes whole) and Lotus's slow calm tail; disperse and steady: Phát 2026-10-24 (the slam's smoke 'flickers and does not disperse')",
    "open": {"n": 9, "life": [0.21, 3.5], "vary": [1.0, 6.0], "stop": [0.195, 0.195], "reach": [0.124, 7.259], "spread": [30.0, 360.0], "size": [0.139, 0.779], "grow": [0.992, 1.32], "fade": [0.0, 0.5], "solid": [0.551, 1.0], "light": [0.0, 0.16]}
   },
   "glow": {
    "job": "an additive soft disc around the core or behind a shape: light, not mass",
-   "ranges": {"count": [1, 8], "size": [0.6, 3.0], "life": [0.06, 1.0], "light": [1, 1], "solid": [0.1, 0.8], "tail": [0.4, 1.0], "pop": [0, 0.2], "leave": [0.05, 0.6]},
+   "ranges": {"count": [1, 8], "size": [0.6, 3.0], "life": [0.06, 1.0], "light": [1, 1], "solid": [0.1, 0.8], "tail": [0.4, 1.0], "pop": [0, 0.2], "leave": [0.05, 0.6], "steady": [0, 0.15]},
    "exits": ["fade", "disperse", "dissolve"],
    "source": "Lotus's violet bloom and bokeh; open glows: LightEmission 1, 0.2-0.9 s, large; exits: Phát 2026-10-24 (a flash leaves fast, an air gust slowly; nothing vanishes whole) and Lotus's slow calm tail",
    "open": {"n": 3, "life": [0.2, 1.594], "vary": [1.0, 4.5], "reach": [0.0, 2.321], "spread": [0.0, 252.0], "size": [1.084, 3.43], "fade": [0.0, 0.7], "solid": [0.05, 0.715], "light": [0.405, 1.0]}
@@ -52,7 +52,7 @@
   },
   "dust": {
    "job": "tiny points over everything for scale and sparkle; calm, lingering",
-   "ranges": {"count": [6, 40], "size": [0.01, 0.15], "life": [0.4, 2.5], "reach": [0.05, 1.0], "vary": [1.5, 4], "tail": [0.4, 1.0], "pop": [0, 0.2], "end": [0.8, 3.0], "leave": [0.3, 1.5]},
+   "ranges": {"count": [6, 40], "size": [0.01, 0.15], "life": [0.4, 2.5], "reach": [0.05, 1.0], "vary": [1.5, 4], "tail": [0.4, 1.0], "pop": [0, 0.2], "end": [0.8, 3.0], "leave": [0.3, 1.5], "steady": [0, 0.15]},
    "exits": ["fade", "shrink"],
    "source": "Lotus's gold dust and petals linger; Genshin sparkles vary about 2x; open dots vary 1-4x; exits: Phát 2026-10-24 (a flash leaves fast, an air gust slowly; nothing vanishes whole) and Lotus's slow calm tail",
    "open": {"n": 15, "life": [0.182, 0.75], "vary": [1.0, 4.0], "stop": [0.332, 3.322], "reach": [0.008, 0.693], "spread": [0.0, 171.0], "size": [0.05, 0.633], "grow": [0.0, 3.055], "fade": [0.0, 0.683], "solid": [0.505, 1.0], "light": [0.0, 1.0]}
@@ -66,9 +66,16 @@
   },
   "ground": {
    "job": "ties the beat to the floor: rings, decals, dust rings",
-   "ranges": {"size": [1, 8], "grow": [1, 5], "life": [0.3, 2.0], "tail": [0.5, 1.0], "pop": [0, 0.15], "end": [0.6, 2.5], "leave": [0.3, 1.5]},
+   "ranges": {"size": [1, 8], "grow": [1, 5], "life": [0.3, 2.0], "tail": [0.5, 1.0], "pop": [0, 0.15], "end": [0.6, 2.5], "leave": [0.3, 1.5], "steady": [0, 0.15]},
    "exits": ["fade", "disperse", "dissolve"],
    "source": "Lotus's ground ring and swirl; Frigid's frost sigil; exits: Phát 2026-10-24 (a flash leaves fast, an air gust slowly; nothing vanishes whole) and Lotus's slow calm tail",
+   "open": {}
+  },
+  "tell": {
+   "job": "a small cue in the wind-up that hands off to the hit: it gathers or glints, then is gone by the hit (motion bible: telegraph)",
+   "exits": ["fade", "shrink", "disperse", "cut"],
+   "ranges": {"size": [0.05, 4.0], "life": [0.1, 0.6], "leave": [0.02, 0.3], "light": [0.5, 1]},
+   "source": "the motion bible's telegraph and wind-up; Frigid's wind arcs and needle glints",
    "open": {}
   }
  },
@@ -76,7 +83,7 @@
  "structure": {
   "depthOrder": ["dark", "volume", "glow", "base", "debris", "shards", "dust", "glint", "core"],
   "beatLayers": [3, 6],
-  "_depthOrder": "ZOffset should not decrease along this list (dark lowest, the core on top); ground and shells are not ordered by ZOffset",
+  "_depthOrder": "ZOffset should not decrease along this list (dark lowest, the core on top); ground, tell and shells are not ordered by ZOffset",
   "_beatLayers": "layers one beat stacks (Lotus: 4 to 9 per beat; a short hit 3 to 6)"
  },
  "openSources": [

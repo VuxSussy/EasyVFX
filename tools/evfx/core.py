@@ -20,6 +20,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 CACHE = os.path.join(ROOT, ".cache", "evfx")
 PACK = os.path.join(ROOT, "pack", "textures")
 GENERATED = os.path.join(ROOT, "pack", "generated")
+CC0 = os.path.join(ROOT, "pack", "cc0")
 MESHES = os.path.join(ROOT, "pack", "meshes")
 
 DIRS = {
@@ -322,6 +323,22 @@ def frame_at(timeline, t):
         return None
     best = min(frames, key=lambda f: abs(f["t"] - t))
     return best
+
+
+def extend(timeline):
+    """The timeline padded with empty frames until its last burst particle has died: the
+    recorder stops when the runtime's own work ends, but particles live on in Roblox."""
+    frames = timeline["frames"]
+    if not frames:
+        return timeline
+    ft = timeline["frameTime"]
+    end = max([b["frame"] * ft + max(b["lifetime"]) for b in timeline["bursts"]] + [frames[-1]["t"]])
+    extra = int(round((end - frames[-1]["t"]) / ft))
+    if extra <= 0:
+        return timeline
+    last = frames[-1]
+    pad = [{**last, "t": last["t"] + (k + 1) * ft, "parts": [], "beams": [], "lights": [], "screens": [], "trails": 0} for k in range(extra)]
+    return {**timeline, "frames": frames + pad}
 
 
 def duration(timeline):

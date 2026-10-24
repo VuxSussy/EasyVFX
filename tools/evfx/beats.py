@@ -158,6 +158,7 @@ def _finding(sev, frame, beat, rule, said, fix):
 def judge(spec, timeline, rules=None):
     """Every finding for one effect, most severe first, then by frame."""
     rules = rules or pacing()
+    timeline = core.extend(timeline)
     fps = round(1 / timeline["frameTime"])
     if fps != rules["fps"]:
         raise SystemExit(f"evfx: the beat judge reads {rules['fps']} fps timelines, got {fps}")
