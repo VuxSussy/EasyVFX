@@ -44,6 +44,12 @@ Download each pack into `.cache/cc0/<folder>` (the folders are named in `cc0.jso
   - Iché's 16×4 and 15×4 flames become 8×8;
   - CodeManu's 6×5 sheets become 4×4;
   - Kenney's 9-frame explosions become 16 frames.
+- **Scores each flipbook's steadiness:** how much a frame changes from the one before, over how much there is. Smooth
+  smoke is about 0.05. Over 0.15 is `jumpy` in the manifest, and the grammar won't let a smoke, glow, ground or dust
+  layer play it as a flipbook. Iché's three explosion books (1.6–1.8) aren't sequences, so play them as variants or
+  not at all. His cloud (0.01–0.02), wispy smoke (0.08–0.15) and fire (0.07–0.15) books are smooth. CodeManu's
+  hand-drawn hits jump on purpose: a cartoon hit changes shape every frame. A sequence's frames share one brightness
+  scale, never one each, or smoke would pump.
 - **Gives each texture a role** from the VFX grammar, by its name (`roles` in `cc0.json`). The grammar and the studio
   then treat them like our own layers.
 

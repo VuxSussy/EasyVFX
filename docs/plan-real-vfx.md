@@ -388,5 +388,25 @@ beat against its sheet, its reference beat and the SE370 move it plays on, timed
 the references and from 50 open Roblox effects (`evfx study`). Next on this list: `forge` (search the knobs against
 both judges) and calibration on Phát's picks.
 
+**An agent chain, not one agent (2026-10-24).** [Gerardo Schiavone's generative workflow](https://www.youtube.com/watch?v=TaRO9IJ6CkE)
+(Griptape and Nuke) runs three briefed agents in a loop per shot: a director of photography, a layout artist who
+owns motion and depth, and a prompt writer. JSON between them is the guardrail. A vision model describes each output
+in words, and a checker compares that with the intent, iterating until they match. A person picks at the end. The
+lesson is the same as ours: an agent needs a role, rules, context and data, and a check it can't talk its way past.
+The aim: a hero effect should need one or two tuning passes by voice before it ships, not five or six. The VFX
+version:
+
+| Agent | Role | Rules and context | Output |
+|---|---|---|---|
+| Beat director | the beats and their timing | the motion bible, the move's windup, active and recovery, the references' beat stats | the beat sheet (`tools/evfx/sheets`) |
+| Layer designer | the layers of each beat | the grammar's roles and the five depths, the texture library (texgen, pack/cc0 with steadiness) | the preset's layers |
+| Curve tuner | each layer's numbers and exit | the grammar's ranges and exits, `evfx serve` knobs, Phát's picks | the tuned preset |
+| Describer and checker | what it looks like against what was meant | `evfx beats`, `evfx grammar`, a strip described in words, set against each beat's intent line | a fix list back to the tuner; it loops until clean |
+
+Each beat in a sheet gains an `intent` line ("smoke spreads out, slows and thins away"), so the checker has words to
+compare with, not only numbers. The first catch of this kind: the slam's smoke flickered because its flipbook's frames
+jumped (a steadiness of 1.6 where smooth smoke is 0.05). The grammar now flags that (`steady`), and a volume must
+spread, slow and thin (`grow`, `stop`, `solid`).
+
 **For SE370's sound:** sounds are still stubs (sound-M4). earshot itself could be the sound side of this pipeline,
 paired with evfx: one cue list, both checked against the same animation markers.

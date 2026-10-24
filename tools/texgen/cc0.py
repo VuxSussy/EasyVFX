@@ -33,6 +33,7 @@ RULES = os.path.join(HERE, "cc0.json")
 SRC = os.path.join(ROOT, ".cache", "cc0")
 OUT = os.path.join(ROOT, "pack", "cc0")
 GRIDS = {4: 2, 16: 4, 64: 8}
+JUMPY = 0.15  # steadiness over this: the frames jump; use the texture as variants, not as a flipbook
 
 
 def _load(path):
@@ -51,17 +52,48 @@ def _alpha_from_black(rgba):
     return rgba
 
 
-def normalize(rgba, mode):
+def _luma(rgba):
+    return rgba[..., :3] @ np.array([0.299, 0.587, 0.114], np.float32)
+
+
+def normalize(rgba, mode, top=None):
+    """One image to the pack convention. `top` is the brightest grey of the whole sequence
+    for luma frames: frames are scaled together, never one by one, or a smoke flipbook's
+    brightness would pump from frame to frame."""
     rgba = _alpha_from_black(rgba)
     rgb, a = rgba[..., :3], rgba[..., 3]
     lum = rgb.max(axis=2)
     if mode == "white":
         return np.dstack([np.ones_like(rgb), a * lum])
     if mode == "luma":
-        g = (rgb @ np.array([0.299, 0.587, 0.114], np.float32))[..., None]
-        g = g / max(1e-3, float(g[a > 0.1].max()) if (a > 0.1).any() else 1.0)
-        return np.dstack([np.repeat(np.clip(g, 0, 1), 3, axis=2), a])
+        g = _luma(rgba)[..., None]
+        if top is None:
+            top = float(g[a > 0.1].max()) if (a > 0.1).any() else 1.0
+        return np.dstack([np.repeat(np.clip(g / max(1e-3, top), 0, 1), 3, axis=2), a])
     return rgba
+
+
+def normalize_all(frames, mode):
+    """A sequence to the pack convention, with one brightness scale for all its frames."""
+    if mode != "luma":
+        return [normalize(f, mode) for f in frames]
+    raws = [_alpha_from_black(f) for f in frames]
+    top = max((float(_luma(r)[r[..., 3] > 0.1].max()) for r in raws if (r[..., 3] > 0.1).any()), default=1.0)
+    return [normalize(r, mode, top) for r in raws]
+
+
+def steadiness(frames):
+    """How much a sequence changes from one frame to the next, over how much there is
+    (alpha x brightness, small): about 0.05 for smooth smoke, 0.2 and up for frames that
+    jump (a sheet of variants, or a sequence that flickers when played as one)."""
+    small = []
+    for f in frames:
+        img = Image.fromarray((np.clip(f, 0, 1) * 255).astype(np.uint8), "RGBA").resize((64, 64), Image.BILINEAR)
+        g = np.asarray(img, np.float32) / 255
+        small.append(g[..., 3] * g[..., :3].max(axis=2))
+    level = float(np.mean([x.mean() for x in small])) or 1e-6
+    jumps = [float(np.abs(x - y).mean()) for x, y in zip(small, small[1:])]
+    return round(float(np.mean(jumps)) / level, 3) if jumps else 0.0
 
 
 def _resize(rgba, side):
@@ -171,20 +203,23 @@ def run(dry=False):
         for key, paths in groups.items():
             clean = _slug(key.rsplit("_", 1)[0] if rule["kind"] == "sheet-grid" else key)
             name = f"cc0_{rule['prefix']}_{clean}"
+            steady = None
             if rule["kind"] == "shape":
                 rgba = _resize(_square(normalize(_load(paths[0]), rule["rgb"])), rule["size"])
                 grid, frames = 1, 1
             else:
                 if rule["kind"] == "sequence-folder":
-                    seq = [normalize(_load(p), rule["rgb"]) for p in paths]
+                    seq = normalize_all([_load(p) for p in paths], rule["rgb"])
                 else:
                     cols, rows = rule.get("grid") or _grid_from_name(key)
                     if "x" not in key.rsplit("_", 1)[-1]:
                         raise SystemExit(f"texgen cc0: {key} has no grid in its name")
-                    seq = [normalize(c, rule["rgb"]) for c in cells(_load(paths[0]), cols, rows)]
+                    seq = normalize_all(cells(_load(paths[0]), cols, rows), rule["rgb"])
                 n = rule.get("frames") or _frames_for(len(seq))
-                rgba, grid = atlas(resample(seq, n), rule["size"], rule.get("edgeFade", False))
+                picked = resample(seq, n)
+                rgba, grid = atlas(picked, rule["size"], rule.get("edgeFade", False))
                 frames = n
+                steady = steadiness(picked)
             role = next((r for stem, r in rule.get("roles", {}).items() if _slug(key).startswith(stem)), rule["role"])
             entry = {
                 "id": f"cc0/{rule['prefix']}_{clean}",
@@ -202,6 +237,9 @@ def run(dry=False):
                 "url": pack["url"],
                 "original": [os.path.relpath(p, base) for p in paths][:4] + (["..."] if len(paths) > 4 else []),
             }
+            if steady is not None:
+                entry["steadiness"] = steady
+                entry["jumpy"] = steady > JUMPY
             if dry:
                 print(f"{name:<48} {entry['kind']:<8} {entry['size'][0]}x{entry['size'][1]} grid {grid} frames {frames}")
             else:

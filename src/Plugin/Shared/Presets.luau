@@ -2315,7 +2315,8 @@ Presets.List = ({
 		defaults = { color1 = rgb(255, 200, 60), color2 = rgb(255, 90, 20), trigger = "Loop", interval = 3.5 },
 		-- Beat sheet tools/evfx/sheets/ground_slam_v4.json (Phát, 2026-10-24): it fires at the press,
 		-- so a Tell carries Cleave's 0.5 s wind-up and the hit lands at 0.5 s; every layer leaves
-		-- its own way (docs/vfx-grammar.md, exits). Smoke and the blast are CC0 flipbooks (pack/cc0).
+		-- its own way (docs/vfx-grammar.md, exits). The smoke and the blast are CC0 flipbooks (pack/cc0)
+		-- whose frames are steady enough to play (the manifest's steadiness).
 		layers = {
 			-- Tell (0-0.5 s): a gold ring tightening on the ground, a glint and rising motes
 			v4("cc0_kp_circle_03", "Tell", Vector3.new(0, -1.85, 0), {
@@ -2391,17 +2392,18 @@ Presets.List = ({
 				color0 = "p",
 				color1 = "s",
 			},
-			v4("cc0_fb_explosion_01", "Slam", Vector3.new(0, -0.4, 0), {
+			-- a hand-drawn explosion (CodeManu, CC0): its frames change shape on purpose
+			v4("cc0_cm_explosion", "Slam", Vector3.new(0, -0.2, 0), {
 				name = "Blast",
 				delay = 0.5,
-				flipbook = "Grid8x8",
-				size = { { 0, 6 }, { 1, 11 } },
-				transparency = { { 0, 0 }, { 0.6, 0.1 }, { 1, 1 } },
-				lifetime = { 0.6, 0.6 },
-				rotation = { -20, 20 },
+				flipbook = "Grid4x4",
+				size = { { 0, 6.5 }, { 1, 10 } },
+				transparency = { { 0, 0 }, { 0.65, 0.05 }, { 1, 1 } },
+				lifetime = { 0.45, 0.45 },
+				rotation = { -15, 15 },
 				color = { "w" },
-				lightEmission = 0.5,
-				brightness = 1.2,
+				lightEmission = 0.6,
+				brightness = 1.3,
 				zOffset = 0.5,
 			}),
 			v4("flip_shock_ring", "Slam", Vector3.new(0, -1.8, 0), {
@@ -2454,21 +2456,23 @@ Presets.List = ({
 				lightInfluence = 1,
 				brightness = 1,
 			}),
-			v4("cc0_fb_explosion_smoke_01", "Settle", Vector3.new(0, -1.2, 0), {
+			-- smoke that disperses: a steady CC0 smoke flipbook (Iche), many thin puffs that
+			-- burst out, slow under drag, keep spreading and thin away over 1.4-2.2 s
+			v4("cc0_fb_wispy_smoke_01", "Settle", Vector3.new(0, -1.3, 0), {
 				name = "Volume",
-				delay = 0.55,
-				burst = 4,
+				delay = 0.53,
+				burst = 8,
 				flipbook = "Grid8x8",
 				direction = "Top",
-				speed = { 4, 8 },
-				spread = { 70, 70 },
-				drag = 3,
-				accel = Vector3.new(0, 1.5, 0),
-				size = { { 0, 3.5, 0.7 }, { 0.4, 6 }, { 1, 7.4 } },
-				transparency = { { 0, 0.3 }, { 0.3, 0.35 }, { 1, 1 } },
-				lifetime = { 0.9, 1.4 },
+				speed = { 6, 14 },
+				spread = { 80, 80 },
+				drag = 4,
+				accel = Vector3.new(0, 1.2, 0),
+				size = { { 0, 2.4, 0.5 }, { 0.35, 5 }, { 1, 7.4 } },
+				transparency = { { 0, 0.5 }, { 0.2, 0.42 }, { 0.6, 0.65 }, { 1, 1 } },
+				lifetime = { 1.4, 2.2 },
 				rotation = { 0, 360 },
-				rotSpeed = { -20, 20 },
+				rotSpeed = { -15, 15 },
 				color = { "g" },
 				lightEmission = 0,
 				lightInfluence = 1,

@@ -1786,7 +1786,9 @@
     "PNG/Black smoke/blackSmoke03.png",
     "..."
    ],
-   "sha256": "e105db835de28ad4f31297013f2bf7b81e65f889f7bb44f92e3db5526091dbf7"
+   "steadiness": 0.41,
+   "jumpy": true,
+   "sha256": "213fc75567c1dc69d003978fd3f68ad8bb4544d202eab75f9c27d694ca36c196"
   },
   "cc0_ks_white_puff": {
    "id": "cc0/ks_white_puff",
@@ -1812,7 +1814,9 @@
     "PNG/White puff/whitePuff03.png",
     "..."
    ],
-   "sha256": "ed41274f93c1a2e0a1581aaa35d15eab390e606e7d9ff2fc8f526ec92d85a61d"
+   "steadiness": 0.375,
+   "jumpy": true,
+   "sha256": "355a15b5da51b070886e126baca3db974bc18d091c10d9389ec76d160d1d5f7f"
   },
   "cc0_ks_explosion": {
    "id": "cc0/ks_explosion",
@@ -1838,6 +1842,8 @@
     "PNG/Explosion/explosion03.png",
     "..."
    ],
+   "steadiness": 0.219,
+   "jumpy": true,
    "sha256": "c0caccff08fe17b666c0d7d73117ac5ece14c54fd18554bf97658df6af28c7d4"
   },
   "cc0_ks_flash": {
@@ -1864,6 +1870,8 @@
     "PNG/Flash/flash03.png",
     "..."
    ],
+   "steadiness": 0.189,
+   "jumpy": true,
    "sha256": "e36dd2ae9570cf11c1743a4e1ff49bd6d45745e5a3bd6d689df9f65742e1e77e"
   },
   "cc0_ks_gas": {
@@ -1890,6 +1898,8 @@
     "PNG/Fart/fart03.png",
     "..."
    ],
+   "steadiness": 0.208,
+   "jumpy": true,
    "sha256": "a1af343f04288ff5f0e671089b4ac8e38c9db0c4ef20bef3eabf1e8f98d6e5ee"
   },
   "cc0_lm_circle_a": {
@@ -6356,7 +6366,9 @@
    "original": [
     "flipbooks/cloud_01_8x8.tga"
    ],
-   "sha256": "6d6d6fd9a43eb3d715fd55b5cef7a46895fe224af6b68f45a9433581244b5178"
+   "steadiness": 0.019,
+   "jumpy": false,
+   "sha256": "6b4c6bfd51fec2d6037f4b02049af0d726f5ebf4ede8a185ec3a9d9c031cee53"
   },
   "cc0_fb_cloud_02": {
    "id": "cc0/fb_cloud_02",
@@ -6378,7 +6390,9 @@
    "original": [
     "flipbooks/cloud_02_8x8.tga"
    ],
-   "sha256": "83c034ff6affc6b00d6b6891b1e137fb58289b11307bda05dc29fadba1978bce"
+   "steadiness": 0.01,
+   "jumpy": false,
+   "sha256": "b49195fa5ccda4bfc22b02c4c12ad4385d382bc59a14f2067a38e5cf0e65c7cd"
   },
   "cc0_fb_explosion_smoke_01": {
    "id": "cc0/fb_explosion_smoke_01",
@@ -6400,7 +6414,9 @@
    "original": [
     "flipbooks/explosion_smoke_01_8x8.tga"
    ],
-   "sha256": "6c6e4b94beb71dec66c568c5fb75fc595db6b12fc82b92d5588979f35126eeee"
+   "steadiness": 1.619,
+   "jumpy": true,
+   "sha256": "bdc55c1bf439fab2148a99da49ebea2596c931dadd1068a0c44652433e4877cf"
   },
   "cc0_fb_wispy_smoke_01": {
    "id": "cc0/fb_wispy_smoke_01",
@@ -6422,7 +6438,9 @@
    "original": [
     "flipbooks/wispy_smoke_01_8x8.tga"
    ],
-   "sha256": "492a7198295abb69da93cbffce0f98e6cd95f0aa3ff3d092ee18078e0ba9db03"
+   "steadiness": 0.084,
+   "jumpy": false,
+   "sha256": "f3ff9a8befb49b9a4012902c4859f5b880b1d9941a6878200b1ef4c263f68c42"
   },
   "cc0_fb_wispy_smoke_02": {
    "id": "cc0/fb_wispy_smoke_02",
@@ -6444,7 +6462,9 @@
    "original": [
     "flipbooks/wispy_smoke_02_8x8.tga"
    ],
-   "sha256": "d2ba888ce13fa33c5bcfccbc76e12108df2a2a8d938d45da66eb47a9c09dd948"
+   "steadiness": 0.114,
+   "jumpy": false,
+   "sha256": "6983624ec05444dc1a7e771ce5b2f55de7168fe2818295a42cd0a7aeb532fd86"
   },
   "cc0_fb_wispy_smoke_03": {
    "id": "cc0/fb_wispy_smoke_03",
@@ -6466,7 +6486,9 @@
    "original": [
     "flipbooks/wispy_smoke_03_8x8.tga"
    ],
-   "sha256": "4153140c3da0f81bf529497205f8de666c27414137859938bc410b4c90ebadc6"
+   "steadiness": 0.152,
+   "jumpy": true,
+   "sha256": "02b43ae6a276ce91636a7557cfd586dfb1410782f5762926c92f4e0b275d750b"
   },
   "cc0_fb_explosion_01": {
    "id": "cc0/fb_explosion_01",
@@ -6488,6 +6510,8 @@
    "original": [
     "flipbooks/explosion_01_8x8.tga"
    ],
+   "steadiness": 1.811,
+   "jumpy": true,
    "sha256": "bb22c01391ab16c6f7508da9d832d809833e5a38e4e6aade545b06dda8b7251c"
   },
   "cc0_fb_explosion_02": {
@@ -6510,6 +6534,8 @@
    "original": [
     "flipbooks/explosion_02_8x8.tga"
    ],
+   "steadiness": 1.677,
+   "jumpy": true,
    "sha256": "ed214ae2c2decb6071cdf0887a5e47f8272c96168126a5cbfe4bc4d649892cdf"
   },
   "cc0_fb_fire_01": {
@@ -6532,6 +6558,8 @@
    "original": [
     "flipbooks/fire_01_8x8.tga"
    ],
+   "steadiness": 0.079,
+   "jumpy": false,
    "sha256": "f681e143b1dfd033940e757c7c8ad4aac285c7bf8996bc8ed0ff2e45b019eb5e"
   },
   "cc0_fb_fire_02": {
@@ -6554,6 +6582,8 @@
    "original": [
     "flipbooks/fire_02_8x8.tga"
    ],
+   "steadiness": 0.11,
+   "jumpy": false,
    "sha256": "e78c2d47f714132d72a5a58b4d5a399beadc5a7926b8729df48cfec56b38f89b"
   },
   "cc0_fb_fire_03": {
@@ -6576,6 +6606,8 @@
    "original": [
     "flipbooks/fire_03_8x8.tga"
    ],
+   "steadiness": 0.067,
+   "jumpy": false,
    "sha256": "f1ed7892737672add69b5a11a5c218e1a7406ef436c26400d5f881afb8fe8e41"
   },
   "cc0_fb_fire_04": {
@@ -6598,6 +6630,8 @@
    "original": [
     "flipbooks/fire_04_8x8.tga"
    ],
+   "steadiness": 0.146,
+   "jumpy": false,
    "sha256": "47e2245fc9a8d03010c8c60bc8bdabfe064832f5cb41fd86828a9476f9f27036"
   },
   "cc0_fb_flame_01": {
@@ -6620,6 +6654,8 @@
    "original": [
     "flipbooks/flame_01_16x4.tga"
    ],
+   "steadiness": 0.109,
+   "jumpy": false,
    "sha256": "61dc12e2e64ca8d3bd0e887bb1b70a16cdb44b3c1f8cb6bc3acde756cc4092d3"
   },
   "cc0_fb_flame_02": {
@@ -6642,6 +6678,8 @@
    "original": [
     "flipbooks/flame_02_15x4.tga"
    ],
+   "steadiness": 0.18,
+   "jumpy": true,
    "sha256": "3126b13e391ad1390c20068fbc3774f3cad9a7a12295be80391bacbd82cedf8f"
   },
   "cc0_cm_big_hit": {
@@ -6664,6 +6702,8 @@
    "original": [
     "predrawn/big_hit_6x5.png"
    ],
+   "steadiness": 0.365,
+   "jumpy": true,
    "sha256": "3f8cbe1618ddf5bc17ef2cbe688cf169faae6cae516997cadb107952fb04a9cd"
   },
   "cc0_cm_blood_impact": {
@@ -6686,6 +6726,8 @@
    "original": [
     "predrawn/blood_impact_6x5.png"
    ],
+   "steadiness": 1.048,
+   "jumpy": true,
    "sha256": "6d67951ba7d65652ae27e12ed6e19bfc9f09d4f7fa289908c533d6a0760e5a23"
   },
   "cc0_cm_charge": {
@@ -6708,6 +6750,8 @@
    "original": [
     "predrawn/charge_7x6.png"
    ],
+   "steadiness": 1.648,
+   "jumpy": true,
    "sha256": "a9da2a6d38c7522a01cd78f72bc6f9412a7242ed61ce9da716236a16e9b7b994"
   },
   "cc0_cm_dithered_fire": {
@@ -6730,6 +6774,8 @@
    "original": [
     "predrawn/dithered_fire_6x5.png"
    ],
+   "steadiness": 0.196,
+   "jumpy": true,
    "sha256": "a6bf60d894e7f1ef906b69c874eca5fb4810eb9a0ec515ff176f5ea347b9c82d"
   },
   "cc0_cm_electric_ring": {
@@ -6752,6 +6798,8 @@
    "original": [
     "predrawn/electric_ring_6x5.png"
    ],
+   "steadiness": 0.661,
+   "jumpy": true,
    "sha256": "43ebb950bd7cc0bb014b2a60a2e46575337cb51a2faaa0d1e40204e567188062"
   },
   "cc0_cm_explosion": {
@@ -6774,6 +6822,8 @@
    "original": [
     "predrawn/explosion_6x5.png"
    ],
+   "steadiness": 0.426,
+   "jumpy": true,
    "sha256": "57451b4e41aa810a90e73af9986870b338e03d53c7646a225347af086cd9e3de"
   },
   "cc0_cm_fire_point": {
@@ -6796,6 +6846,8 @@
    "original": [
     "predrawn/fire_point_6x5.png"
    ],
+   "steadiness": 0.244,
+   "jumpy": true,
    "sha256": "358996ea7e8ff5432c8364c4bdf7d9d0d71a0c62ffb9103c9e0b902c30018002"
   },
   "cc0_cm_fire_ring": {
@@ -6818,6 +6870,8 @@
    "original": [
     "predrawn/fire_ring_6x5.png"
    ],
+   "steadiness": 0.167,
+   "jumpy": true,
    "sha256": "8808888c370f4dd15d80fa502efe71513fc7025186a612c6c168a7fa80a8e134"
   },
   "cc0_cm_impact_white": {
@@ -6840,6 +6894,8 @@
    "original": [
     "predrawn/impact_white_6x4.png"
    ],
+   "steadiness": 0.518,
+   "jumpy": true,
    "sha256": "fc5d8be1ea9ccd877010766ce20fedbea908b2eadefc7f50339a16f44e4bf745"
   },
   "cc0_cm_lightstreaks": {
@@ -6862,6 +6918,8 @@
    "original": [
     "predrawn/lightstreaks_6x5.png"
    ],
+   "steadiness": 0.614,
+   "jumpy": true,
    "sha256": "2ae0e763d2f910bfdb1dc701b501b78178157f85be59757798678527fa176d7d"
   },
   "cc0_cm_star_explosion": {
@@ -6884,6 +6942,8 @@
    "original": [
     "predrawn/star_explosion_6x5.png"
    ],
+   "steadiness": 1.632,
+   "jumpy": true,
    "sha256": "15f4240c56349b4f3e4b9538184ced00b13cb875e05182c17f9ba1b4d33df3c6"
   },
   "cc0_cm_vortex": {
@@ -6906,6 +6966,8 @@
    "original": [
     "predrawn/vortex_6x5.png"
    ],
+   "steadiness": 0.362,
+   "jumpy": true,
    "sha256": "4d02029f42a34652b3efb34ceb8899fb4583d3ad2b414d087f48f7ed8434fd0c"
   },
   "cc0_cm_wavy_blue": {
@@ -6928,6 +6990,8 @@
    "original": [
     "predrawn/wavy_blue_6x5.png"
    ],
+   "steadiness": 0.344,
+   "jumpy": true,
    "sha256": "0bb5d990b79e5908f41143f8b0d365ffd34400e21f8fa270c7ac4d6111006f8c"
   },
   "cc0_cm_wavy_purple": {
@@ -6950,6 +7014,8 @@
    "original": [
     "predrawn/wavy_purple_6x5.png"
    ],
+   "steadiness": 0.231,
+   "jumpy": true,
    "sha256": "74a425cf94135e8306f81abf9ea7942e2a029f3dddee0ee2433d751ddd167464"
   },
   "cc0_rp_effect_1": {

@@ -4,6 +4,18 @@ All notable changes to EasyVFX are listed here. Versions follow [Semantic Versio
 
 ## [Unreleased]
 
+### Smoke that disperses, and flipbooks that don't flicker
+- The slam's smoke flickered: its CC0 flipbook (Iché's `explosion_smoke_01`) isn't a sequence, so its frames jump
+  (steadiness 1.6, where smooth smoke is 0.05). The import also scaled each frame's brightness separately. Now
+  `texgen cc0` scales a sequence as a whole and scores every flipbook's steadiness (`jumpy` over 0.15). The grammar
+  flags a smoke, glow, ground or dust layer playing a jumpy flipbook (`steady`), and a volume must spread, slow and
+  thin (`grow`, `stop`, `solid`).
+- `ground_slam_v4` now uses steady textures: Iché's wispy smoke for the volume, with 8 thin puffs that burst out,
+  slow under drag, keep spreading and thin away over 1.4–2.2 s, and CodeManu's hand-drawn explosion for the blast.
+  Smoke jitter went from 0.229 to 0.003, and the grammar finds 0 issues.
+- The plan gains an agent chain for VFX (beat director, layer designer, curve tuner, describer and checker), after
+  Gerardo Schiavone's generative workflow.
+
 ### Ground Slam (v4), rebuilt on its beat sheet
 - `ground_slam_v4` fires at the press. A Tell (a tightening gold ring, a glint, rising motes) carries Cleave's 0.5 s
   wind-up, the 2-frame hit and the hit-stop land at 0.5 s, and each layer leaves its own way. The blast is a CC0

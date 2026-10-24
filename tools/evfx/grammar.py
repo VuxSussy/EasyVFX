@@ -28,6 +28,8 @@ that don't depend on how big the effect is, so a sword hit and a meteor compare:
     pop       how much of it is still visible on its last frame (0 clean, 1 vanishes
               whole: the abrupt end)
     end       seconds from its own start until its last particle is gone
+    steady    for a one-shot flipbook, how much its frames jump from one to the next
+              (pack/cc0 manifest; about 0.05 for smooth smoke, over 0.15 flickers)
 
 Sizes are in bodies, not over the effect's own size: effects are made to sit on a
 character, and it lets open effects without a base layer compare. grammar.json holds, per
@@ -42,7 +44,7 @@ import os
 HERE = os.path.dirname(os.path.abspath(__file__))
 GRAMMAR = os.path.join(HERE, "grammar.json")
 BODY = 5.0
-MEASURES = ("count", "delay", "life", "vary", "stop", "reach", "spread", "size", "grow", "fade", "solid", "light", "z", "exit", "tail", "leave", "pop", "end")
+MEASURES = ("count", "delay", "life", "vary", "stop", "reach", "spread", "size", "grow", "fade", "solid", "light", "z", "exit", "tail", "leave", "pop", "end", "steady")
 
 
 def load():
@@ -107,6 +109,23 @@ def fade_point(transparency):
 
 
 _FLIP = {}
+_STEADY = None
+
+
+def steadiness(texture):
+    """A CC0 flipbook's steadiness from pack/cc0/manifest.json, or None."""
+    global _STEADY
+    if _STEADY is None:
+        from . import core
+
+        path = os.path.join(core.CC0, "manifest.json")
+        _STEADY = {}
+        if os.path.exists(path):
+            with open(path, encoding="utf-8") as f:
+                for k, e in json.load(f)["textures"].items():
+                    if "steadiness" in e:
+                        _STEADY[k] = e["steadiness"]
+    return _STEADY.get((texture or "").split("://")[-1])
 
 
 def flip_profile(texture, flipbook):
@@ -200,6 +219,8 @@ def particle(b, frame_time):
         kind, pop = "dissolve", round(flip_pop * pop, 3)
         row["end"] = round(max(b["lifetime"]) * seen, 3)
     row.update(exit=kind, tail=tail, pop=pop, leave=round(tail * life, 3))
+    if b.get("flipMode") == "OneShot" and b.get("flipbook") not in (None, "None"):
+        row["steady"] = steadiness(b.get("texture"))
     return row
 
 
@@ -305,7 +326,7 @@ def judge(rows, grammar=None, spec=None):
     return out
 
 
-COLUMNS = ("role", "count", "delay", "life", "vary", "stop", "reach", "spread", "size", "grow", "solid", "light", "z", "exit", "tail", "leave", "pop", "end")
+COLUMNS = ("role", "count", "delay", "life", "vary", "stop", "reach", "spread", "size", "grow", "solid", "light", "z", "exit", "tail", "leave", "pop", "end", "steady")
 
 
 def table(rows, found):
