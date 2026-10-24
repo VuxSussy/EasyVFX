@@ -3555,7 +3555,8 @@ LayerBuilders.particles = function(ctx, key, layer)
 	e.Texture = texture or Presets.Textures.Glow
 	local preview = layer.pack and not ctx.assets[layer.pack] and Builder.previewContent[layer.pack]
 	if preview then
-		-- a Studio preview of a texture not uploaded yet (see Builder.previewContent)
+		-- a Studio preview of a texture not uploaded yet (see Builder.previewContent). Studio
+		-- 0.744 accepts it but draws nothing; kept for when particles render editable images.
 		pcall(function()
 			(e :: any).TextureContent = preview
 		end)

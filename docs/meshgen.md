@@ -93,6 +93,22 @@ session.
 ![middle](meshes/studio-play-2-mid.jpg)
 ![end](meshes/studio-play-3-end.jpg)
 
+### Bloom Strike in Studio (2026-10-23, edit mode, no upload)
+
+`studio.preset_data("bloom_strike", ...)` exported its 28 textures and 6 meshes; Studio fetched them from a localhost
+server into `Builder.previewContent`. The real `Builder.create` baked the effect: 23 emitters and 520 shell frames
+(each a MeshPart with its own `SurfaceAppearance`). The shells play correctly:
+
+![wrap](meshes/studio-bloom-1-wrap.jpg)
+![sphere](meshes/studio-bloom-2-sphere.jpg)
+![pillar](meshes/studio-bloom-3-pillar.jpg)
+
+- **Particles don't draw an `EditableImage`.** `ParticleEmitter.TextureContent` takes `Content.fromObject(image)`
+  without an error, but the particles are invisible; the same emitter with a built-in texture draws. So particle layers
+  can only be seen in Studio once their textures are uploaded, and the beats that are mostly particles (the flare, the
+  sigil, the seed, the dust) are judged headless in evfx until then.
+- **The lotus is too small to read inside the pillar** from a game camera.
+
 ### The halftone on the yellow shells (2026-10-23, edit mode)
 
 Phát saw a halftone pattern on the yellow slash shells that the blue torus didn't have. An A/B in Studio settled it:
