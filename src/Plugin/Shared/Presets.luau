@@ -531,7 +531,9 @@ end
 -- upward pull (studs/s², 5 when left out); `o.inward` pulls each spot's flames toward the middle
 -- as they rise (per stud out from it), so a wide seat narrows into a cone. `o.stagger` lets each
 -- spot catch up to that many seconds late, with its own rate and speed, so the seat never lights
--- as one ring rising in step (Phát, 2026-10-25: it broke the organic feel)
+-- as one ring rising in step (Phát, 2026-10-25: it broke the organic feel). `o.base` is how high
+-- over the floor the flames start (0.3 studs when left out): Roblox cuts a particle flat where it
+-- meets the ground, so a flame's lower half needs that much room
 local function hash(i: number, salt: number): number
 	return (math.sin(i * 12.9898 + salt * 78.233) * 43758.5453) % 1
 end
@@ -547,7 +549,7 @@ local function fireLoop(b: FireBeats, o): { Layer }
 	for i, spot in o.spots do
 		local late = stagger * hash(i, 1)
 		local pace = 1 + stagger * (hash(i, 3) - 0.5)
-		table.insert(out, v4(HOOK, "Sustain", floorAt(spot[1], spot[2]) + Vector3.new(0, 0.3, 0), { name = "ContinuousFlame", delay = start + late,
+		table.insert(out, v4(HOOK, "Sustain", floorAt(spot[1], spot[2]) + Vector3.new(0, o.base or 0.3, 0), { name = "ContinuousFlame", delay = start + late,
 			burst = false, rate = o.rate * (1 + 1.5 * stagger * (hash(i, 2) - 0.5)), streamFor = b.out - start - late,
 			orientation = "FacingCameraWorldUp", direction = "Top", speed = { o.speed[1] * pace, o.speed[2] * pace },
 			spread = { 8, 8 }, drag = 1,
@@ -566,7 +568,7 @@ local function fireLoop(b: FireBeats, o): { Layer }
 			color = { Color3.fromRGB(255, 190, 110), Color3.fromRGB(255, 100, 40), Color3.fromRGB(185, 33, 28) },
 			lightEmission = 0.1, brightness = 1.1, zOffset = 1.1 }))
 	end
-	table.insert(out, v4(HOOK, "Sustain", floorAt() + Vector3.new(0, 0.2, 0), { name = "FlameCore", delay = start,
+	table.insert(out, v4(HOOK, "Sustain", floorAt() + Vector3.new(0, (o.base or 0.3) - 0.1, 0), { name = "FlameCore", delay = start,
 		burst = false, rate = 10, streamFor = b.out - start, orientation = "FacingCameraWorldUp",
 		direction = "Top", speed = { 1, 2 }, spread = { 12, 12 }, accel = Vector3.new(0, 2, 0),
 		size = { { 0, 1.4 }, { 0.4, 1.9 }, { 1, 0.6 } }, transparency = { { 0, 0.5 }, { 0.15, 0.1 }, { 1, 1 } },
@@ -719,7 +721,10 @@ end
 -- `life` scales every flame's life (1 as tuned); `edge` is how see-through the ring's flames start,
 -- so they melt away instead of showing as single flames; `dim` scales every flame's brightness;
 -- `spin` (degrees) turns each flame its own way at birth, up to that far, and slowly after. The
--- crown, surge, roll, licks and swirl tail it was built from before are in git history
+-- crown, surge, roll, licks and swirl tail it was built from before are in git history.
+-- Heights over the floor, in studs: `coreAt` (0.5), `heartAt` (0.4) and `ringAt` (0.6), and
+-- `ringDip`, how many degrees below level the ring leaves the core (10, give or take 8). Roblox
+-- cuts a particle flat where it meets the ground, so flames near it need room for their lower half
 local function fireball(b: FireBeats, o): { Layer }
 	local HOOK = "shape_mold_fire_hook"
 	local k_ = o.scale or 1
@@ -734,13 +739,13 @@ local function fireball(b: FireBeats, o): { Layer }
 	end
 	local ringStart = o.edge * 0.6
 	local out = {}
-	table.insert(out, v4(HOOK, "Explosion", floorAt() + Vector3.new(0, 0.5, 0), { name = "FireballCore", delay = b.strike - 0.017,
+	table.insert(out, v4(HOOK, "Explosion", floorAt() + Vector3.new(0, o.coreAt or 0.5, 0), { name = "FireballCore", delay = b.strike - 0.017,
 		-- a ball, not a flame: each turned its own way, nudged off the spot and held by drag
 		burst = o.core, orientation = "FacingCameraWorldUp", direction = "Top", speed = { 1, 3 }, spread = { 180, 180 },
 		drag = 12, size = grow(1.6, 2.6, 2.6), transparency = { { 0, 0 }, { 0.8, 0 }, { 1, 0.6 } },
 		lifetime = { b.flash - b.strike + 0.05, b.flash - b.strike + 0.1 }, rotation = { 0, 360 }, color = { Color3.fromRGB(255, 225, 160), Color3.fromRGB(255, 175, 90) },
 		lightEmission = 0.3, brightness = 1.3, zOffset = 1.3 }))
-	table.insert(out, v4(HOOK, "Explosion", floorAt() + Vector3.new(0, 0.4, 0), { name = "FireballHeart", delay = t0,
+	table.insert(out, v4(HOOK, "Explosion", floorAt() + Vector3.new(0, o.heartAt or 0.4, 0), { name = "FireballHeart", delay = t0,
 		burst = false, rate = o.heart, streamFor = o.heartFor, orientation = "FacingCameraWorldUp", direction = "Top",
 		speed = { 0.5, 2.2 * o.heartRise }, spread = { 40, 40 }, drag = 2, accel = Vector3.new(0, 3 * o.heartRise, 0),
 		size = grow(1.3, 2.2, 0.6), transparency = { { 0, 0.1 }, { 0.6, 0.15 }, { 1, 1 } },
@@ -754,8 +759,8 @@ local function fireball(b: FireBeats, o): { Layer }
 		-- a little below level, out of the core, slowed by drag to about `torus` studs, lifted by the
 		-- hot air so the far end curls up, and drawn back in a touch as it curls
 		local reachSpeed = o.torus * 2.8
-		table.insert(out, v4(HOOK, "Explosion", floorAt(cx * 0.2, cz * 0.2) + Vector3.new(0, 0.6, 0), { name = "VortexRing",
-			delay = t0, tilt = Vector3.new(0, -az, -(100 + 8 * hash(k, 22))), burst = false, rate = 4 / o.pour, streamFor = o.pour,
+		table.insert(out, v4(HOOK, "Explosion", floorAt(cx * 0.2, cz * 0.2) + Vector3.new(0, o.ringAt or 0.6, 0), { name = "VortexRing",
+			delay = t0, tilt = Vector3.new(0, -az, -(90 + (o.ringDip or 10) + 8 * hash(k, 22))), burst = false, rate = 4 / o.pour, streamFor = o.pour,
 			orientation = "FacingCameraWorldUp", direction = "Top",
 			speed = { reachSpeed * 0.8, reachSpeed * 1.15 }, spread = { 14, 14 }, drag = 4.5,
 			accel = Vector3.new(-cx * o.curl, o.lift, -cz * o.curl),

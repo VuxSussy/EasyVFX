@@ -270,7 +270,8 @@ local function capture(root: Instance, emitters: { any })
 				frame.trails += 1
 			end
 		elseif d:IsA("ParticleEmitter") then
-			if d.Enabled and d.Rate > 0 then
+			-- on, or streamed by the runtime (VFX_Streaming)
+			if (d.Enabled or d:GetAttribute("VFX_Streaming") == true) and d.Rate > 0 then
 				local key = d:GetAttribute("EvfxKey")
 				if typeof(key) ~= "number" then
 					table.insert(emitters, emitterInfo(d))
