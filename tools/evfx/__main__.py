@@ -323,7 +323,7 @@ def cmd_beats(args):
     for name in names:
         spec = beats.sheet(name)
         timeline = core.load(name, args.mode, fresh=args.fresh, fps=60)
-        found = beats.judge(spec, timeline)
+        found = beats.judge(spec, timeline, groups=beats.kit_groups(name))
         text = beats.report(spec, found)
         print(text + "\n")
         base = _out(args, f"{name}.beats")
@@ -390,7 +390,7 @@ def cmd_variants(args):
 def cmd_serve(args):
     from evfx import serve
 
-    serve.run(args.port)
+    serve.run(args.port, args.host)
 
 
 def cmd_ref(args):
@@ -525,6 +525,7 @@ def main():
 
     p = sub.add_parser(name="serve", parents=[common])
     p.add_argument("--port", type=int, default=8765)
+    p.add_argument("--host", default="127.0.0.1", help="0.0.0.0 opens the studio to the local network")
     p.set_defaults(run=cmd_serve)
 
     p = sub.add_parser(name="variants", parents=[common])

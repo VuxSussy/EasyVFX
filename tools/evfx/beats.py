@@ -48,16 +48,25 @@ def pacing():
         return json.load(f)
 
 
+def _sheet_dirs():
+    # a game's own sheets (EVFX_KITS) first, then this repo's
+    return [os.path.join(d, "sheets") for d in core.kit_dirs()] + [SHEETS]
+
+
 def sheet(preset):
-    path = os.path.join(SHEETS, preset + ".json")
-    if not os.path.exists(path):
+    path = next((p for p in (os.path.join(d, preset + ".json") for d in _sheet_dirs()) if os.path.exists(p)), "")
+    if not path:
         raise SystemExit(f"evfx: no beat sheet for {preset} (tools/evfx/sheets/{preset}.json)")
     with open(path, encoding="utf-8") as f:
         return json.load(f)
 
 
 def sheets():
-    return sorted(name[:-5] for name in os.listdir(SHEETS) if name.endswith(".json"))
+    names = set()
+    for d in _sheet_dirs():
+        if os.path.isdir(d):
+            names.update(name[:-5] for name in os.listdir(d) if name.endswith(".json"))
+    return sorted(names)
 
 
 def only(timeline, names):
@@ -72,7 +81,8 @@ def only(timeline, names):
         **timeline,
         "frames": frames,
         "bursts": [b for b in timeline["bursts"] if b["name"] in keep],
-        "emitters": [e for e in timeline["emitters"] if e.get("name") in keep],
+        # streams point at emitters by position, so the others stay in the list, switched off
+        "emitters": [e if e.get("name") in keep else {**e, "rate": 0} for e in timeline["emitters"]],
     }
 
 
@@ -103,11 +113,20 @@ def _short(asset):
 
 
 def layers(timeline):
-    """Every layer the timeline shows, by name: bursts by emitter name, shells by mesh.
-    Each is {first, last, rate}: the frames it is live and how many times a second its
-    picture changes (a one-shot flipbook's frames over its life, or a shell's frames)."""
+    """Every layer the timeline shows, by name: bursts and streaming emitters by emitter name,
+    shells by mesh. Each is {first, last, rate}: the frames it is live and how many times a
+    second its picture changes (a one-shot flipbook's frames over its life, or a shell's frames)."""
     ft = timeline["frameTime"]
     out = {}
+    emitters = timeline.get("emitters", [])
+    for k, frame in enumerate(timeline["frames"]):
+        for stream in frame.get("streams", []):
+            e = emitters[stream["emitter"] - 1] if 0 < stream["emitter"] <= len(emitters) else None
+            if not e or e.get("rate", 0) <= 0 or not e.get("name"):
+                continue
+            row = out.setdefault(e["name"], {"first": k, "last": k, "rate": 0.0})
+            row["first"] = min(row["first"], k)
+            row["last"] = max(row["last"], k + int(round(max(e["lifetime"]) / ft)))
     for b in timeline["bursts"]:
         life = max(b["lifetime"])
         row = out.setdefault(b["name"], {"first": b["frame"], "last": 0, "rate": 0.0})
@@ -138,6 +157,34 @@ def shake_frames(timeline):
     return [k for k in range(1, len(frames)) if frames[k]["camera"] != frames[k - 1]["camera"]]
 
 
+def kit_groups(preset):
+    """For an effect built from a layer kit (Presets.Kits), each kit layer's particle names
+    across its variants, so a sheet can list kit layers ("FireLoop") while the timeline names their
+    parts ("ContinuousFlame", "FlameCore"): {layer: {"names": [...], "measured": bool}}. `measured` is
+    False for a layer with no particles (a light, a beam shape), which the judge cannot see.
+    None when no kit builds the preset."""
+    try:
+        from . import serve
+
+        data = serve.kits()
+    except Exception:  # noqa: BLE001 (no Lune, or the kits script failed: judge by names alone)
+        return None
+    for kit in data.values():
+        if kit.get("preset") != preset:
+            continue
+        out = {}
+        for layer in kit["layers"]:
+            names, measured = set(), False
+            for v in layer["variants"].values():
+                for part in v["layers"]:
+                    if part.get("name"):
+                        names.add(part["name"])
+                    measured = measured or part.get("type") == "particles"
+            out[layer["name"]] = {"names": sorted(names), "measured": measured}
+        return out
+    return None
+
+
 def _names(layer_map):
     return [name for depth in DEPTHS for name in layer_map.get(depth, [])]
 
@@ -155,8 +202,9 @@ def _finding(sev, frame, beat, rule, said, fix):
     return {"sev": sev, "frame": int(frame), "beat": beat, "rule": rule, "said": said, "fix": fix}
 
 
-def judge(spec, timeline, rules=None):
-    """Every finding for one effect, most severe first, then by frame."""
+def judge(spec, timeline, rules=None, groups=None):
+    """Every finding for one effect, most severe first, then by frame. `groups` (kit_groups)
+    lets the sheet name kit layers: each stands for its parts in the timeline."""
     rules = rules or pacing()
     timeline = core.extend(timeline)
     fps = round(1 / timeline["frameTime"])
@@ -173,19 +221,26 @@ def judge(spec, timeline, rules=None):
     def window(b):
         return max(0, b["from"]), min(n - 1, max(b["to"], b["from"]))
 
+    def parts(layer):
+        return groups[layer]["names"] if groups and layer in groups else [layer]
+
     listed = set()
     for b in beats:
         a, z = window(b)
         name = b["name"]
         names = _names(b.get("layers", {}))
-        own = curves(only(timeline, names), range(a - 6, z + max(30, z - a) + 1)) if names else c
+        expanded = [p for layer in names for p in parts(layer)]
+        own = curves(only(timeline, expanded), range(a - 6, z + max(30, z - a) + 1)) if expanded else c
         b["_curves"] = own
         st = refs.stats(own, a, z, b.get("flash", False))
         b["_stats"] = st
         bwhite = np.array(own["white"])
         firsts = []
         for layer in names:
-            row = live.get(layer)
+            rows = [live[p] for p in parts(layer) if p in live]
+            row = {"first": min(r["first"] for r in rows), "last": max(r["last"] for r in rows)} if rows else None
+            if row is None and groups and layer in groups and not groups[layer]["measured"]:
+                continue
             if row is None:
                 out.append(_finding(2, a, name, "layers", f"layer {layer} is not in the effect", f"add {layer} or fix its name in the sheet"))
             elif row["last"] < b["from"] - rules["onsetTolerance"] or row["first"] > b["to"] + rules["onsetTolerance"]:
@@ -193,6 +248,7 @@ def judge(spec, timeline, rules=None):
             elif layer not in listed:
                 firsts.append(row["first"])
         listed.update(names)
+        listed.update(expanded)
         if np.array(own["coverage"])[a : z + 1].max(initial=0) <= rules["alive"]:
             out.append(_finding(3, b["from"], name, "present", f"nothing on screen in f{b['from']}-{b['to']}", "build the beat or move its layers' Delay into the window"))
             continue

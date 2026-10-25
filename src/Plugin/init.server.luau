@@ -21,6 +21,24 @@ if not RunService:IsEdit() then
 end
 
 local Presets = require(script.Shared.Presets)
+-- a game's own effects, kept in its own repo (Presets.register): each ModuleScript in
+-- ServerStorage.EasyVFX_Kits returns function(lib) -> { kits, presets }. Loaded before the
+-- panel reads the preset list; one that fails is skipped with a warning
+do
+	local folder = game:GetService("ServerStorage"):FindFirstChild("EasyVFX_Kits")
+	if folder then
+		for _, module in folder:GetChildren() do
+			if module:IsA("ModuleScript") then
+				local ok, err = pcall(function()
+					Presets.register((require :: any)(module)(Presets.Library))
+				end)
+				if not ok then
+					warn(`EasyVFX: kit {module.Name} failed to load: {err}`)
+				end
+			end
+		end
+	end
+end
 local Builder = require(script.Shared.Builder)
 local Custom = require(script.Shared.Custom)
 local DefaultAssets = require(script.Shared.DefaultAssets)

@@ -104,8 +104,8 @@
       "role": "ground",
       "upload": true,
       "rgb": "ramp",
-      "sha256": "197f30bc835898670ca6e0e5f49bca828b7ec016b8bea22eedb226d9a16d290c",
-      "use": "glowing ground cracks under a fire: Voronoi cells growing outward, hot at the centre (additive decal or flat particle, white tint)"
+      "sha256": "1b170d46aa38ba305b482925d94b9ccd1f671ff69988b1641b45a3046453c654",
+      "use": "glowing ground cracks under a fire: Voronoi cells growing outward, hot at the centre, reaching half way out (Ph\u00e1t: a smaller patch, cells the same size) (additive decal or flat particle, white tint)"
     },
     "art_ground_flame": {
       "id": "art/ground_flame",
@@ -136,6 +136,21 @@
       "rgb": "white",
       "sha256": "2ab5b6c1750b4f3a3274a8c2c87d26503ceafbd45b2ba36f590c9b3627dd9c05",
       "use": "frost ground sigil (decal or flat particle)"
+    },
+    "art_ground_scorch": {
+      "id": "art/ground_scorch",
+      "kind": "decal",
+      "size": [
+        1024,
+        1024
+      ],
+      "grid": 1,
+      "frames": 1,
+      "role": "dark",
+      "upload": true,
+      "rgb": "white",
+      "sha256": "732e3688d959013a4d35d9f9bf236376a861109f1771219a650d86bbea7ca7c6",
+      "use": "the scorch on the floor: a dark ragged disc with dark spikes radiating out (flat, normal blend, tint dark)"
     },
     "art_ground_storm": {
       "id": "art/ground_storm",
@@ -182,6 +197,51 @@
       "sha256": "f281650c3276566fd76cb7b0d60efe4de968a7651e081e7963f2670fe506fc63",
       "use": "cel-style outlined petals and shards"
     },
+    "art_plate_cracks": {
+      "id": "art/plate_cracks",
+      "kind": "decal",
+      "size": [
+        1024,
+        1024
+      ],
+      "grid": 1,
+      "frames": 1,
+      "role": "ground",
+      "upload": true,
+      "rgb": "ramp",
+      "sha256": "cc2587f7197b71dacfaaa10fe7033f69ea3bba07f4636139b146e11aa17cab69",
+      "use": "lava-plate ground cracks under a fire, laid out from the impact: small plates at the middle, long cracks running out to large plates at the rim, weaker rings between, seams thick and hot at the middle thinning to red tips (Ph\u00e1t's pick C, after the fire pit reference) (additive decal or flat particle, white tint)"
+    },
+    "art_scorch_rays": {
+      "id": "art/scorch_rays",
+      "kind": "decal",
+      "size": [
+        1024,
+        1024
+      ],
+      "grid": 1,
+      "frames": 1,
+      "role": "dark",
+      "upload": true,
+      "rgb": "white",
+      "sha256": "18af2a20a114fa0112a643af9bd686041c22b69b711a235caa62210608ae2738",
+      "use": "the scorch under the fire pit's cracks: art/scorch_smudge's soft dark blot with long soot rays of uneven length that smudge and fade toward their tips, like the reference's black streaks (Ph\u00e1t: A + B) (a decal, normal blend, tinted black)"
+    },
+    "art_scorch_smudge": {
+      "id": "art/scorch_smudge",
+      "kind": "decal",
+      "size": [
+        1024,
+        1024
+      ],
+      "grid": 1,
+      "frames": 1,
+      "role": "dark",
+      "upload": true,
+      "rgb": "white",
+      "sha256": "f066feaa64266cc441c1ab6f2e350c1a89a481468deeeb037bc4a4b482069661",
+      "use": "the smooth scorch under the fire pit's cracks: a soft dark blot with long smudged rays (a decal, normal blend, tinted near-black; Ph\u00e1t picked it over the spiky art/ground_scorch)"
+    },
     "art_sigil_ornate": {
       "id": "art/sigil_ornate",
       "kind": "shape",
@@ -211,6 +271,21 @@
       "rgb": "white",
       "sha256": "27d3d1a19060b1035fd3f77c8965ea8f67db8088660b503400d0e67a1b355307",
       "use": "a magic circle with rune glyphs"
+    },
+    "beam_flame_spire": {
+      "id": "beam/flame_spire",
+      "kind": "beam",
+      "size": [
+        512,
+        512
+      ],
+      "grid": 1,
+      "frames": 1,
+      "role": "base",
+      "upload": true,
+      "rgb": "ramp",
+      "sha256": "b8abde25147fbb05a27ba42c222d10731648dfe52482397b9110b8770ec22527",
+      "use": "one flame jet for a Beam, traced from the fire pit's left jet (f8, unwarped): a flat base at the left edge, two peaks pointing right and a small tip on one flank, in two tones (a red-orange edge, a cream core) (TextureMode Stretch, TextureLength 1, Attachment0 at the base); it flashes in, narrows and stretches out on the Beam's properties"
     },
     "flip_burst_dissolve": {
       "id": "flip/burst_dissolve",
@@ -242,6 +317,141 @@
       "sha256": "daa8835b601e4c963627b4dd29ac4a37209ccb20908de2f41ef17f87bad8d1e6",
       "use": "a ground dust ring from above (OneShot, flat, normal blend)"
     },
+    "flip_flame_lick": {
+      "id": "flip/flame_lick",
+      "kind": "flipbook",
+      "size": [
+        1024,
+        1024
+      ],
+      "grid": 4,
+      "frames": 16,
+      "role": "base",
+      "upload": true,
+      "rgb": "ramp",
+      "sha256": "2966e0660aef4e3a266b7743b15e7b0f1ccbe8c269cb40de1e3a9ebacd20de89",
+      "use": "one stylized flame tongue, start to end: it flares, breaks off, thins and dies (OneShot). Many, rising out of one core flame, make a fire's volume"
+    },
+    "flip_flame_lick_base": {
+      "id": "flip/flame_lick_base",
+      "kind": "flipbook",
+      "size": [
+        1024,
+        1024
+      ],
+      "grid": 4,
+      "frames": 16,
+      "role": "base",
+      "upload": true,
+      "rgb": "ramp",
+      "sha256": "80ec4536cea887dade960caf1f334ed9cbecf9a62d3ea706e3c1b37222c06c04",
+      "use": "the lick drawn in each cell's top half, so the billboard pivots on its base: emit it from the floor at twice the lick's height (OneShot)"
+    },
+    "flip_flame_lick_ink": {
+      "id": "flip/flame_lick_ink",
+      "kind": "flipbook",
+      "size": [
+        1024,
+        1024
+      ],
+      "grid": 4,
+      "frames": 16,
+      "role": "base",
+      "upload": true,
+      "rgb": "ramp",
+      "sha256": "9cf932bb50ea0fac80b48cd24b9d5b8e54fc430e6717e4f06cf899fd7ff20b3b",
+      "use": "the same lick with the dark-red ink line (OneShot)"
+    },
+    "flip_flame_lumpy": {
+      "id": "flip/flame_lumpy",
+      "kind": "flipbook",
+      "size": [
+        1024,
+        1024
+      ],
+      "grid": 4,
+      "frames": 16,
+      "role": "base",
+      "upload": true,
+      "rgb": "white",
+      "sha256": "5658e65221949e30a4421b5e971cbd1c0451a092611d9fded1c61d8b0da64794",
+      "use": "the flame with rounded lumps instead of spikes, one white tone (alpha follows the heat) for the particle to colour, its base faded out: for the splash, many of them flung out of the spot at once so the burst reads as volume (Loop)"
+    },
+    "flip_flame_seated": {
+      "id": "flip/flame_seated",
+      "kind": "flipbook",
+      "size": [
+        1024,
+        1024
+      ],
+      "grid": 4,
+      "frames": 16,
+      "role": "base",
+      "upload": true,
+      "rgb": "ramp",
+      "sha256": "c556cc36e4679e27a40a5a924df33b752dd9c38d2b7f22285c24e5cd762bfb3a",
+      "use": "the stepped flame on a clean base (ref 013): hottest at the bottom with no rim, fading softly into a contact glow on the floor; drawn in each cell's top half so the billboard pivots on its base: place the particle on the floor at twice the flame's height; draw it as light (Loop, 12 fps, white tint)"
+    },
+    "flip_flame_seated_out": {
+      "id": "flip/flame_seated_out",
+      "kind": "flipbook",
+      "size": [
+        1024,
+        1024
+      ],
+      "grid": 4,
+      "frames": 16,
+      "role": "base",
+      "upload": true,
+      "rgb": "ramp",
+      "sha256": "de6d2a5046a2cdcd07e5b25abbb705108515a98135a8ed2a60497333a30745f1",
+      "use": "flip/flame_seated burning out, top down: the heat falls, the tips go first and the base last (OneShot at 18 fps, 0.89 s). It starts on the loop's frame 15, so it takes over from a loop that began 15/18 s earlier without a jump; the tongues get shorter and softer as it dies"
+    },
+    "flip_flame_seated_out_single": {
+      "id": "flip/flame_seated_out_single",
+      "kind": "flipbook",
+      "size": [
+        1024,
+        1024
+      ],
+      "grid": 4,
+      "frames": 16,
+      "role": "base",
+      "upload": true,
+      "rgb": "white",
+      "sha256": "a2603ad53524903566b994f62e8e10edceb4f23b942b585820d6b8d2c43eb9f6",
+      "use": "flip/flame_seated_out in one white tone, the single-tone flames' burn-out (OneShot)"
+    },
+    "flip_flame_seated_single": {
+      "id": "flip/flame_seated_single",
+      "kind": "flipbook",
+      "size": [
+        1024,
+        1024
+      ],
+      "grid": 4,
+      "frames": 16,
+      "role": "base",
+      "upload": true,
+      "rgb": "white",
+      "sha256": "dce066510bdb3c94307ac05f2a9162a6fa3f89df6d7e3b3cbacfa110eb5928e5",
+      "use": "flip/flame_seated in one white tone (its alpha follows the heat), coloured by the particle: several spread round the core make the burning fire (Loop)"
+    },
+    "flip_flame_strands": {
+      "id": "flip/flame_strands",
+      "kind": "flipbook",
+      "size": [
+        1024,
+        1024
+      ],
+      "grid": 4,
+      "frames": 16,
+      "role": "base",
+      "upload": true,
+      "rgb": "ramp",
+      "sha256": "0582f9ef6740ccb3235592a8c2623619ec6e77ccae55bf76dcb77187b36c1793",
+      "use": "the stepped flame's tongues alone, standing strands with no body under them: for the splash, flung with the lumps (Loop)"
+    },
     "flip_flame_stylized": {
       "id": "flip/flame_stylized",
       "kind": "flipbook",
@@ -254,8 +464,23 @@
       "role": "base",
       "upload": true,
       "rgb": "ramp",
-      "sha256": "a217e4bab3c42c69f228fdfc545ccfb47cd931e8f1b4c36a93625f13b739a4bb",
+      "sha256": "a8e4f6d64d531224b4d0b5dac7176fd73a8a533bce845ba5ffff440c79ef0035",
       "use": "a looping stylized flame in three hard bands on a solid base, tapered tips, stepped on twos (Loop, 12 fps, white tint)"
+    },
+    "flip_flame_stylized_hot": {
+      "id": "flip/flame_stylized_hot",
+      "kind": "flipbook",
+      "size": [
+        1024,
+        1024
+      ],
+      "grid": 4,
+      "frames": 16,
+      "role": "base",
+      "upload": true,
+      "rgb": "ramp",
+      "sha256": "35dd4c596ddd1df61a8179045066e1fdea1a035d33212d6ce49ffa48017c1940",
+      "use": "the stepped flame on a hotter rounded base: the cream core fills the bowl (Loop, 12 fps, white tint)"
     },
     "flip_flame_stylized_ink": {
       "id": "flip/flame_stylized_ink",
@@ -269,7 +494,7 @@
       "role": "base",
       "upload": true,
       "rgb": "ramp",
-      "sha256": "5c2b4606501125f12e7190a62ab387ba040a5db94130b28a2397d777e783c42e",
+      "sha256": "674641b54db41527e34b22442863b8d8e069100a6a6877969a2c041f9529f03d",
       "use": "the stepped flame with a thin dark-red ink outline, the hand-drawn look (Loop, 12 fps, white tint)"
     },
     "flip_flame_stylized_smooth": {
@@ -284,7 +509,7 @@
       "role": "base",
       "upload": true,
       "rgb": "ramp",
-      "sha256": "3b2960302b26cdddc92b939ddb09e762ed9518e19dfbd52b4f6c5e0c70473b9c",
+      "sha256": "354310d4cc4b311c21ecf80c86971ee9182a988338402cb83fba54433b872d10",
       "use": "the same flame with every sim frame (Loop, 24-48 fps)"
     },
     "flip_flame_tongue": {
@@ -317,6 +542,21 @@
       "sha256": "b979e1a54db4beb009edc4898e0cf688d0b49911ad99ae5dc6416f4a05658d92",
       "use": "the same cracks spreading out from the centre with a hot leading edge, then holding (OneShot, about 0.5 s, then swap to art/ground_cracks)"
     },
+    "flip_plate_cracks_reveal": {
+      "id": "flip/plate_cracks_reveal",
+      "kind": "flipbook",
+      "size": [
+        1024,
+        1024
+      ],
+      "grid": 2,
+      "frames": 4,
+      "role": "ground",
+      "upload": true,
+      "rgb": "ramp",
+      "sha256": "0663faaae0337cb3195946f8cc30c25f59999ea7f3cd16993d834bd872996e65",
+      "use": "art/plate_cracks running out from the impact along their seams, hot at the front, in 4 frames (OneShot, then swap to art/plate_cracks)"
+    },
     "flip_shock_ring": {
       "id": "flip/shock_ring",
       "kind": "flipbook",
@@ -347,6 +587,36 @@
       "sha256": "97a1a9394ad95ca3a0a1f3229faad99d98dfcfc042bd0d79f6d9715f07217c7c",
       "use": "a crescent slash eroding from its tail (OneShot, VelocityPerpendicular, Emit 4)"
     },
+    "flip_smoke_ball": {
+      "id": "flip/smoke_ball",
+      "kind": "flipbook",
+      "size": [
+        1024,
+        1024
+      ],
+      "grid": 4,
+      "frames": 16,
+      "role": "volume",
+      "upload": true,
+      "rgb": "luma",
+      "sha256": "669704c6cdc225ee19c4e3a3c49feca65b7571f67e964a60f1ae496c570de3bf",
+      "use": "one cel-shaded smoke ball that swells and breaks up; emit many, overlapping and unrotated, for a smoke volume (OneShot, normal blend)"
+    },
+    "flip_smoke_ball_soft": {
+      "id": "flip/smoke_ball_soft",
+      "kind": "flipbook",
+      "size": [
+        1024,
+        1024
+      ],
+      "grid": 4,
+      "frames": 16,
+      "role": "volume",
+      "upload": true,
+      "rgb": "luma",
+      "sha256": "f0e2bf97eb994f85ece1a38549f4aca29610ac8db3a1f13daf7b0693013f1ee0",
+      "use": "the smoke ball between cel and realistic: two tones with a soft edge and a wispy, see-through body (OneShot, normal blend, emit many overlapping)"
+    },
     "flip_smoke_cel": {
       "id": "flip/smoke_cel",
       "kind": "flipbook",
@@ -376,6 +646,21 @@
       "rgb": "white",
       "sha256": "14fab4d6bb64a4d05ea507cbf8df0ab77928d1f29fba540c7ac60a05d3cb0e9e",
       "use": "domain-warped smoke, normal blend (OneShot)"
+    },
+    "flip_smoke_tongue": {
+      "id": "flip/smoke_tongue",
+      "kind": "flipbook",
+      "size": [
+        1024,
+        1024
+      ],
+      "grid": 4,
+      "frames": 16,
+      "role": "volume",
+      "upload": true,
+      "rgb": "luma",
+      "sha256": "a513b3b7e0c921148a4ca45cc3e82f7e14a490bb56771d51e5e0b4835cd1075d",
+      "use": "black smoke tongues (the fire pit's f16-25): the lick's torn, crisp-edged silhouette in two grey tones; tint near black, see-through, normal blend (OneShot)"
     },
     "seq_slash_ribbon_00": {
       "id": "seq/slash_ribbon",
@@ -753,6 +1038,21 @@
       "sha256": "d6755da54e38eaf599deb5e79ed00145d6b84d86152fb467f02f46cea4edda69",
       "use": "orbit rings around a sigil"
     },
+    "shape_hot_spot": {
+      "id": "shape/hot_spot",
+      "kind": "shape",
+      "size": [
+        256,
+        256
+      ],
+      "grid": 1,
+      "frames": 1,
+      "role": "glow",
+      "upload": true,
+      "rgb": "ramp",
+      "sha256": "74ed6d220cf76d28d58e4829011bc817c2c15acbc16c6ae2e1cbc583b11ca3e8",
+      "use": "the hot spot under a fire: a soft disc, cream-yellow in the middle, orange, red at its round edge (flat, as light, white tint)"
+    },
     "shape_impact_spikes": {
       "id": "shape/impact_spikes",
       "kind": "shape",
@@ -783,6 +1083,21 @@
       "sha256": "02ce3502e04afb2eff696e7761905d5a084731346544d44ec9bad1be0d28f6f4",
       "use": "the black ink slash accent (normal blend, tinted black)"
     },
+    "shape_mold_fire_hook": {
+      "id": "shape/mold_fire_hook",
+      "kind": "shape",
+      "size": [
+        512,
+        512
+      ],
+      "grid": 1,
+      "frames": 1,
+      "role": "base",
+      "upload": true,
+      "rgb": "white",
+      "sha256": "54265a47c5bfa2cbe390aa4255077e0879ec8044b3398423f70a21c5c813dc40",
+      "use": "molded by hand in the mold page (tools/texgen/molds/fire_hook.json), shaded in code"
+    },
     "shape_saw_ring": {
       "id": "shape/saw_ring",
       "kind": "shape",
@@ -797,6 +1112,66 @@
       "rgb": "white",
       "sha256": "0a48cd3637268d302b3418f08869f0f06a75177985a657c34039daa4c5ef93ac",
       "use": "ring of outward shards: a sharp circle impact"
+    },
+    "shape_shard_burst": {
+      "id": "shape/shard_burst",
+      "kind": "shape",
+      "size": [
+        512,
+        512
+      ],
+      "grid": 1,
+      "frames": 1,
+      "role": "shards",
+      "upload": true,
+      "rgb": "white",
+      "sha256": "8602476c6fbeef964c2474596bb02677934a35740c2fe874e8dc32b10c91c06f",
+      "use": "the fire pit's shard ring: thorns scattered on a ring, merged where close and smeared outward (thorn_burst, after VFX_Haku's Substance graph), brightest in each piece's middle, only its top half, centred on the floor; it holds its shape, swells a little, brightens and fades"
+    },
+    "shape_shard_fur": {
+      "id": "shape/shard_fur",
+      "kind": "shape",
+      "size": [
+        512,
+        512
+      ],
+      "grid": 1,
+      "frames": 1,
+      "role": "shards",
+      "upload": true,
+      "rgb": "ramp",
+      "sha256": "2fbb0da4b5340c0e50e2348131ac1f5a7aafc9a82b80f50ac5e1f2094e66e5d4",
+      "use": "the fire pit's shard ring: a fur burst of flame streaks (streak_ring), only its top half, centred on the floor; it holds its shape, swells a little, brightens and fades"
+    },
+    "shape_soft_glow": {
+      "id": "shape/soft_glow",
+      "kind": "shape",
+      "size": [
+        256,
+        256
+      ],
+      "grid": 1,
+      "frames": 1,
+      "role": "glow",
+      "upload": true,
+      "rgb": "white",
+      "sha256": "33bb19917585a13282b8dc687a1f5913087dcbf4b825b1cfee59b2f919295a81",
+      "use": "a plain soft disc of light: contact glows on the floor, halos behind hot shapes"
+    },
+    "shape_soft_pool": {
+      "id": "shape/soft_pool",
+      "kind": "shape",
+      "size": [
+        256,
+        256
+      ],
+      "grid": 1,
+      "frames": 1,
+      "role": "glow",
+      "upload": true,
+      "rgb": "white",
+      "sha256": "366ebf38bdf4eb873bcd16eedbbc901caf2c701ff2d10a56dfa65c0d886e8557",
+      "use": "a wide, flat pool of light with no hot spot: the contact glow under a flame, wider than its base"
     },
     "shape_star8": {
       "id": "shape/star8",
@@ -887,6 +1262,51 @@
       "rgb": "white",
       "sha256": "9565d68f248cadbe41616ba69372b69674107df79317c4cccdf38c9181ed183c",
       "use": "hot fragments, one random variant per particle"
+    },
+    "sheet_flame_jet": {
+      "id": "sheet/flame_jet",
+      "kind": "sheet",
+      "size": [
+        1024,
+        1024
+      ],
+      "grid": 2,
+      "frames": 4,
+      "role": "base",
+      "upload": true,
+      "rgb": "ramp",
+      "sha256": "6a4f5601ddcaa48326968eb309381b2b460b3f2b67a99efcfc31fc7d68563ae5",
+      "use": "four flame jets for an ignition: tapered, three bands, a few hooks swept back; each drawn in its cell's top half, base on the centre line, so a still particle on the spot pivots on the jet's base (VelocityParallel)"
+    },
+    "sheet_flame_ribbons": {
+      "id": "sheet/flame_ribbons",
+      "kind": "sheet",
+      "size": [
+        1024,
+        1024
+      ],
+      "grid": 4,
+      "frames": 16,
+      "role": "base",
+      "upload": true,
+      "rgb": "white",
+      "sha256": "b840dac41e7f392e40bda44b03cd46378259880178d119bcb6172fe4fb12eacf",
+      "use": "16 thin ribbons of flame peeling up off a fire, tapered at both ends with a gentle S, one white tone for the particle to colour (the fire pit's f16-30 licks)"
+    },
+    "sheet_flame_shards": {
+      "id": "sheet/flame_shards",
+      "kind": "sheet",
+      "size": [
+        1024,
+        1024
+      ],
+      "grid": 4,
+      "frames": 16,
+      "role": "shards",
+      "upload": true,
+      "rgb": "ramp",
+      "sha256": "1b2e361fba9d4775ef3731d6a6ece7d668226f5902be0c1585847dd6af046c0c",
+      "use": "16 spiky flame shards, jagged like flame-coloured lightning, pointing up the cell (VelocityParallel)"
     },
     "sheet_grass": {
       "id": "sheet/grass",

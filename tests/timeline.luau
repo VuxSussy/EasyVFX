@@ -18,6 +18,7 @@ H.install()
 
 local Builder = H.require("Shared/Builder")
 local Presets = H.require("Shared/Presets")
+H.loadKits(Presets)
 local DefaultAssets = H.require("Shared/DefaultAssets")
 local EasyVFX = H.require("Runtime/EasyVFX")
 
@@ -135,6 +136,7 @@ local function emitterInfo(e: ParticleEmitter)
 		flipbook = enumName(e.FlipbookLayout),
 		flipMode = enumName(e.FlipbookMode),
 		flipFramerate = { e.FlipbookFramerate.Min, e.FlipbookFramerate.Max },
+		flipRandom = e.FlipbookStartRandom,
 		size = numSeq(e.Size),
 		squash = numSeq(e.Squash),
 		transparency = numSeq(e.Transparency),
@@ -336,6 +338,8 @@ local function record(preset)
 	if loop then
 		EasyVFX.SetEnabled(root, true)
 	end
+	-- the same random every recording, so a kit layer alone matches it inside its effect
+	root:SetAttribute("VFX_Seed", 1)
 	EasyVFX.PlayLocal(root)
 	local emitters, frames = {}, {}
 	local limit = math.floor((if loop then LOOP_SECONDS else MAX_SECONDS) / H.FRAME + 0.5)
@@ -358,7 +362,7 @@ local function record(preset)
 				emitted += 1
 			end
 		end
-		if not loop and busy == 0 and leftover() == 0 and emitted == 0 and next(steps) == nil then
+		if not loop and busy == 0 and leftover() == 0 and emitted == 0 and next(steps) == nil and EasyVFX.Pending() == 0 then
 			quiet += 1
 			done = quiet >= 3
 		else
@@ -423,7 +427,36 @@ H.setMode("client")
 H.lockstep = true
 fs.writeDir(outDir)
 local count = 0
-for _, preset in Presets.List do
+-- Layer kits (Presets.Kits): "kit__<kit>__<layer>__<variant>" plays one variant alone and
+-- "kit__<kit>__<layer>__<variant>__in" plays the kit's preset with that variant swapped in;
+-- the studio renders both. They exist only here, for evfx.
+-- EVFX_KIT_PICKS ({"campfire": {"FireLoop": "A"}}) holds the studio's picks so far, so a variant is
+-- seen inside the effect as it stands
+local studioPicks = {}
+local picksEnv = process.env.EVFX_KIT_PICKS
+if picksEnv and picksEnv ~= "" then
+	studioPicks = serde.decode("json", picksEnv)
+end
+local playList = table.clone(Presets.List)
+for id in only or {} do
+	local kitName, layerName, variant, inPreset = id:match("^kit__([%w_]-)__([%w]+)__([%w]+)(.*)$")
+	local kit = kitName and Presets.Kits[kitName]
+	if kit and kit.layers[layerName] and kit.layers[layerName][variant] then
+		local base = Presets.ById[kit.preset]
+		local picks = table.clone(studioPicks[kitName] or {})
+		picks[layerName] = variant
+		local layers = if inPreset == "__in"
+			then Presets.kitLayers(kit, picks)
+			else table.clone(kit.layers[layerName][variant].layers)
+		local preset = table.clone(base)
+		preset.id = id
+		preset.layers = layers
+		table.insert(playList, preset)
+		Presets.ById[id] = preset
+	end
+end
+
+for _, preset in playList do
 	if not only or (only :: any)[preset.id] then
 		local ok, result = pcall(record, preset)
 		if ok then

@@ -29,6 +29,10 @@ a.fx small { display: block; font: 12px var(--mono); color: var(--dim); margin-t
   <h1>EasyVFX <span>Studio</span></h1>
   <p>Pick an effect to see it loop, read its layers in the VFX grammar's numbers, and tune its knobs. Keep or drop what you render: picks are saved in <code>tools/evfx/picks</code> and set the grammar's ranges.</p>
   <ul id="list"></ul>
+  <p>Layer kits: pick one layer at a time, each variant seen alone and inside the effect.</p>
+  <ul id="kits"></ul>
+  <p>Textures by hand: push a shape around like Photoshop's Liquify, and texgen shades and builds it.</p>
+  <ul><li><a class="fx" href="/mold">Mold a texture<small>liquify, then shade</small></a></li></ul>
 </main>
 <script>
 const DATA = /*DATA*/null;
@@ -39,6 +43,14 @@ for (const name of DATA.effects) {
   a.className = "fx"; a.href = "/fx/" + name; a.textContent = name;
   const s = document.createElement("small"); s.textContent = "beat sheet, grammar, knobs";
   a.append(s); li.append(a); list.append(li);
+}
+const kits = document.getElementById("kits");
+for (const name of DATA.kits || []) {
+  const li = document.createElement("li");
+  const a = document.createElement("a");
+  a.className = "fx"; a.href = "/kit/" + name; a.textContent = name;
+  const s = document.createElement("small"); s.textContent = "layer kit: pick per layer";
+  a.append(s); li.append(a); kits.append(li);
 }
 </script>
 </body>

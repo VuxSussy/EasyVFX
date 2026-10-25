@@ -15,14 +15,22 @@ from PIL import Image, ImageDraw, ImageFilter
 
 from . import core
 
-BACK_TOP = np.array([0.075, 0.085, 0.105], np.float32)
-BACK_BOTTOM = np.array([0.11, 0.12, 0.14], np.float32)
-FLOOR_LINE = np.array([0.2, 0.22, 0.26], np.float32)
+# a dim grey stage, so the effect's own light is what shows it (Phát, 2026-10-24): a grey wall,
+# and a grey floor lit by a low ambient plus every PointLight the effect carries
+BACK_TOP = np.array([0.105, 0.105, 0.11], np.float32)
+BACK_BOTTOM = np.array([0.15, 0.15, 0.155], np.float32)
+FLOOR_LINE = np.array([0.26, 0.26, 0.27], np.float32)
+FLOOR_ALBEDO = np.array([0.5, 0.5, 0.5], np.float32)
+AMBIENT = 0.3
+LIGHT_GAIN = 0.55
 BODY = np.array([0.36, 0.38, 0.42], np.float32)
 BLOOM = 0.55
 TEXTURE_SIZE = 128
 
 _textures = {}
+_colours = {}
+# pack textures read from an image on disk (not stood in for by a procedural shape)
+_images = set()
 
 
 def _procedural(kind):
@@ -60,36 +68,59 @@ BUILT_IN = {
 }
 
 
-def texture(name):
-    """The texture's mask (0..1 floats). Pack images are read from disk (uploaded ones in
-    pack/textures, library v4 in pack/generated, CC0 packs in pack/cc0); Roblox's built-in ones are stood in
-    for by simple shapes."""
-    if name in _textures:
-        return _textures[name]
-    mask = None
-    if name.startswith("pack://"):
-        path = os.path.join(core.PACK, name[7:] + ".png")
-        if not os.path.exists(path):
-            path = os.path.join(core.GENERATED, name[7:] + ".png")
-        if not os.path.exists(path):
-            path = os.path.join(core.CC0, name[7:] + ".png")
+def _texture_path(name):
+    """Where a pack texture's PNG is, or None: uploaded ones in pack/textures, library v4 in
+    pack/generated, CC0 packs in pack/cc0."""
+    if not name.startswith("pack://"):
+        return None
+    for folder in (core.PACK, core.GENERATED, core.CC0):
+        path = os.path.join(folder, name[7:] + ".png")
         if os.path.exists(path):
-            img = Image.open(path).convert("RGBA")
-            rgba = np.asarray(img, np.float32) / 255.0
-            lum = rgba[..., :3].max(axis=2)
+            return path
+    return None
+
+
+def texture(name):
+    """The texture's mask (0..1 floats). Pack images are read from disk; Roblox's built-in ones are
+    stood in for by simple shapes. A pack image is read again when its file changes, so a
+    long-running studio never draws a texture texgen has since rebuilt."""
+    path = _texture_path(name)
+    stamp = (os.stat(path).st_mtime_ns, os.stat(path).st_size) if path else None
+    if name in _textures and _textures[name][0] == stamp:
+        return _textures[name][1]
+    mask = None
+    _colours.pop(name, None)
+    if path:
+        _images.add(name)
+        img = Image.open(path).convert("RGBA")
+        rgba = np.asarray(img, np.float32) / 255.0
+        rgb = rgba[..., :3]
+        if np.abs(rgb - rgb.mean(axis=2, keepdims=True)).max() > 2 / 255:
+            # a baked palette (texgen "ramp", a coloured CC0 sheet): Roblox multiplies the
+            # texture's colour by the particle's, so keep it and use alpha alone as the mask
+            _colours[name] = rgb
+            mask = rgba[..., 3]
+        else:
+            lum = rgb.max(axis=2)
             mask = lum * rgba[..., 3]
     if mask is None:
         low = name.lower()
         kind = next((v for k, v in BUILT_IN.items() if k in low), "glow" if name else "square")
         mask = _procedural(kind)
-    _textures[name] = mask
+    _textures[name] = (stamp, mask)
     return mask
+
+
+def texture_colour(name):
+    """A coloured texture's RGB (0..1 floats), or None when it is white or grey."""
+    texture(name)
+    return _colours.get(name)
 
 
 def _cell(mask, grid, cell):
     if grid <= 1:
         return mask
-    h, w = mask.shape
+    h, w = mask.shape[:2]
     r, c = divmod(cell, grid)
     return mask[r * h // grid : (r + 1) * h // grid, c * w // grid : (c + 1) * w // grid]
 
@@ -109,19 +140,19 @@ def _coeffs(dest, src):
 
 
 def _warp(mask, quad, w, h):
-    """Draws `mask` into the screen quad `quad` (4 points). Returns (x0, y0, patch)."""
+    """Draws `mask` (or an RGB image) into the screen quad `quad` (4 points). Returns (x0, y0, patch)."""
     xs, ys = [p[0] for p in quad], [p[1] for p in quad]
     x0, y0 = max(0, int(math.floor(min(xs)))), max(0, int(math.floor(min(ys))))
     x1, y1 = min(w, int(math.ceil(max(xs))) + 1), min(h, int(math.ceil(max(ys))) + 1)
     if x1 - x0 < 1 or y1 - y0 < 1 or (x1 - x0) * (y1 - y0) > w * h:
         return None
-    th, tw = mask.shape
+    th, tw = mask.shape[:2]
     src = [(0, 0), (tw, 0), (tw, th), (0, th)]
     dest = [(p[0] - x0, p[1] - y0) for p in quad]
     k = _coeffs(dest, src)
     if k is None:
         return None
-    img = Image.fromarray((mask * 255).astype(np.uint8), "L")
+    img = Image.fromarray((mask * 255).astype(np.uint8), "L" if mask.ndim == 2 else "RGB")
     patch = img.transform((x1 - x0, y1 - y0), Image.PERSPECTIVE, tuple(k), Image.BILINEAR)
     return x0, y0, np.asarray(patch, np.float32) / 255.0
 
@@ -135,7 +166,7 @@ class Canvas:
         self.glow = np.zeros((self.h, self.w, 3), np.float32)
 
     def blend(self, x0, y0, patch, color, alpha, additive):
-        h, w = patch.shape
+        h, w = patch.shape[:2]
         region = (slice(y0, y0 + h), slice(x0, x0 + w))
         col = np.asarray(color, np.float32)
         if additive > 0:
@@ -165,9 +196,39 @@ class Canvas:
         return np.clip(out, 0, 1)
 
 
-def _floor(canvas, center):
+def _lit_floor(canvas, lights):
+    """Paints the floor plane (y = 0) grey, lit by a low ambient and the effect's PointLights,
+    fading into the wall toward the horizon."""
     cam = canvas.cam
-    img = Image.fromarray((canvas.base * 255).astype(np.uint8))
+    ys, xs = np.mgrid[0:canvas.h, 0:canvas.w].astype(np.float32)
+    f, r, u = (np.asarray(v, np.float32) for v in (cam.f, cam.r, cam.u))
+    d = f[None, None] + r[None, None] * ((xs - cam.w / 2) / cam.scale)[..., None] - u[None, None] * ((ys - cam.h / 2) / cam.scale)[..., None]
+    eye = np.asarray(cam.eye, np.float32)
+    down = d[..., 1] < -1e-4
+    t = np.where(down, -eye[1] / np.where(down, d[..., 1], -1.0), 0.0)
+    world = eye[None, None] + d * t[..., None]
+    light = np.full(world.shape, AMBIENT, np.float32)
+    for lt in lights:
+        lp = np.asarray(lt["pos"], np.float32)
+        rng = float(lt["range"])
+        if rng <= 0:
+            continue
+        to = lp[None, None] - world
+        dist = np.maximum(np.linalg.norm(to, axis=-1), 1e-3)
+        fall = np.clip(1 - dist / rng, 0, 1) ** 2
+        facing = np.clip(to[..., 1] / dist, 0, 1)
+        light += (np.asarray(lt["color"], np.float32)[None, None] * (float(lt["brightness"]) * LIGHT_GAIN) * (fall * facing)[..., None])
+    floor = FLOOR_ALBEDO * light
+    # far floor fades into the wall
+    far = np.clip((t * np.linalg.norm(d, axis=-1) - 25) / 60, 0, 1)[..., None]
+    floor = floor * (1 - far) + canvas.base * far
+    canvas.base = np.where(down[..., None], floor, canvas.base).astype(np.float32)
+
+
+def _floor(canvas, center, lights=()):
+    cam = canvas.cam
+    _lit_floor(canvas, lights)
+    img = Image.fromarray((np.clip(canvas.base, 0, 1) * 255).astype(np.uint8))
     d = ImageDraw.Draw(img)
     cx, cz = round(center[0] / 4) * 4, round(center[2] / 4) * 4
     for i in range(-40, 41, 4):
@@ -230,8 +291,11 @@ def _particle(canvas, p):
     else:
         right, up = cam.r, cam.u
         if mode == "FacingCameraWorldUp":
+            # upright to the world, then turned by its Rotation in its own plane, as Roblox does
             up = (0, 1, 0)
             right = core.norm(core.cross(up, to_cam))
+            axis = core.norm(core.cross(right, up))
+            right, up = core.rotate_about(right, axis, -rot), core.rotate_about(up, axis, -rot)
         else:
             axis = core.norm(core.cross(right, up))
             right, up = core.rotate_about(right, axis, -rot), core.rotate_about(up, axis, -rot)
@@ -249,17 +313,46 @@ def _particle(canvas, p):
         core.sub(core.add(pos, hx), hy),
         core.sub(core.sub(pos, hx), hy),
     ]
-    quad = [cam.project(c) for c in corners]
-    if any(q is None for q in quad):
-        return
     mask = _cell(texture(e["texture"]), p["grid"], p["cell"])
-    warped = _warp(mask, [q[:2] for q in quad], canvas.w, canvas.h)
+    tint = texture_colour(e["texture"])
+    tint = _cell(tint, p["grid"], p["cell"]) if tint is not None else None
+    light = e.get("lightEmission", 0)
+    brightness = e.get("brightness", 1) if light > 0 else 1
+    base = np.asarray([c * brightness for c in p["color"]], np.float32)
+    quad = [cam.project(c) for c in corners]
+    if all(q is not None for q in quad):
+        _draw_quad(canvas, mask, tint, [q[:2] for q in quad], base, alpha, light)
+        return
+    # a big quad (a wide floor decal) can reach behind the camera: draw it in tiles and skip
+    # only the tiles that do, instead of dropping the whole sprite
+    n = 8
+    th, tw = mask.shape[:2]
+    for j in range(n):
+        for i in range(n):
+            def at(a, b):
+                top = core.add(core.mul(corners[0], 1 - a), core.mul(corners[1], a))
+                bot = core.add(core.mul(corners[3], 1 - a), core.mul(corners[2], a))
+                return core.add(core.mul(top, 1 - b), core.mul(bot, b))
+            cs = [at(i / n, j / n), at((i + 1) / n, j / n), at((i + 1) / n, (j + 1) / n), at(i / n, (j + 1) / n)]
+            q = [cam.project(c) for c in cs]
+            if any(x is None for x in q):
+                continue
+            ys, xs = slice(j * th // n, (j + 1) * th // n), slice(i * tw // n, (i + 1) * tw // n)
+            sub = mask[ys, xs]
+            if not sub.size or not sub.any():
+                continue
+            _draw_quad(canvas, sub, tint[ys, xs] if tint is not None else None, [x[:2] for x in q], base, alpha, light)
+
+
+def _draw_quad(canvas, mask, tint, quad, color, alpha, light):
+    warped = _warp(mask, quad, canvas.w, canvas.h)
     if warped is None:
         return
     x0, y0, patch = warped
-    light = e.get("lightEmission", 0)
-    brightness = e.get("brightness", 1) if light > 0 else 1
-    color = [c * brightness for c in p["color"]]
+    if tint is not None:
+        rgb = _warp(tint, quad, canvas.w, canvas.h)
+        if rgb is not None and rgb[2].shape[:2] == patch.shape:
+            color = rgb[2] * color
     canvas.blend(x0, y0, patch, color, alpha, min(1.0, light))
 
 
@@ -290,9 +383,12 @@ def _beam(canvas, beam):
             return
         width = cam.pixels(beam["w0"] + (beam["w1"] - beam["w0"]) * t, pr[2]) / 2
         pts.append((pr[0], pr[1], width, t))
+    light = min(1.0, beam.get("lightEmission", 0))
+    if beam.get("texture", "").startswith("pack://") and texture(beam["texture"]) is not None and beam["texture"] in _images:
+        _beam_textured(canvas, beam, pts, light)
+        return
     strips = 6
     profile = _profile(beam.get("texture", ""), strips)
-    light = min(1.0, beam.get("lightEmission", 0))
     for k in range(n):
         x0, y0, w0, t0 = pts[k]
         x1, y1, w1, t1 = pts[k + 1]
@@ -314,6 +410,43 @@ def _beam(canvas, beam):
                 (x0 + nx * w0 * b, y0 + ny * w0 * b),
             ]
             _fill(canvas, quad, color, alpha * float(profile[s]), light)
+
+
+def _beam_textured(canvas, beam, pts, light):
+    """A beam with a pack texture, drawn as Roblox lays it: U along the beam (Stretch repeats it
+    TextureLength times over the length; Wrap and Static every TextureLength studs), V across
+    its width. Each segment gets its own slice of the texture."""
+    name = beam["texture"]
+    mask, tint = texture(name), texture_colour(name)
+    tw = mask.shape[1]
+    reps = max(1e-3, beam.get("textureLength", 1) or 1)
+    if beam.get("textureMode", "Stretch") != "Stretch":
+        reps = math.dist(beam["p0"], beam["p3"]) / reps
+    brightness = beam.get("brightness", 1) if light > 0 else 1
+    for k in range(len(pts) - 1):
+        x0, y0, w0, t0 = pts[k]
+        x1, y1, w1, t1 = pts[k + 1]
+        dx, dy = x1 - x0, y1 - y0
+        m = math.hypot(dx, dy) or 1
+        nx, ny = -dy / m, dx / m
+        tm = (t0 + t1) / 2
+        alpha = 1 - core.number_at(beam["transparency"], tm)
+        if alpha <= 0.002:
+            continue
+        u0 = (t0 * reps) % 1
+        u1 = u0 + (t1 - t0) * reps
+        c0, c1 = int(u0 * tw), min(tw, max(int(u0 * tw) + 1, int(math.ceil(min(1.0, u1) * tw))))
+        quad = [(x0 - nx * w0, y0 - ny * w0), (x1 - nx * w1, y1 - ny * w1), (x1 + nx * w1, y1 + ny * w1), (x0 + nx * w0, y0 + ny * w0)]
+        warped = _warp(mask[:, c0:c1], quad, canvas.w, canvas.h)
+        if warped is None:
+            continue
+        px, py, patch = warped
+        color = np.asarray([c * brightness for c in core.color_at(beam["color"], tm)], np.float32)
+        if tint is not None:
+            rgb = _warp(np.ascontiguousarray(tint[:, c0:c1]), quad, canvas.w, canvas.h)
+            if rgb is not None and rgb[2].shape[:2] == patch.shape:
+                color = rgb[2] * color
+        canvas.blend(px, py, patch, color, alpha, light)
 
 
 def _fill(canvas, quad, color, alpha, additive):
@@ -472,29 +605,15 @@ def _hull(points):
     return lower[:-1] + upper[:-1]
 
 
-def _light(canvas, light):
-    cam = canvas.cam
-    pr = cam.project(tuple(light["pos"]))
-    if not pr or light["range"] <= 0:
-        return
-    r = cam.pixels(light["range"], pr[2]) * 0.6
-    quad = [(pr[0] - r, pr[1] - r), (pr[0] + r, pr[1] - r), (pr[0] + r, pr[1] + r), (pr[0] - r, pr[1] + r)]
-    warped = _warp(_procedural("glow"), quad, canvas.w, canvas.h)
-    if warped:
-        x0, y0, patch = warped
-        canvas.blend(x0, y0, patch, light["color"], min(1.0, light["brightness"] * 0.08), 1.0)
-
-
 def draw(timeline, t, cam, body=True):
     """The frame `t` seconds into the play, seen through `cam`. Returns (rgb, info)."""
     frame = core.frame_at(timeline, t)
     canvas = Canvas(cam)
     holder = tuple(timeline["holder"][:3])
-    _floor(canvas, holder)
+    _floor(canvas, holder, frame["lights"] if frame else ())
     body_mask = _body(canvas, add_y(holder, 0.5)) if body else None
     if frame:
-        for light in frame["lights"]:
-            _light(canvas, light)
+        # a PointLight shows only on what it lights (the floor, in _floor), not as a glow in the air
         parts = sorted(frame["parts"], key=lambda p: -core.dot(core.sub(p["cframe"][:3], cam.eye), cam.f))
         for part in parts:
             _part(canvas, part)

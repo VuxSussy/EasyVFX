@@ -9,16 +9,31 @@ It's a burst that settles into a loop: a short, violent ignition hands off to a 
 
 ## Beats
 
+Corrected 2026-10-24 (Phát, stepping the clip again): the big light streaks at f8 don't slam into the ground. They are
+flame jets shooting **out** of the spot, and the ignition frame (f7) holds more than a tell.
+
 | Beat | Frames | Length | What is on screen |
 |---|---|---|---|
 | Lead-in | f0–6 | 0.20 s | nothing: a dark blue-grey stage |
-| Tell | f7 | **1 frame** | a small red glow dome on the ground, with a few sparks shooting straight up |
-| Strike | f8–9 | **2 frames** | big diagonal white-orange light streaks slamming into the ground spot, as if something fell onto it |
-| Flash | f10 | **1 frame** | a wide flat ellipse of light across the ground, and sparks thrown outward |
-| Burst | f11–15 | 0.17 s | chunky flame tongues spread out flat and sideways from a white-hot core; the hex cracks appear (f12) and glow |
-| Rise | f16–23 | 0.27 s | the tongues peel upward; one tall flame column leans and thins; dark smoke puffs appear around the base and drift out; sparks rise and drift |
-| Collapse | f24–30 | 0.23 s | the fire shrinks to a small pile on the cracks; smoke thins away; embers float |
-| Loop | f31 on | steady | small flames lick up and die on the cracks, a tongue peeling off every few frames; the cracks glow steadily; a few embers and faint smoke |
+| Ignition | f7 | **1 frame** | at once: a black smoke ring blasted out low around the spot; a red glow dome; a small cream core with hollow shapes curling inward (an implosion); about 25 red sparks; two thin flame flicks thrown up |
+| Jets | f8–9 | **2 frames** | two huge flame jets shoot out of the spot, one diagonal and one near vertical: long, tapered, yellow-white with orange edges and jagged, hooked edges. Spiky flame shards (jagged, like lightning) fan out around them. At f9 a hard-edged dark scorch disc lies on the ground under the burst |
+| Flash | f10 | **1 frame** | the jets are gone but for one thin streak; a wide, flat orange-white glow band lies across the ground; the core turns into a splash |
+| Splash | f11–15 | 0.17 s | the fire splashes out flat and sideways like a liquid: big flame shapes, white-hot middle, orange, red tips. The cracks appear small and close in (f11). Black smoke tongues lie low on the ground |
+| Rise | f16–25 | 0.33 s | the splash peels up into one tall leaning column with side tongues curling off; flame shreds break away and fly; black smoke drifts; the cracks spread out to their full ring (about f22); many small red sparks rise |
+| Settle | f26–35 | 0.33 s | it collapses into a small fire on the cracks. A hot spot lies on the ground under it, yellow in the middle and red outward, and dark scorch spikes radiate out across the floor |
+| Loop | f36 on | steady | a small fire built from several flame cards at fixed angles, so it has volume from any side; it licks, a tongue peeling off now and then; hot ground core; cracks steady; embers; faint smoke. The clip loops to its end, so it has no ending |
+
+## Motion between frames
+
+The clip is a 30 fps export, so fast changes happen between frames. Block-matching each bright 16 px tile against the
+next frame (frames at 500 px wide, where about 27 px is a stud) shows:
+- **f7–f10:** more than 20–25 px a frame (the search limit). The shapes change completely, so they are sprites
+  spawning and leaving within a frame, not one shape moving. The ignition reaches its full size between f6 and f7,
+  the jets reach their full length between f7 and f8, and they are gone between f9 and f10. At 60 fps, give each of
+  these one in-between frame.
+- **f10–f22:** readable motion, radially outward and slowing steadily: 20, 16, 13, 12, 10 and 9 px a frame. It turns
+  upward from f16. In studs, the burst leaves at more than 22 studs/s and is down to about 10 studs/s by f22, rising:
+  a strong ease-out (drag).
 
 ## Layers, back to front
 
