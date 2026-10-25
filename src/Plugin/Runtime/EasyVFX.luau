@@ -1896,6 +1896,38 @@ local function pulse(inst: Instance, delay: number, duration: number)
 	end, function() end)
 end
 
+-- A stream inside a burst effect (EmitDuration): the runtime emits it at the emitter's Rate,
+-- times the play's quality, for `duration` seconds after `delay`, instead of switching the
+-- emitter on. Roblox thins an enabled emitter's Rate at low graphics levels; at the lowest it left
+-- a fire with no flames (Studio at QualityLevel 1, 2026-10-25). Emit counts are not thinned.
+-- VFX_Streaming marks the window, so tools still read it as a stream.
+local function stream(e: ParticleEmitter, delay: number, duration: number, quality: number)
+	local token = (pulseTokens[e] or 0) + 1
+	pulseTokens[e] = token
+	local owed = 0
+	-- in effect time, as the clock runs it (slow motion emits fewer a second)
+	local scale = playScale
+	addAnim(delay, duration, function()
+		if pulseTokens[e] == token and alive(e) then
+			e:SetAttribute("VFX_Streaming", true)
+		end
+	end, function(_alpha, dt)
+		if pulseTokens[e] ~= token or not alive(e) then
+			return
+		end
+		owed += e.Rate * quality * dt * scale
+		local n = math.floor(owed)
+		if n > 0 then
+			owed -= n
+			e:Emit(n)
+		end
+	end, function()
+		if pulseTokens[e] == token and alive(e) then
+			e:SetAttribute("VFX_Streaming", nil)
+		end
+	end)
+end
+
 -- Your own Blender/Studio mesh: a hidden template part that gets copied and animated.
 local function playMesh(template: BasePart, ctx: Ctx): number
 	local delay = num(template, "EmitDelay", 0)
@@ -2125,7 +2157,7 @@ function EasyVFX.PlayLocal(target: Instance | string, at: CFrame?): number
 				length = math.max(length, delay + d.Lifetime.Max)
 			end
 			if type(duration) == "number" and duration > 0 then
-				pulse(d, delay, duration)
+				stream(d, delay, duration, ctx.quality)
 				length = math.max(length, delay + duration + d.Lifetime.Max)
 			end
 		elseif d:IsA("Beam") or d:IsA("Trail") or d:IsA("Light") or d:IsA("Highlight") then

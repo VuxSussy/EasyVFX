@@ -307,6 +307,39 @@ do
 		return (H.workspace.CurrentCamera or H.workspace):FindFirstChild("EasyVFX_Live")
 	end
 
+	-- A stream inside a burst effect (EmitDuration) is emitted by the runtime, never switched on,
+	-- so Roblox's thinning of Rate at low graphics levels can't empty it; VFX_Streaming marks
+	-- its window for the tools
+	H.warnings = {}
+	local streamRoot = roblox.Instance.new("Part")
+	streamRoot.Parent = H.workspace
+	local streamAt = roblox.Instance.new("Attachment")
+	streamAt.Parent = streamRoot
+	local streamer = roblox.Instance.new("ParticleEmitter")
+	streamer.Enabled = false
+	streamer.Rate = 30
+	streamer:SetAttribute("EmitDelay", 0.1)
+	streamer:SetAttribute("EmitDuration", 0.5)
+	streamer.Parent = streamAt
+	H.emitted = {}
+	EasyVFX.PlayLocal(streamRoot)
+	local sawOn, sawStreaming = false, false
+	for _ = 1, 60 do
+		task.wait()
+		sawOn = sawOn or streamer.Enabled
+		sawStreaming = sawStreaming or streamer:GetAttribute("VFX_Streaming") == true
+	end
+	waitForQuiet(200)
+	-- the only emitter playing, so the total is its count (the harness keys emits by proxy)
+	local streamed = 0
+	for _, n in H.emitted do
+		streamed += n
+	end
+	check(not sawOn, "a stream is never switched on")
+	check(sawStreaming and streamer:GetAttribute("VFX_Streaming") == nil, "VFX_Streaming marks the stream's window")
+	check(streamed >= 13 and streamed <= 16, "a stream emits its rate over its window (" .. streamed .. ")")
+	streamRoot:Destroy()
+
 	-- Spiral: strands * segments beams (+ cores), all sharp geometry, cleaned up
 	H.warnings = {}
 	local spiral = shapeRoot("Spiral", { Count = 3, Turns = 2, Height = 8, Duration = 0.6 })

@@ -312,7 +312,8 @@ function Harness.install()
 	end)
 	roblox.implementMethod("ParticleEmitter", "Emit", function(inst, n)
 		Harness.emitted[inst] = (Harness.emitted[inst] or 0) + (n or 16)
-		if Harness.recordEmits then
+		-- a runtime stream's emits are recorded as its stream, not as bursts
+		if Harness.recordEmits and inst:GetAttribute("VFX_Streaming") ~= true then
 			-- remember where/how it emitted, for tests/snapshot.luau
 			local parent = inst.Parent
 			local cf, size = roblox.CFrame.new(), roblox.Vector3.new(0, 0, 0)
