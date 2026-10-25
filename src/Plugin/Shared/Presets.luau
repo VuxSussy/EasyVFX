@@ -7,7 +7,7 @@
 	             it streams with `rate`. `at` = "part" (whole effect volume),
 	             "center", or a Vector3 offset in studs.
 	  shape      Crisp procedural piece played by the runtime (Ring, Slash, Lines, Bolt,
-	             Orb, Debris, Crater). `attrs` are written as attributes.
+	             Orb, Debris, Crater, Jet). `attrs` are written as attributes.
 	  light      PointLight. `flash = seconds` makes it a quick fading flash.
 	  beam       Static Beam between two offsets (lasers).
 	  trail      Trail along the longest side of the effect part (weapon swings).
@@ -467,6 +467,372 @@ local function heroEmbers(at: any, count: number, delay: number?): Layer
 		lifetime = { 0.35, 0.5 },
 		color = { "w", "p" },
 	})
+end
+
+-- Layer kits: a layer's variants, picked one at a time in the studio (`evfx serve`, Layers),
+-- then combined. A kit's preset is built from its `picks`; tests/timeline.luau can also play
+-- one variant alone ("kit__<kit>__<layer>__<variant>") or swapped into the preset
+-- ("...__in"), which is what the studio renders. Picks come from Phát, never from the studio.
+export type KitVariant = { note: string, layers: { Layer } }
+export type Kit = { preset: string, order: { string }, layers: { [string]: { [string]: KitVariant } }, picks: { [string]: string } }
+
+local FLOOR = -1.85
+local function floorAt(x: number?, z: number?): Vector3
+	return Vector3.new(x or 0, FLOOR, z or 0)
+end
+local lying = { orientation = "VelocityPerpendicular", direction = "Top", speed = { 0.01, 0.01 } }
+local function with(base: { [string]: any }, fields: { [string]: any }): { [string]: any }
+	local out = table.clone(base)
+	for k, v in fields do
+		out[k] = v
+	end
+	return out
+end
+
+-- The fire library (Phát's fire pit, 2026-10-24 to 25, is the first effect built from it): builders
+-- for a fire made of particles, timed by a FireBeats table. A game keeps its own tuned fire, the
+-- numbers and picks, in its own repo and loads it with Presets.register.
+--
+-- FireBeats, in seconds: `tell` the anticipation, `strike` the impact, `flash` the flash, `burst`
+-- the explosion and `burn` when the fire burns steady; `out` is when it starts dying, `burnFor`
+-- how long the layers that outlast the flames (smoke, embers, ground glow) run from `burn`, and
+-- `held` how much longer than 15 loop frames it burns. fireBeats builds one: `hold` (seconds)
+-- holds the burn longer, in whole 16-frame cycles of an 18 fps flame loop, so it still dies on the
+-- loop's frame 15 (0 gives the 15 frames, 0.83 s)
+export type FireBeats = {
+	tell: number,
+	strike: number,
+	flash: number,
+	burst: number,
+	burn: number,
+	out: number,
+	burnFor: number,
+	held: number,
+}
+local FLAME_FPS = 18
+local function fireBeats(o): FireBeats
+	local out = o.burn + (math.floor((o.hold or 0) * FLAME_FPS / 16) * 16 + 15) / FLAME_FPS
+	return {
+		tell = o.tell,
+		strike = o.strike,
+		flash = o.flash,
+		burst = o.burst,
+		burn = o.burn,
+		out = out,
+		burnFor = out - o.burn + 0.967,
+		held = out - (o.burn + 15 / FLAME_FPS),
+	}
+end
+
+-- FireLoop's pool fire, built from hook-flame particles: `o.spots` are where on the seat the
+-- flames come from, each streaming `o.rate` a second while the fire burns; a small glowing core,
+-- dark hook shapes rising from `o.smokeAt` studs up as smoke, and now and then a tall lick that
+-- peels off the top (`o.licks` a second). `o.rise` is the flames'
+-- upward pull (studs/s², 5 when left out); `o.inward` pulls each spot's flames toward the middle
+-- as they rise (per stud out from it), so a wide seat narrows into a cone. `o.stagger` lets each
+-- spot catch up to that many seconds late, with its own rate and speed, so the seat never lights
+-- as one ring rising in step (Phát, 2026-10-25: it broke the organic feel)
+local function hash(i: number, salt: number): number
+	return (math.sin(i * 12.9898 + salt * 78.233) * 43758.5453) % 1
+end
+
+local function fireLoop(b: FireBeats, o): { Layer }
+	local HOOK = "shape_mold_fire_hook"
+	local out = {}
+	local stagger = o.stagger or 0
+	-- `o.start` lets the fire catch before BURN (from the blast, Phát, 2026-10-25); its licks and
+	-- smoke still wait until it has grown, just before BURN
+	local start = o.start or b.burn
+	local grown = math.max(start, b.burn - 0.3)
+	for i, spot in o.spots do
+		local late = stagger * hash(i, 1)
+		local pace = 1 + stagger * (hash(i, 3) - 0.5)
+		table.insert(out, v4(HOOK, "Sustain", floorAt(spot[1], spot[2]) + Vector3.new(0, 0.3, 0), { name = "ContinuousFlame", delay = start + late,
+			burst = false, rate = o.rate * (1 + 1.5 * stagger * (hash(i, 2) - 0.5)), streamFor = b.out - start - late,
+			orientation = "FacingCameraWorldUp", direction = "Top", speed = { o.speed[1] * pace, o.speed[2] * pace },
+			spread = { 8, 8 }, drag = 1,
+			accel = Vector3.new(-spot[1] * (o.inward or 0), o.rise or 5, -spot[2] * (o.inward or 0)),
+			size = o.size, transparency = { { 0, 0.4 }, { 0.12, 0 }, { 0.75, 0.1 }, { 1, 1 } },
+			lifetime = o.life, rotation = { -12, 12 },
+			color = { Color3.fromRGB(255, 190, 110), Color3.fromRGB(255, 105, 40), Color3.fromRGB(190, 35, 28) },
+			lightEmission = 0.1, brightness = 1.1, zOffset = if i == 1 then 1.2 else 1 }))
+	end
+	if o.licks then
+		table.insert(out, v4(HOOK, "Sustain", floorAt() + Vector3.new(0, 0.8, 0), { name = "IntermittentFlame", delay = grown + 0.1,
+			burst = false, rate = o.licks, streamFor = b.out - grown, orientation = "FacingCameraWorldUp",
+			direction = "Top", speed = { o.speed[2], o.speed[2] + 2 }, spread = { 6, 6 }, accel = Vector3.new(0, o.rise or 5, 0),
+			size = { { 0, 2 }, { 0.25, 3.6 }, { 1, 1 } }, transparency = { { 0, 0.3 }, { 0.1, 0 }, { 0.7, 0.15 }, { 1, 1 } },
+			lifetime = { 0.6, 0.8 }, rotation = { -12, 12 },
+			color = { Color3.fromRGB(255, 190, 110), Color3.fromRGB(255, 100, 40), Color3.fromRGB(185, 33, 28) },
+			lightEmission = 0.1, brightness = 1.1, zOffset = 1.1 }))
+	end
+	table.insert(out, v4(HOOK, "Sustain", floorAt() + Vector3.new(0, 0.2, 0), { name = "FlameCore", delay = start,
+		burst = false, rate = 10, streamFor = b.out - start, orientation = "FacingCameraWorldUp",
+		direction = "Top", speed = { 1, 2 }, spread = { 12, 12 }, accel = Vector3.new(0, 2, 0),
+		size = { { 0, 1.4 }, { 0.4, 1.9 }, { 1, 0.6 } }, transparency = { { 0, 0.5 }, { 0.15, 0.1 }, { 1, 1 } },
+		lifetime = { 0.3, 0.45 }, rotation = { -12, 12 }, color = { Color3.fromRGB(255, 215, 150), Color3.fromRGB(255, 135, 55) },
+		lightEmission = 0.3, brightness = 1.15, zOffset = 1.4 }))
+	local smoke = o.smokeSize or 2.4
+	table.insert(out, v4(HOOK, "Sustain", floorAt() + Vector3.new(0, o.smokeAt, 0), { name = "BuoyantPlume", delay = grown + 0.1,
+		burst = false, rate = o.smokeRate, streamFor = b.out - grown, orientation = "FacingCameraWorldUp",
+		direction = "Top", speed = { 3, 4.5 }, spread = { 18, 18 }, accel = Vector3.new(0, 2, 0),
+		size = { { 0, 1.2 }, { 0.4, smoke * 0.85 }, { 1, smoke } }, transparency = { { 0, 1 }, { 0.12, 0 }, { 0.7, 0.25 }, { 1, 1 } },
+		lifetime = { 0.7, 1 }, rotation = { -20, 20 }, color = { Color3.fromRGB(60, 40, 36), Color3.fromRGB(26, 22, 22) },
+		lightEmission = 0, brightness = 1, zOffset = 0.5 }))
+	return out
+end
+
+
+-- A flame jet as one Beam (Phát, 2026-10-24: "one single texture, but on a beam"): the texture
+-- is his two-peak sketch (beam/flame_spire), base on the spot. It flashes in, then narrows as it
+-- stretches out over its 2 frames (f8-9).
+local JET_TINT = Color3.fromRGB(255, 250, 150)
+
+local function fireSpike(azimuth: number, fromVertical: number, delay: number, length: number): Layer
+	return {
+		type = "shape",
+		kind = "Jet",
+		hd = true,
+		name = "JetFlame",
+		packAttrs = { Texture = "beam_flame_spire" },
+		attrs = {
+			Delay = delay,
+			Duration = 0.08,
+			Offset = floorAt() + Vector3.new(0, 0.2, 0),
+			Tilt = Vector3.new(0, -azimuth, -fromVertical),
+			Length0 = length * 0.6,
+			Length1 = length,
+			-- thinner across than the texture's square, as the reference's jets are
+			Width0 = length * 0.24,
+			Width1 = length * 0.06,
+			Flash = 1.6,
+			FlashFor = 0.35,
+			FadeStart = 0.6,
+			Ease = "Out",
+			-- additive, so where the two jets cross (and over the burst) the light adds up and they
+			-- merge into one hot source instead of one lying over the other; the brightness stays
+			-- low enough that each jet's two tones still read
+			Glow = 1,
+			Brightness = 0.7,
+			Transparency = 0.1,
+			-- the V changes as one each play: tipped up to 15 degrees either way in its own plane,
+			-- and mirrored half the time, never turned edge-on (Phát: they merged when it did)
+			Sway = 30,
+			Mirror = 1,
+		},
+		-- tinted so the cream core, with the bloom added, lands on the reference's pale yellow
+		-- (about 253, 255, 190 at its hottest), not white
+		color0 = JET_TINT,
+	}
+end
+
+
+-- A transparency that breathes over `life` seconds: a slow, uneven swell about every 0.8 s
+-- (never twice the same), `deep` at a swell and `shallow` between, then a fade out over the
+-- last `fade` of its life. For heat that stays and pulses (Phát, 2026-10-25)
+local function breathe(life: number, deep: number, shallow: number, fade: number): { { number } }
+	local out = { { 0, shallow } }
+	local steps = math.min(16, math.floor(life * (1 - fade) / 0.4))
+	for k = 1, steps do
+		local t = k / (steps + 1) * (1 - fade)
+		table.insert(out, { t, if k % 2 == 0 then deep + (k % 3) * 0.03 else shallow })
+	end
+	table.insert(out, { 1 - fade, shallow })
+	table.insert(out, { 1, 1 })
+	return out
+end
+
+-- the breathing tints come on with the tell, before the blast (the reference's f7: the air and
+-- the floor are already red-pink): `breathe`, faded in over its first 0.12 s
+local function breatheIn(life: number, deep: number, shallow: number, fade: number): { { number } }
+	local out = breathe(life, deep, shallow, fade)
+	out[1] = { 0, 1 }
+	table.insert(out, 2, { math.min(0.12 / life, out[2][1] * 0.5), shallow })
+	return out
+end
+
+-- AirGlow: the burst's red puff, and (`deep`, `shallow` given) a faint pink that stays in the air
+-- behind the fire from the tell until it burns out, breathing between those transparencies, in `tint` (pink when
+-- left out)
+local function airGlow(b: FireBeats, deep: number?, shallow: number?, tint: Color3?): { Layer }
+	local out = {
+		-- from the tell (the reference's f7: the air is already red before the blast), swelling
+		-- through the blast and gone by f27
+		v4("shape_soft_glow", "Explosion", floorAt() + Vector3.new(0, 2.2, 0), { name = "AirGlowBurst", delay = b.tell,
+			orientation = "FacingCamera", size = { { 0, 9 }, { 0.2, 11 }, { 1, 17 } },
+			transparency = { { 0, 0.5 }, { 0.15, 0.35 }, { 0.4, 0.55 }, { 1, 1 } }, lifetime = { 0.7, 0.7 }, rotation = { 0, 0 },
+			color = { Color3.fromRGB(205, 30, 45) }, lightEmission = 1, brightness = 1, zOffset = -2 }),
+	}
+	if deep and shallow then
+		local start = b.tell - 0.017
+		local life = b.burn + b.burnFor - start
+		table.insert(out, v4("shape_soft_glow", "Sustain", floorAt() + Vector3.new(0, 2.4, 0), { name = "AirGlowLoop", delay = start,
+			orientation = "FacingCamera", size = 13, transparency = breatheIn(life, deep, shallow, 0.15),
+			lifetime = { life, life }, rotation = { 0, 0 },
+			color = { tint or Color3.fromRGB(200, 45, 85) }, lightEmission = 1, brightness = 1, zOffset = -2 }))
+	end
+	return out
+end
+
+-- The ignite (the reference's f7, Phát, 2026-10-25): a heap of flames on the spot, a tall one in
+-- the middle and five shorter ones round it, each placed apart so the heap reads as flames, not
+-- one white blob; painted, cream at the foot burning to orange, and buried by the jets a frame on
+local function flameKernels(b: FireBeats): { Layer }
+	local out = {}
+	for k = 0, 5 do
+		local a = math.rad(k * 72 + 40 * hash(k, 31))
+		local r = if k == 0 then 0 else 0.7 + 0.4 * hash(k, 32)
+		local tall = if k == 0 then 1.25 else 0.8 + 0.25 * hash(k, 33)
+		table.insert(out, v4("shape_mold_fire_hook", "Anticipation", floorAt(math.cos(a) * r, math.sin(a) * r) + Vector3.new(0, 0.5, 0), {
+			name = "FlameKernel", delay = b.tell, burst = 1, orientation = "FacingCameraWorldUp", direction = "Top",
+			speed = { 0.5, 1.5 }, spread = { 20, 20 }, drag = 4,
+			size = { { 0, 2.4 * tall }, { 0.5, 3 * tall }, { 1, 2.8 * tall } }, transparency = { { 0, 0 }, { 0.7, 0 }, { 1, 1 } },
+			lifetime = { 0.05, 0.07 }, rotation = { -12, 12 },
+			color = { Color3.fromRGB(255, 220, 150), Color3.fromRGB(255, 150, 70), Color3.fromRGB(215, 60, 35) },
+			lightEmission = 0.3, brightness = 1.5, zOffset = 1 }))
+	end
+	return out
+end
+
+-- GroundGlow: a glow `size` studs across lying on the floor from the anticipation to the
+-- fire's end, breathing between `deep` and `shallow` transparency, in `color`
+local function groundGlow(b: FireBeats, size: number, deep: number, shallow: number, color: Color3): Layer
+	local start = b.tell - 0.017
+	local life = b.burn + b.burnFor - start
+	return v4("shape_soft_glow", "Sustain", floorAt() + Vector3.new(0, 0.017, 0), with(lying, { name = "BounceLight", delay = start,
+		size = size, transparency = breatheIn(life, deep, shallow, 0.15), lifetime = { life, life }, rotation = { 0, 0 },
+		color = { color }, lightEmission = 1, brightness = 1 }))
+end
+
+-- The fireball (Phát, 2026-10-25: a Molotov), built from hook flames, all upright (the texture's
+-- axis stays vertical), painted rather than glowing so they keep their colour where they overlap,
+-- cream at birth burning to red. `scale` sizes every flame (1 as tuned):
+--   FireballCore   the fire packs into one dense white-hot ball on the spot under the spikes
+--                  (`core` flames; the reference's f8-10)
+--   FireballHeart  a dense heart of flames (`heart` a second, for `heartFor` seconds) keeps the
+--                  middle full through the blast; `heartRise` scales how fast it rises
+--   VortexRing     the blast as one toroidal flow (Phát, 2026-10-25): fire leaves the core going
+--                  down and outward, skims out along the floor, slows, and rises a little at the rim
+--                  as it curls over; thrown once, over `pour` seconds, and gone. `torus` is how far
+--                  it spreads (studs), `lift` the hot air's pull up on it, `curl` how hard its far
+--                  end is drawn back in as it rises
+-- `life` scales every flame's life (1 as tuned); `edge` is how see-through the ring's flames start,
+-- so they melt away instead of showing as single flames; `dim` scales every flame's brightness;
+-- `spin` (degrees) turns each flame its own way at birth, up to that far, and slowly after. The
+-- crown, surge, roll, licks and swirl tail it was built from before are in git history
+local function fireball(b: FireBeats, o): { Layer }
+	local HOOK = "shape_mold_fire_hook"
+	local k_ = o.scale or 1
+	local function grow(a, b, c)
+		return { { 0, a * k_ }, { 0.3, b * k_ }, { 1, c * k_ } }
+	end
+	local t0 = b.flash - 0.017
+	local hot = { Color3.fromRGB(255, 175, 90), Color3.fromRGB(245, 95, 38), Color3.fromRGB(185, 33, 28) }
+	local lf = o.life or 1
+	local function lives(a, b)
+		return { a * lf, b * lf }
+	end
+	local ringStart = o.edge * 0.6
+	local out = {}
+	table.insert(out, v4(HOOK, "Explosion", floorAt() + Vector3.new(0, 0.5, 0), { name = "FireballCore", delay = b.strike - 0.017,
+		-- a ball, not a flame: each turned its own way, nudged off the spot and held by drag
+		burst = o.core, orientation = "FacingCameraWorldUp", direction = "Top", speed = { 1, 3 }, spread = { 180, 180 },
+		drag = 12, size = grow(1.6, 2.6, 2.6), transparency = { { 0, 0 }, { 0.8, 0 }, { 1, 0.6 } },
+		lifetime = { b.flash - b.strike + 0.05, b.flash - b.strike + 0.1 }, rotation = { 0, 360 }, color = { Color3.fromRGB(255, 225, 160), Color3.fromRGB(255, 175, 90) },
+		lightEmission = 0.3, brightness = 1.3, zOffset = 1.3 }))
+	table.insert(out, v4(HOOK, "Explosion", floorAt() + Vector3.new(0, 0.4, 0), { name = "FireballHeart", delay = t0,
+		burst = false, rate = o.heart, streamFor = o.heartFor, orientation = "FacingCameraWorldUp", direction = "Top",
+		speed = { 0.5, 2.2 * o.heartRise }, spread = { 40, 40 }, drag = 2, accel = Vector3.new(0, 3 * o.heartRise, 0),
+		size = grow(1.3, 2.2, 0.6), transparency = { { 0, 0.1 }, { 0.6, 0.15 }, { 1, 1 } },
+		lifetime = lives(0.35, 0.5), rotation = { 0, 0 }, color = hot, lightEmission = 0.15, brightness = 1.15, zOffset = 1.25 }))
+	local m = 22
+	local spinT = 15
+	for k = 0, m - 1 do
+		local az = spinT + (k + hash(k, 21) - 0.5) * 360 / m
+		local a = math.rad(az)
+		local cx, cz = math.cos(a), math.sin(a)
+		-- a little below level, out of the core, slowed by drag to about `torus` studs, lifted by the
+		-- hot air so the far end curls up, and drawn back in a touch as it curls
+		local reachSpeed = o.torus * 2.8
+		table.insert(out, v4(HOOK, "Explosion", floorAt(cx * 0.2, cz * 0.2) + Vector3.new(0, 0.6, 0), { name = "VortexRing",
+			delay = t0, tilt = Vector3.new(0, -az, -(100 + 8 * hash(k, 22))), burst = false, rate = 4 / o.pour, streamFor = o.pour,
+			orientation = "FacingCameraWorldUp", direction = "Top",
+			speed = { reachSpeed * 0.8, reachSpeed * 1.15 }, spread = { 14, 14 }, drag = 4.5,
+			accel = Vector3.new(-cx * o.curl, o.lift, -cz * o.curl),
+			size = grow(1.8, 3.2, 0.8), transparency = { { 0, ringStart }, { 0.5, ringStart + 0.05 }, { 1, 1 } }, lifetime = lives(0.45, 0.65),
+			rotation = { 0, 0 }, color = hot, lightEmission = 0.15, brightness = 1.1, zOffset = 1.15 }))
+	end
+	for _, layer in out do
+		layer.brightness = (layer.brightness or 1) * (o.dim or 1)
+		if o.spin then
+			layer.rotation = { -o.spin, o.spin }
+			layer.rotSpeed = { -30, 30 }
+		end
+	end
+	return out
+end
+
+-- Kits. A kit's preset is built from its picks; this repo keeps only the demo, a small campfire
+-- from the fire library's builders. Tuned kits live in their games' repos (Presets.register)
+local CAMP = fireBeats({ tell = 0, strike = 0, flash = 0, burst = 0, burn = 0.2, hold = 1 })
+
+Presets.Kits = {
+	campfire = {
+		preset = "campfire_demo",
+		order = { "FireLoop", "EmberLoop", "GroundGlow", "PointLight" },
+		layers = {
+			FireLoop = {
+				A = { note = "a pool fire of hook flames on a small seat, narrowing into a cone, smoke off the tips", layers = fireLoop(CAMP, {
+					spots = { { 0, 0 }, { 0.5, 0.3 }, { -0.5, -0.3 }, { 0.3, -0.5 } }, rate = 5, speed = { 2, 3.5 }, life = { 0.6, 0.8 },
+					stagger = 0.2, size = { { 0, 1.4 }, { 0.3, 2.6 }, { 1, 0.5 } }, rise = 2, inward = 1, smokeAt = 3, smokeRate = 3, licks = 1,
+				}) },
+			},
+			EmberLoop = {
+				A = { note = "small sparks rising off the fire", layers = {
+					v4("shape_soft_glow", "Sustain", floorAt() + Vector3.new(0, 1, 0), { name = "LoftedFirebrands", delay = CAMP.burn,
+						burst = false, rate = 4, streamFor = CAMP.out - CAMP.burn, direction = "Top", speed = { 3, 6 }, spread = { 40, 40 },
+						drag = 1.6, accel = Vector3.new(1.5, 2.2, 0.5), size = { { 0, 0.25, 0.08 }, { 1, 0 } },
+						transparency = { { 0, 0 }, { 0.7, 0.1 }, { 1, 1 } }, lifetime = { 0.9, 1.4 }, rotation = { 0, 0 },
+						color = { Color3.fromRGB(255, 120, 60) }, lightEmission = 1, brightness = 2.5, zOffset = 2 }),
+				} },
+			},
+			GroundGlow = {
+				A = { note = "a warm glow lying on the floor round the fire, breathing", layers = { groundGlow(CAMP, 6, 0.5, 0.65, Color3.fromRGB(240, 100, 50)) } },
+			},
+			PointLight = {
+				A = { note = "the fire's light", layers = {
+					{ type = "light", brightness = 2.5, range = 8, color = Color3.fromRGB(240, 110, 50), delay = CAMP.burn, flash = CAMP.out - CAMP.burn + 0.5 },
+				} },
+			},
+		},
+		picks = { FireLoop = "A", EmberLoop = "A", GroundGlow = "A", PointLight = "A" },
+	},
+} :: { [string]: Kit }
+
+--- A kit's layers with `picks` (a layer -> variant map) over its own; a layer with no pick
+--- uses its first variant, and a layer picked "-" is left out. `only` keeps one layer.
+function Presets.kitLayers(kit: Kit, picks: { [string]: string }?, only: string?): { Layer }
+	local out = {}
+	for _, name in kit.order do
+		local off = ((picks and picks[name]) or kit.picks[name]) == "-"
+		if (only == nil or only == name) and not off then
+			local variants = kit.layers[name]
+			local pick = (picks and picks[name]) or kit.picks[name]
+			local chosen = pick and variants[pick]
+			if not chosen then
+				local keys = {}
+				for k in variants do
+					table.insert(keys, k)
+				end
+				table.sort(keys)
+				chosen = variants[keys[1]]
+			end
+			for _, layer in chosen.layers do
+				table.insert(out, layer)
+			end
+		end
+	end
+	return out
 end
 
 -- extra layers per preset (appended after the list below)
@@ -2501,6 +2867,19 @@ Presets.List = ({
 		},
 	},
 	{
+		id = "campfire_demo",
+		needs = "shape_mold_fire_hook",
+		-- a demo of the kits and the fire library: out of the plugin's library
+		study = true,
+		category = "impact",
+		name = { vi = "Lửa trại (bộ lớp mẫu)", en = "Campfire (demo kit)" },
+		desc = { vi = "Bộ lớp mẫu dựng từ thư viện lửa", en = "A demo layer kit built from the fire library" },
+		kind = "burst",
+		placement = "ground",
+		defaults = { color1 = rgb(255, 130, 50), color2 = rgb(205, 50, 25), trigger = "Loop", interval = 3.5 },
+		layers = Presets.kitLayers(Presets.Kits.campfire),
+	},
+	{
 		id = "slash_v4",
 		needs = "shape_core_flash",
 		category = "slash",
@@ -2990,6 +3369,50 @@ end
 Presets.ById = {} :: { [string]: Preset }
 for _, preset in Presets.List do
 	Presets.ById[preset.id] = preset :: any
+end
+
+-- The builders a kit kept outside this repo is made from
+Presets.Library = {
+	v4 = v4,
+	rgb = rgb,
+	floorAt = floorAt,
+	lying = lying,
+	with = with,
+	hash = hash,
+	breathe = breathe,
+	breatheIn = breatheIn,
+	fireBeats = fireBeats,
+	fireLoop = fireLoop,
+	fireSpike = fireSpike,
+	fireball = fireball,
+	airGlow = airGlow,
+	groundGlow = groundGlow,
+	flameKernels = flameKernels,
+	kitLayers = Presets.kitLayers,
+}
+
+--- Kits and presets from outside the plugin: a game keeps its own tuned effects in its own repo,
+--- each a module returning `function(lib) return { kits = {...}, presets = {...} } end`, built
+--- from Presets.Library. The plugin loads them from ServerStorage.EasyVFX_Kits, the evfx tools from
+--- the `kits` folder of each directory in EVFX_KITS. A preset whose id is taken replaces the old one.
+function Presets.register(pack: { kits: { [string]: Kit }?, presets: { Preset }? })
+	local kits: { [string]: Kit } = pack.kits or {}
+	local presets: { Preset } = pack.presets or {}
+	for name, kit in kits do
+		Presets.Kits[name] = kit
+	end
+	for _, preset in presets do
+		local old = Presets.ById[preset.id]
+		if old then
+			local at = table.find(Presets.List, old)
+			if at then
+				Presets.List[at] = preset
+			end
+		else
+			table.insert(Presets.List, preset)
+		end
+		Presets.ById[preset.id] = preset
+	end
 end
 
 return Presets

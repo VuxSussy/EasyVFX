@@ -75,7 +75,7 @@ Builder.Attributes = ATTRS
 local SIZE_KEYS = {
 	"Radius0", "Radius1", "Width0", "Width1", "Radius", "Width", "Distance0", "Distance1",
 	"Length", "Jitter", "Size0", "Size1", "SizeMin", "SizeMax", "Force",
-	"Height", "ArcHeight", "HeadSize",
+	"Height", "ArcHeight", "HeadSize", "Length0", "Length1",
 }
 local VECTOR_SIZE_KEYS = { "Step", "Offset", "From", "To" }
 local TIME_KEYS = { "Delay", "Duration", "Stagger", "FadeIn", "FadeOut" }
@@ -306,7 +306,16 @@ local function layerParent(ctx: any, key: string, layer: { [string]: any }, defa
 		return ctx.root
 	end
 	local position = if typeof(at) == "Vector3" then at * ctx.params.size else Vector3.zero
-	local attachKey = if layer.group then "g:" .. layer.group else key .. ":a"
+	-- layers in a group share one attachment (and its random tilt) only where they also share
+	-- a position: one attachment per group per spot, so a floor decal in a group with sparks
+	-- higher up stays on the floor instead of taking the first layer's height
+	local spot = if typeof(at) == "Vector3" then "@" .. tostring(at) else ""
+	-- and only where they share a tilt: a layer tilted its own way (a splash's spokes) gets its
+	-- own attachment, or every one fired along the first layer's direction
+	if typeof(layer.tilt) == "Vector3" then
+		spot ..= "^" .. tostring(layer.tilt)
+	end
+	local attachKey = if layer.group then "g:" .. layer.group .. spot else key .. ":a"
 	-- a shared group attachment is set up once, by the first layer that uses it
 	local done = ctx.configured[attachKey]
 	if done then
@@ -375,6 +384,10 @@ LayerBuilders.particles = function(ctx, key, layer)
 		else enumItem(Enum.ParticleFlipbookLayout, layer.flipbook, Enum.ParticleFlipbookLayout.None) :: any
 	e.FlipbookMode = enumItem(Enum.ParticleFlipbookMode, layer.flipMode, Enum.ParticleFlipbookMode.OneShot) :: any
 	e.FlipbookStartRandom = layer.flipRandom == true
+	if layer.flipFps then
+		-- a Loop flipbook's pace: a 16-frame flame on twos plays at 12
+		e.FlipbookFramerate = NumberRange.new(layer.flipFps)
+	end
 	e.Color = colorSequence(layer.color, params)
 	-- a layer's exit (Curves.EXITS) reshapes how it leaves: transparency, size, lifetime
 	local size, transparency, lifeMul = layer.size or 1, layer.transparency or 0, 1
@@ -420,6 +433,12 @@ LayerBuilders.particles = function(ctx, key, layer)
 		end, function()
 			e.Enabled = false
 		end)
+		-- a stream inside a burst effect (a fire that keeps burning after its ignition):
+		-- it starts at `delay` and streams for `streamFor` seconds
+		if layer.streamFor and not ctx.alwaysOn then
+			e:SetAttribute("EmitDelay", (layer.delay or 0) * params.lifetime)
+			e:SetAttribute("EmitDuration", layer.streamFor * params.lifetime)
+		end
 	end
 end
 

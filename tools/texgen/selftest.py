@@ -134,9 +134,27 @@ def recipes_small():
         ok("core_flash" in str(ex), "an unknown id names the closest ones")
 
 
+def measuring():
+    import measure
+
+    u, v = lib.grid(128)
+    disc = np.clip((0.55 - np.hypot(u, v)) / 0.02, 0, 1)
+    m = measure.measure_cell(disc)
+    ok(m["solidity"] > 0.95 and m["roundness"] < 1.25 and m["horns"] == 0,
+       f"measure: a disc is solid, round and hornless ({m['solidity']:.2f}, {m['roundness']:.2f}, {m['horns']:.0f})")
+    star = (np.hypot(u, v) < 0.22).astype(np.float32)
+    for ang in (np.pi / 2, np.pi / 2 + 2 * np.pi / 3, np.pi / 2 + 4 * np.pi / 3):  # three thin arms
+        d, _ = lib.sd_segment(u, v, 0, 0, 0.85 * np.cos(ang), 0.85 * np.sin(ang))
+        star = np.maximum(star, (d < 0.05).astype(np.float32))
+    s = measure.measure_cell(star)
+    ok(s["horns"] == 3, f"measure: a three-armed star has three horns ({s['horns']:.0f})")
+    ok(s["solidity"] < m["solidity"], "measure: the star is less solid than the disc")
+
+
 def run():
     primitives()
     planted()
+    measuring()
     recipes_small()
     for f in _fails:
         print("FAIL", f)

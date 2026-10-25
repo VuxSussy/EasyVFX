@@ -314,7 +314,31 @@ def flame_loop(seed=21, frames=64, every=2, warm=160, overlap=16, n=192, sources
             out.append(caps[j])
     return np.clip(np.stack(out), 0, 1.5).astype(np.float32)
 
-SIMS = {"smoke_puff": smoke_puff, "explosion": explosion, "flame_loop": flame_loop}
+def flame_lick(seed=31, frames=16, every=3, lead=10, flare=14, n=192, half=0.06, buoyancy=2.4, swirl=3.0,
+               stir=3.5, kick=1.4, keep_h=0.968):
+    """One tongue of flame, start to end, for a OneShot flipbook: a single source flares for
+    `flare` steps (after `lead` steps of nothing), then stops, so the tongue rises, breaks off
+    the base, thins and dies. The parts a fire's volume is built from: many licks rising out
+    of one core flame. Returns the heat frames (0..1 floats, image orientation)."""
+    f = Fluid(n)
+    rng = np.random.default_rng(seed)
+    f.turb.from_numpy(np.ascontiguousarray(np.transpose(_curl_noise(n, seed + 5, 16), (1, 0, 2))))
+    total = lead + frames * every
+    sway = rng.uniform(-1, 1)
+    caps = []
+    for k in range(total):
+        on = k < lead + flare
+        if on:
+            ramp = min(1.0, (k + 1) / 4)
+            f.emit(n / 2 + 4 * sway, n * half, 6, 18, 1.1 * ramp, 0.6 * sway, kick)
+        f.step(0.5, keep_d=0.95, keep_h=keep_h, buoyancy=buoyancy, swirl=swirl, iters=30, stir=stir)
+        if k >= lead and (k - lead) % every == every - 1:
+            caps.append(_capture(f)[1])
+    out = np.stack(caps[:frames])
+    out[-1] *= 0
+    return np.clip(out, 0, 1.5).astype(np.float32)
+
+SIMS = {"smoke_puff": smoke_puff, "explosion": explosion, "flame_loop": flame_loop, "flame_lick": flame_lick}
 
 
 def main(argv=None):

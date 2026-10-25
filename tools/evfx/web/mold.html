@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mold a Texture</title>
+<style>
+:root {
+  --stage: #0b0c10; --panel: #14161d; --line: #262a35; --ink: #e8e9ee; --dim: #9aa0ae; --gold: #ffcf5a;
+  --display: "Chakra Petch", "Arial Narrow", system-ui, sans-serif;
+  --body: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--stage); color: var(--ink); font: 14px/1.45 var(--body); padding: 20px max(16px, 3vw); }
+h1 { font: 600 26px var(--display); margin: 0 0 4px; }
+h1 span { color: var(--gold); }
+p.lead { color: var(--dim); margin: 0 0 16px; max-width: 80ch; }
+.wrap { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
+@media (max-width: 1100px) { .wrap { grid-template-columns: 1fr; } }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
+.card h2 { font: 600 15px var(--display); margin: 0 0 8px; color: var(--dim); }
+canvas, img.preview { width: 100%; aspect-ratio: 1; display: block; background: #000; border-radius: 4px; image-rendering: auto; }
+canvas { cursor: none; touch-action: none; }
+.tools { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 10px; }
+button { font: 13px var(--body); color: var(--ink); background: #1c1f28; border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; cursor: pointer; }
+button:hover, button:focus-visible { border-color: var(--gold); outline: none; }
+button.on { background: var(--gold); color: #000; border-color: var(--gold); }
+label { display: grid; grid-template-columns: 96px 1fr 44px; gap: 8px; align-items: center; font-size: 13px; color: var(--dim); margin: 4px 0; }
+label output { font: 12px var(--mono); color: var(--ink); text-align: right; }
+input[type=range] { width: 100%; accent-color: var(--gold); }
+select, input[type=text], input[type=number] { width: 100%; font: 13px var(--body); color: var(--ink); background: #1c1f28; border: 1px solid var(--line); border-radius: 6px; padding: 5px 6px; }
+.row { display: flex; gap: 6px; margin: 6px 0; }
+.row > * { flex: 1; }
+.note { font: 12px var(--mono); color: var(--dim); min-height: 1.4em; margin-top: 6px; word-break: break-all; }
+kbd { font: 11px var(--mono); border: 1px solid var(--line); border-radius: 3px; padding: 0 3px; color: var(--dim); }
+</style>
+</head>
+<body>
+<h1>Mold a <span>Texture</span></h1>
+<p class="lead">Push the shape around on the left, the way Photoshop's Liquify does; the right shows it shaded the way texgen builds it. Save keeps the mold in <code>tools/texgen/molds</code> and builds it into the pack as <code>shape/mold_&lt;name&gt;</code>.</p>
+<div class="wrap">
+  <div class="card">
+    <h2>Shape (brush here)</h2>
+    <canvas id="paint" width="512" height="512" aria-label="Shape to mold"></canvas>
+  </div>
+  <div class="card">
+    <h2>Shaded (what texgen builds)</h2>
+    <img class="preview" id="preview" alt="Shaded preview">
+  </div>
+  <div class="card">
+    <h2>Start from</h2>
+    <div class="row"><select id="base"></select><input id="cell" type="number" min="0" value="0" title="frame of a sheet or flipbook" style="flex:0 0 64px"></div>
+    <div class="row"><select id="molds"><option value="">open a saved mold…</option></select></div>
+    <h2 style="margin-top:12px">Guide (stays in this browser)</h2>
+    <div class="row"><input id="guidefile" type="file" accept="image/*" aria-label="Guide image"></div>
+    <div class="row">
+      <select id="guidegrid" title="cells per side in the guide image"><option value="1">whole image</option><option value="2" selected>2 x 2 sheet</option><option value="4">4 x 4 sheet</option></select>
+      <input id="guidecell" type="number" min="0" value="0" title="which cell" style="flex:0 0 64px">
+      <button id="guideshow" class="on" title="show or hide the guide (g)">Shown</button>
+    </div>
+    <label>Opacity <input id="guideop" type="range" min="0" max="1" step="0.05" value="0.5"><output></output></label>
+    <label>Guide size <input id="guidescale" type="range" min="0.3" max="4" step="0.01" value="1"><output></output></label>
+    <div class="row"><button id="guidefit" title="put the guide back to fill the canvas">Reset guide</button></div>
+    <p class="hint" style="margin:0;font-size:12px;color:var(--dim, #9aa0ae)">Shift-drag moves the guide; Shift-scroll resizes it.</p>
+    <h2 style="margin-top:12px">Brush</h2>
+    <div class="tools" id="tools"></div>
+    <label>Size <input id="size" type="range" min="0.03" max="0.6" step="0.01" value="0.18"><output></output></label>
+    <label>Strength <input id="strength" type="range" min="0.05" max="1" step="0.05" value="0.5"><output></output></label>
+    <div class="row"><button id="undo">Undo <kbd>⌘Z</kbd></button><button id="reset">Reset warp</button><button id="clearfold">Clear fold</button><button id="cleartone">Clear tone</button></div>
+    <h2 style="margin-top:12px">Shading</h2>
+    <div id="shading"></div>
+    <h2 style="margin-top:12px">Save</h2>
+    <div class="row"><input id="name" type="text" placeholder="name, e.g. splash_a"><button id="save">Save</button></div>
+    <div class="note" id="note"></div>
+  </div>
+</div>
+<script>
+const DATA = /*DATA*/null;
+const G = 64, W = 256;            // warp grid nodes per side; working resolution of the brush view
+const SHADE_RANGE = {
+  cut: [0.05, 0.9, 0.01], edge_soft: [0.01, 0.5, 0.01], reach: [0, 0.3, 0.005], edge: [0, 1, 0.01],
+  gamma: [0.2, 3, 0.05], fold: [0, 1, 0.01], fold_width: [0.005, 0.2, 0.005], soften: [0, 0.06, 0.002],
+  light: [0, 1, 0.01], light_angle: [0, 360, 1],
+};
+const TOOLS = [["push", "Push", "p"], ["pull", "Pull", "l"], ["bloat", "Bloat", "b"], ["pinch", "Pinch", "n"], ["twirl", "Twirl", "t"],
+               ["twirlr", "Twirl back", "y"], ["smooth", "Smooth", "s"], ["restore", "Restore", "r"], ["fold", "Fold line", "f"],
+               ["dodge", "Dodge", "o"], ["burn", "Burn", "u"], ["softtone", "Soften tone", "m"]];
+
+let warp = new Float32Array(G * G * 2);
+// the painted tone: 2 to this power multiplies the brightness (Dodge raises it, Burn lowers it)
+let tone = new Float32Array(G * G);
+const snap = () => ({ warp: warp.slice(), tone: tone.slice() });
+let fold = [];
+let base = new Float32Array(W * W);
+let tool = "push";
+let undo = [];
+const shading = { ...DATA.shading };
+const $ = (id) => document.getElementById(id);
+const paint = $("paint"), ctx = paint.getContext("2d");
+const work = document.createElement("canvas"); work.width = work.height = W;
+const wctx = work.getContext("2d");
+
+// ---- controls
+for (const b of DATA.bases) $("base").add(new Option(b, b));
+for (const m of DATA.molds) $("molds").add(new Option(m, m));
+for (const [k, label, key] of TOOLS) {
+  const b = document.createElement("button");
+  b.textContent = label; b.title = `${label} (${key})`; b.dataset.tool = k;
+  b.onclick = () => setTool(k);
+  $("tools").append(b);
+}
+function setTool(k) {
+  tool = k;
+  for (const b of $("tools").children) b.classList.toggle("on", b.dataset.tool === k);
+}
+setTool("push");
+for (const [k, [lo, hi, st]] of Object.entries(SHADE_RANGE)) {
+  const l = document.createElement("label");
+  l.innerHTML = `${k.replace("_", " ")} <input type="range" min="${lo}" max="${hi}" step="${st}"><output></output>`;
+  const inp = l.querySelector("input"), out = l.querySelector("output");
+  inp.value = shading[k]; out.textContent = (+inp.value).toFixed(3);
+  inp.oninput = () => { shading[k] = +inp.value; out.textContent = (+inp.value).toFixed(3); schedule(); };
+  inp.dataset.key = k;
+  $("shading").append(l);
+}
+for (const id of ["size", "strength", "guideop", "guidescale"]) {
+  const inp = $(id), out = inp.nextElementSibling;
+  out.textContent = inp.value; inp.oninput = () => { out.textContent = inp.value; if (id === "guidescale") scaleGuide(+inp.value, 256, 256); if (id === "guideop" || id === "guidescale") draw(); };
+}
+
+// ---- the guide: a reference read from a local file, drawn in cyan under the shape. It is never
+// sent to the server or saved with the mold, so a reference that can't ship stays a reference
+let guide = null, guideOn = true, guideImg = null;
+// where the guide sits on the 512 px canvas: its top-left corner and its scale
+let gpos = { x: 0, y: 0, s: 1 };
+function scaleGuide(s, cx, cy) {
+  s = Math.min(4, Math.max(0.3, s));
+  // keep the canvas point (cx, cy) over the same spot of the guide
+  gpos.x = cx - (cx - gpos.x) * s / gpos.s; gpos.y = cy - (cy - gpos.y) * s / gpos.s; gpos.s = s;
+  $("guidescale").value = s.toFixed(2); $("guidescale").nextElementSibling.textContent = s.toFixed(2);
+}
+const guideCanvas = document.createElement("canvas"); guideCanvas.width = guideCanvas.height = 512;
+function cutGuide() {
+  if (!guideImg) return;
+  const g = +$("guidegrid").value, n = g * g, cell = ((+$("guidecell").value || 0) % n + n) % n;
+  const cw = guideImg.naturalWidth / g, ch = guideImg.naturalHeight / g;
+  const gc = guideCanvas.getContext("2d");
+  gc.clearRect(0, 0, 512, 512);
+  gc.drawImage(guideImg, (cell % g) * cw, Math.floor(cell / g) * ch, cw, ch, 0, 0, 512, 512);
+  const d = gc.getImageData(0, 0, 512, 512), px = d.data;
+  for (let i = 0; i < px.length; i += 4) {
+    const l = (px[i] * 0.3 + px[i + 1] * 0.59 + px[i + 2] * 0.11) / 255;
+    px[i] = 70; px[i + 1] = 200; px[i + 2] = 255; px[i + 3] = l * 255;
+  }
+  gc.putImageData(d, 0, 0);
+  guide = guideCanvas; draw();
+}
+$("guidefile").onchange = async () => {
+  const f = $("guidefile").files[0]; if (!f) return;
+  guideImg = new Image(); guideImg.src = URL.createObjectURL(f); await guideImg.decode(); cutGuide();
+};
+$("guidegrid").onchange = cutGuide;
+$("guidefit").onclick = () => { gpos = { x: 0, y: 0, s: 1 }; scaleGuide(1, 0, 0); draw(); };
+$("guidecell").onchange = cutGuide;
+$("guideshow").onclick = () => { guideOn = !guideOn; $("guideshow").classList.toggle("on", guideOn); $("guideshow").textContent = guideOn ? "Shown" : "Hidden"; draw(); };
+
+// ---- base image
+async function loadBase() {
+  const id = $("base").value, cell = +$("cell").value || 0;
+  const img = new Image();
+  img.src = `/api/mold/base?id=${encodeURIComponent(id)}&cell=${cell}&size=${W}`;
+  await img.decode();
+  wctx.clearRect(0, 0, W, W); wctx.drawImage(img, 0, 0, W, W);
+  const px = wctx.getImageData(0, 0, W, W).data;
+  for (let i = 0; i < W * W; i++) base[i] = px[i * 4] / 255;
+  draw(); schedule();
+}
+$("base").onchange = loadBase;
+$("cell").onchange = loadBase;
+
+// ---- warp: the view reads the base back through the offsets (u, v run -1..1)
+function sampleGrid(gx, gy, ch, src = warp) {
+  const warp = src;
+  const x0 = Math.max(0, Math.min(G - 2, Math.floor(gx))), y0 = Math.max(0, Math.min(G - 2, Math.floor(gy)));
+  const fx = Math.min(1, Math.max(0, gx - x0)), fy = Math.min(1, Math.max(0, gy - y0));
+  const a = warp[(y0 * G + x0) * 2 + ch], b = warp[(y0 * G + x0 + 1) * 2 + ch];
+  const c = warp[((y0 + 1) * G + x0) * 2 + ch], d = warp[((y0 + 1) * G + x0 + 1) * 2 + ch];
+  return (a * (1 - fx) + b * fx) * (1 - fy) + (c * (1 - fx) + d * fx) * fy;
+}
+function sampleTone(gx, gy) {
+  const x0 = Math.max(0, Math.min(G - 2, Math.floor(gx))), y0 = Math.max(0, Math.min(G - 2, Math.floor(gy)));
+  const fx = Math.min(1, Math.max(0, gx - x0)), fy = Math.min(1, Math.max(0, gy - y0)), i = y0 * G + x0;
+  return (tone[i] * (1 - fx) + tone[i + 1] * fx) * (1 - fy) + (tone[i + G] * (1 - fx) + tone[i + G + 1] * fx) * fy;
+}
+function sampleBase(sx, sy) {
+  if (sx < 0 || sy < 0 || sx > W - 1 || sy > W - 1) return 0;
+  const x0 = Math.min(W - 2, Math.floor(sx)), y0 = Math.min(W - 2, Math.floor(sy));
+  const fx = sx - x0, fy = sy - y0;
+  const i = y0 * W + x0;
+  return (base[i] * (1 - fx) + base[i + 1] * fx) * (1 - fy) + (base[i + W] * (1 - fx) + base[i + W + 1] * fx) * fy;
+}
+const view = wctx.createImageData(W, W);
+let cursor = null;
+function draw() {
+  const px = view.data;
+  for (let y = 0; y < W; y++) {
+    const v = (y + 0.5) / W * 2 - 1, gy = (v + 1) / 2 * (G - 1);
+    for (let x = 0; x < W; x++) {
+      const u = (x + 0.5) / W * 2 - 1, gx = (u + 1) / 2 * (G - 1);
+      const su = u - sampleGrid(gx, gy, 0), sv = v - sampleGrid(gx, gy, 1);
+      const a = Math.min(1, sampleBase((su + 1) / 2 * W - 0.5, (sv + 1) / 2 * W - 0.5) * 2 ** sampleTone(gx, gy));
+      // the shape in warm white, its alpha its brightness, so the guide shows through
+      const o = (y * W + x) * 4;
+      px[o] = 255; px[o + 1] = 236; px[o + 2] = 205; px[o + 3] = a * 255;
+    }
+  }
+  wctx.putImageData(view, 0, 0);
+  ctx.imageSmoothingEnabled = true;
+  ctx.fillStyle = "#000"; ctx.fillRect(0, 0, 512, 512);
+  if (guide && guideOn) { ctx.globalAlpha = +$("guideop").value; ctx.drawImage(guide, gpos.x, gpos.y, 512 * gpos.s, 512 * gpos.s); ctx.globalAlpha = 1; }
+  ctx.drawImage(work, 0, 0, 512, 512);
+  // the fold line and the brush
+  if (fold.length) {
+    ctx.strokeStyle = "rgba(255,120,80,.9)"; ctx.lineWidth = 2; ctx.beginPath();
+    fold.forEach(([u, v], i) => { const X = (u + 1) * 256, Y = (v + 1) * 256; i ? ctx.lineTo(X, Y) : ctx.moveTo(X, Y); });
+    ctx.stroke();
+    for (const [u, v] of fold) { ctx.fillStyle = "#ff7850"; ctx.fillRect((u + 1) * 256 - 3, (v + 1) * 256 - 3, 6, 6); }
+  }
+  if (cursor) {
+    ctx.strokeStyle = "rgba(255,207,90,.9)"; ctx.lineWidth = 1.5; ctx.beginPath();
+    ctx.arc((cursor[0] + 1) * 256, (cursor[1] + 1) * 256, +$("size").value * 256, 0, Math.PI * 2); ctx.stroke();
+  }
+}
+
+// Push and Pull carry the shape along with the brush, the way Liquify's forward warp does: the
+// new offset at p is the move plus the old offset read where p's content came from. A long drag
+// is cut into steps short enough that the warp never folds over itself, which is what tore holes.
+// Pull grabs the point under the cursor at full strength, so a horn follows the cursor out.
+function carry(cu, cv, du, dv) {
+  const r = +$("size").value, k = tool === "pull" ? 1 : +$("strength").value;
+  // the falloff's steepest slope is about 1.54 k / r; keep each step's stretch under 0.4
+  const steps = Math.max(1, Math.ceil(Math.hypot(du, dv) * 1.54 * k / r / 0.4));
+  for (let s = 0; s < steps; s++) {
+    const t = (s + 0.5) / steps, su = du / steps, sv = dv / steps;
+    const pu = cu - du + du * t, pv = cv - dv + dv * t;
+    const old = warp.slice();
+    const lo = Math.max(0, Math.floor((pu - r + 1) / 2 * (G - 1))), hi = Math.min(G - 1, Math.ceil((pu + r + 1) / 2 * (G - 1)));
+    const lo2 = Math.max(0, Math.floor((pv - r + 1) / 2 * (G - 1))), hi2 = Math.min(G - 1, Math.ceil((pv + r + 1) / 2 * (G - 1)));
+    for (let j = lo2; j <= hi2; j++) for (let i = lo; i <= hi; i++) {
+      const u = i / (G - 1) * 2 - 1, v = j / (G - 1) * 2 - 1, d = Math.hypot(u - pu, v - pv);
+      if (d >= r) continue;
+      const w = (1 - (d / r) ** 2) ** 2 * k, n = (j * G + i) * 2;
+      const gx = (u - w * su + 1) / 2 * (G - 1), gy = (v - w * sv + 1) / 2 * (G - 1);
+      warp[n] = w * su + sampleGrid(gx, gy, 0, old);
+      warp[n + 1] = w * sv + sampleGrid(gx, gy, 1, old);
+    }
+  }
+}
+
+function brush(cu, cv, du, dv) {
+  const r = +$("size").value, k = +$("strength").value;
+  const lo = Math.max(0, Math.floor((cu - r + 1) / 2 * (G - 1))), hi = Math.min(G - 1, Math.ceil((cu + r + 1) / 2 * (G - 1)));
+  const lo2 = Math.max(0, Math.floor((cv - r + 1) / 2 * (G - 1))), hi2 = Math.min(G - 1, Math.ceil((cv + r + 1) / 2 * (G - 1)));
+  const old = tool === "smooth" ? warp.slice() : null, oldTone = tool === "softtone" ? tone.slice() : null;
+  for (let j = lo2; j <= hi2; j++) for (let i = lo; i <= hi; i++) {
+    const u = i / (G - 1) * 2 - 1, v = j / (G - 1) * 2 - 1;
+    const qx = u - cu, qy = v - cv, d = Math.hypot(qx, qy);
+    if (d >= r) continue;
+    const f = (1 - (d / r) ** 2) ** 2, w = f * k, n = (j * G + i) * 2;
+    if (tool === "softtone") {
+      // each node eases toward its neighbours' mean, so painted edges blend out
+      let sum = 0, cnt = 0;
+      for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]]) {
+        const ii = i + a, jj = j + b;
+        if (ii >= 0 && ii < G && jj >= 0 && jj < G) { sum += oldTone[jj * G + ii]; cnt++; }
+      }
+      tone[n / 2] += (sum / cnt - oldTone[n / 2]) * Math.min(1, w * 1.5);
+    }
+    else if (tool === "dodge" || tool === "burn") { const t = tone[n / 2] + (tool === "dodge" ? 0.04 : -0.04) * w; tone[n / 2] = Math.max(-4, Math.min(2, t)); }
+    else if (tool === "push") { warp[n] += du * w; warp[n + 1] += dv * w; }
+    else if (tool === "bloat" || tool === "pinch") { const s = (tool === "bloat" ? 1 : -1) * 0.06 * w; warp[n] += qx * s; warp[n + 1] += qy * s; }
+    else if (tool === "twirl" || tool === "twirlr") {
+      const t = (tool === "twirl" ? 1 : -1) * 0.08 * w, c = Math.cos(-t), s = Math.sin(-t);
+      warp[n] += qx - (qx * c - qy * s); warp[n + 1] += qy - (qx * s + qy * c);
+    } else if (tool === "smooth") {
+      for (const ch of [0, 1]) {
+        let sum = 0, cnt = 0;
+        for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const ii = i + a, jj = j + b;
+          if (ii >= 0 && ii < G && jj >= 0 && jj < G) { sum += old[(jj * G + ii) * 2 + ch]; cnt++; }
+        }
+        warp[n + ch] += (sum / cnt - old[n + ch]) * w;
+      }
+    } else if (tool === "restore") { warp[n] *= 1 - 0.3 * w; warp[n + 1] *= 1 - 0.3 * w; }
+  }
+}
+
+// ---- pointer
+let down = false, last = null, hold = null;
+function uvOf(e) { const b = paint.getBoundingClientRect(); return [(e.clientX - b.left) / b.width * 2 - 1, (e.clientY - b.top) / b.height * 2 - 1]; }
+let guideDrag = null;
+function pxOf(e) { const b = paint.getBoundingClientRect(); return [(e.clientX - b.left) / b.width * 512, (e.clientY - b.top) / b.height * 512]; }
+paint.onpointerdown = (e) => {
+  paint.setPointerCapture(e.pointerId);
+  if (e.shiftKey && guide) { guideDrag = { at: pxOf(e), x: gpos.x, y: gpos.y }; return; }
+  const p = uvOf(e);
+  if (tool === "fold") { fold.push(p); draw(); schedule(); return; }
+  undo.push(snap()); if (undo.length > 40) undo.shift();
+  down = true; last = p;
+  // bloat, pinch, twirl, smooth and restore keep working while held still
+  if (tool !== "push" && tool !== "pull") hold = setInterval(() => { brush(last[0], last[1], 0, 0); draw(); }, 30);
+};
+paint.onpointermove = (e) => {
+  if (guideDrag) { const q = pxOf(e); gpos.x = guideDrag.x + q[0] - guideDrag.at[0]; gpos.y = guideDrag.y + q[1] - guideDrag.at[1]; draw(); return; }
+  const p = uvOf(e); cursor = p;
+  if (down && (tool === "push" || tool === "pull")) carry(p[0], p[1], p[0] - last[0], p[1] - last[1]);
+  else if (down) brush(p[0], p[1], 0, 0);
+  if (down) last = p;
+  draw();
+};
+paint.addEventListener("wheel", (e) => {
+  if (!e.shiftKey || !guide) return;
+  e.preventDefault();
+  const q = pxOf(e), d = e.deltaY || e.deltaX;
+  scaleGuide(gpos.s * Math.exp(-d * 0.0015), q[0], q[1]); draw();
+}, { passive: false });
+paint.onpointerup = paint.onpointercancel = () => { if (guideDrag) { guideDrag = null; return; } down = false; clearInterval(hold); hold = null; schedule(); };
+paint.onpointerleave = () => { cursor = null; draw(); };
+
+$("undo").onclick = () => { if (undo.length) { ({ warp, tone } = undo.pop()); draw(); schedule(); } };
+$("reset").onclick = () => { undo.push(snap()); warp = new Float32Array(G * G * 2); draw(); schedule(); };
+$("cleartone").onclick = () => { undo.push(snap()); tone = new Float32Array(G * G); draw(); schedule(); };
+$("clearfold").onclick = () => { fold = []; draw(); schedule(); };
+document.addEventListener("keydown", (e) => {
+  if (e.target.tagName === "INPUT" && e.target.type === "text") return;
+  if ((e.metaKey || e.ctrlKey) && e.key === "z") { e.preventDefault(); $("undo").click(); return; }
+  const t = TOOLS.find((x) => x[2] === e.key); if (t) setTool(t[0]);
+  if (e.key === "g") $("guideshow").click();
+  if (e.key === "[") { $("size").value = Math.max(0.03, +$("size").value - 0.02); $("size").oninput(); draw(); }
+  if (e.key === "]") { $("size").value = Math.min(0.6, +$("size").value + 0.02); $("size").oninput(); draw(); }
+});
+
+// ---- shaded preview from texgen itself
+function mold() { return { base: $("base").value, cell: +$("cell").value || 0, grid: G, warp: Array.from(warp, (x) => +x.toFixed(5)), tone: Array.from(tone, (x) => +x.toFixed(3)), fold, shading }; }
+let timer = null, busy = false, again = false;
+function schedule() { clearTimeout(timer); timer = setTimeout(renderPreview, 150); }
+async function renderPreview() {
+  if (busy) { again = true; return; }
+  busy = true;
+  try {
+    const r = await fetch("/api/mold/render", { method: "POST", body: JSON.stringify({ mold: mold(), size: 256 }) });
+    if (!r.ok) throw new Error((await r.json()).error);
+    const url = URL.createObjectURL(await r.blob());
+    const prev = $("preview").src; $("preview").src = url; if (prev.startsWith("blob:")) URL.revokeObjectURL(prev);
+  } catch (err) { $("note").textContent = "preview: " + err.message; }
+  busy = false;
+  if (again) { again = false; renderPreview(); }
+}
+
+$("save").onclick = async () => {
+  const name = $("name").value.trim();
+  if (!/^[a-z0-9_]{1,40}$/.test(name)) { $("note").textContent = "a name is lowercase letters, digits and _"; return; }
+  $("note").textContent = "saving and building…";
+  const r = await fetch("/api/mold/save", { method: "POST", body: JSON.stringify({ name, mold: mold() }) });
+  const j = await r.json();
+  $("note").textContent = r.ok ? `saved ${j.saved}; built ${j.id}` : "save: " + j.error;
+  if (r.ok && ![...$("molds").options].some((o) => o.value === name)) $("molds").add(new Option(name, name));
+};
+$("molds").onchange = async () => {
+  const name = $("molds").value; if (!name) return;
+  const m = await (await fetch(`/api/mold/load/${name}`)).json();
+  $("base").value = m.base; $("cell").value = m.cell;
+  warp = new Float32Array(m.grid === G ? m.warp : G * G * 2); fold = m.fold || [];
+  tone = new Float32Array(m.grid === G && m.tone && m.tone.length === G * G ? m.tone : G * G);
+  Object.assign(shading, m.shading);
+  for (const inp of $("shading").querySelectorAll("input")) { inp.value = shading[inp.dataset.key]; inp.nextElementSibling.textContent = (+inp.value).toFixed(3); }
+  $("name").value = name; undo = [];
+  await loadBase();
+};
+loadBase();
+</script>
+</body>
+</html>

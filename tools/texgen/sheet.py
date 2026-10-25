@@ -11,7 +11,7 @@ FAIL = (255, 110, 100)
 CELL = 240
 LABEL = 34
 FAMILIES = [("shape", "Shapes"), ("flip", "Erosion flipbooks (4x4)"), ("seq", "Sequences (separate frames, for meshes)"), ("sheet", "Spritesheets (variants)"),
-            ("strip", "Tiled strips (shown twice, end to end)"), ("art", "Art tier"), ("source", "Source maps (not uploaded)")]
+            ("strip", "Tiled strips (shown twice, end to end)"), ("beam", "Beam textures (base at the left)"), ("art", "Art tier"), ("source", "Source maps (not uploaded)")]
 
 
 def _font(size):

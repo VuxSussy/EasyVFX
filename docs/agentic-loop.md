@@ -148,3 +148,25 @@ size, blend, depth. [The VFX grammar](vfx-grammar.md) has the roles, the measure
 - **The busiest moment** in `sheet` is picked from the census, which can miss the visual peak.
 - **Accuracy against Studio** isn't measured yet: a Studio capture of a few presets, frozen with `TimeScale = 0` at
   the strip's moments, comes next.
+
+## Kits kept in your own repo
+
+A layer kit (`Presets.Kits`) has named layers, each with variants. Its preset is built from the variant picked for each
+layer. This repo keeps one demo, `campfire_demo`, built from the fire library's builders (`fireLoop`, `fireball`,
+`airGlow`, `groundGlow`, `flameKernels` and `fireSpike`, timed by a `fireBeats` table).
+
+A game keeps its own tuned effects in its own repo. Lay them out like this:
+
+| Path | What it holds |
+|---|---|
+| `kits/<kit>.luau` | A module returning `function(lib) return { kits = {...}, presets = {...} } end`. `lib` is `Presets.Library`. |
+| `sheets/<preset>.json` | The beat sheet. |
+| `picks/kit_<kit>.json` | The studio's picks. |
+
+The plugin loads every ModuleScript in `ServerStorage.EasyVFX_Kits` before the panel opens. The tools load the
+directories listed in `EVFX_KITS`, separated by `:`:
+
+```bash
+EVFX_KITS=../game/art/vfx/easyvfx python3 tools/evfx serve
+EVFX_KITS=../game/art/vfx/easyvfx python3 tools/evfx beats fire_pit
+```

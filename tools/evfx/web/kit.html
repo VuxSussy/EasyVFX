@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Layer Kit</title>
+<style>
+:root {
+  --stage: #0b0c10; --panel: #13151c; --panel2: #191c25; --line: #262a35; --ink: #e8e9ee; --dim: #9aa0ae; --faint: #6b7180;
+  --gold: #ffcf5a; --keep: #6fdc8c; --new: #5ad0ff; --changed: #ffb347;
+  --display: "Chakra Petch", "Arial Narrow", system-ui, sans-serif;
+  --body: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { scroll-padding-top: 76px; }
+body { margin: 0; background: var(--stage); color: var(--ink); font: 14px/1.5 var(--body); }
+button { font: 600 13px var(--body); background: var(--panel2); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 5px 12px; cursor: pointer; }
+button:hover, button:focus-visible { border-color: var(--gold); outline: none; }
+button[aria-pressed="true"] { border-color: var(--changed); color: var(--changed); }
+input { font: 13px var(--body); background: var(--stage); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; width: 100%; min-width: 0; }
+.chip { display: inline-flex; align-items: center; gap: 4px; font: 600 11px var(--mono); padding: 1px 7px; border-radius: 99px; border: 1px solid currentColor; white-space: nowrap; }
+.chip.new { color: var(--new); } .chip.changed { color: var(--changed); } .chip.kept { color: var(--keep); } .chip.beat { color: var(--dim); border-color: var(--line); }
+
+/* top bar */
+header.bar { position: sticky; top: 0; z-index: 5; background: rgba(11, 12, 16, 0.94); backdrop-filter: blur(6px); border-bottom: 1px solid var(--line); padding: 10px max(16px, 2vw); display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
+header.bar h1 { margin: 0; font: 600 20px var(--display); }
+header.bar h1 span { color: var(--gold); }
+.progress { font: 12px var(--mono); color: var(--dim); }
+.since { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12px; color: var(--dim); }
+.bar .actions { margin-left: auto; display: flex; gap: 8px; }
+
+.layout { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 24px; padding: 18px max(16px, 2vw) 80px; max-width: 1500px; margin: 0 auto; }
+nav.side { position: sticky; top: 76px; align-self: start; max-height: calc(100vh - 92px); overflow: auto; display: grid; gap: 14px; }
+nav.side h4 { margin: 0 0 4px; font: 600 11px var(--mono); color: var(--faint); text-transform: uppercase; letter-spacing: 0.08em; }
+nav.side a { display: flex; justify-content: space-between; gap: 6px; align-items: center; padding: 4px 8px; border-radius: 6px; color: var(--ink); text-decoration: none; font-size: 13px; }
+nav.side a:hover, nav.side a:focus-visible { background: var(--panel2); outline: none; }
+nav.side a .marks { display: flex; gap: 4px; align-items: center; }
+.dot { width: 7px; height: 7px; border-radius: 50%; }
+.dot.new { background: var(--new); } .dot.changed { background: var(--changed); }
+.pickname { font: 11px var(--mono); color: var(--keep); }
+
+main { display: grid; gap: 22px; min-width: 0; }
+#rows { display: grid; gap: 22px; }
+details.story { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; color: var(--dim); }
+details.story summary { cursor: pointer; color: var(--ink); font-weight: 600; }
+details.story p { margin: 8px 0 0; max-width: 95ch; }
+.help { color: var(--faint); font-size: 12px; margin: 0; }
+
+section.layer { border: 1px solid var(--line); border-radius: 10px; background: var(--panel); padding: 14px; }
+section.layer.has-changes { border-color: #3a3424; }
+section.layer > header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin-bottom: 12px; }
+section.layer h2 { margin: 0; font: 600 19px var(--display); }
+section.layer > header .grow { flex: 1; }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 400px), 1fr)); gap: 12px; }
+.card { background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 10px; display: grid; gap: 8px; align-content: start; }
+.card.picked { border-color: var(--keep); box-shadow: inset 0 0 0 1px var(--keep); }
+.card.new { border-color: var(--new); } .card.changed { border-color: var(--changed); }
+.card.picked.new, .card.picked.changed { box-shadow: inset 0 0 0 1px var(--keep); }
+.card .head { display: flex; align-items: center; gap: 6px; }
+.card .head b { font: 600 17px var(--display); margin-right: 4px; }
+.card p.note { margin: 0; color: var(--dim); font-size: 13px; }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.pair figure { margin: 0; display: grid; gap: 2px; }
+.pair figcaption { font: 11px var(--mono); color: var(--faint); }
+.img { aspect-ratio: 3 / 2; background: #050608; border-radius: 4px; display: grid; place-items: center; overflow: hidden; color: var(--faint); font: 11px var(--mono); }
+.img img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.diff { margin: 0; padding: 6px 8px; list-style: none; background: #15120a; border: 1px solid #3a3424; border-radius: 6px; font: 11px/1.5 var(--mono); color: #e7c98f; display: grid; gap: 1px; overflow-wrap: anywhere; }
+.diff li.add { color: var(--new); }
+.foot { display: flex; gap: 8px; align-items: center; }
+.card.picked .foot button { background: #173322; border-color: var(--keep); }
+.hidden { display: none !important; }
+
+@media (max-width: 860px) {
+  .layout { grid-template-columns: minmax(0, 1fr); }
+  nav.side { position: static; max-height: none; grid-auto-flow: column; grid-auto-columns: max-content; overflow-x: auto; }
+  .bar .actions { margin-left: 0; }
+}
+</style>
+</head>
+<body>
+<header class="bar">
+  <h1>Layer kit: <span id="kit"></span></h1>
+  <span class="progress" id="progress"></span>
+  <span class="since" id="since"></span>
+  <span class="actions">
+    <button id="onlyChanges" aria-pressed="false">Only changes</button>
+    <button id="seenAll">Mark all seen</button>
+  </span>
+</header>
+<div class="layout">
+  <nav class="side" id="side" aria-label="Layers"></nav>
+  <main>
+    <details class="story"><summary>The story</summary><p id="story"></p></details>
+    <p class="help">Each variant plays alone (left) and inside the fire with your picks so far (right). NEW and CHANGED mark what is different since you last marked a row seen; a changed variant lists what changed. Keep the one you like (a note is optional, Vietnamese is fine). Views render one at a time, only near the screen.</p>
+    <div id="rows"></div>
+  </main>
+</div>
+<script>
+const DATA = /*DATA*/null;
+const $ = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+document.getElementById("kit").textContent = DATA.kit;
+document.getElementById("story").textContent = DATA.story;
+let picks = DATA.picks || {};
+const current = name => picks[name] || DATA.kitPicks[name] || null;
+const keys = layer => Object.keys(layer.variants).sort();
+const changesIn = layer => keys(layer).filter(k => layer.variants[k].status !== "same");
+
+// ---------------------------------------------------------------- render queue
+// Renders run two at a time, the card nearest the middle of the screen first; a card scrolled
+// away before its turn leaves the queue and comes back when it is seen again, so scrolling
+// fast past many cards doesn't make the one you stop on wait behind them all.
+const queue = []; let running = 0; const WORKERS = 2;
+function nearest() {
+  const mid = innerHeight / 2;
+  let best = 0, bestD = Infinity;
+  queue.forEach((job, i) => {
+    const r = job.box.getBoundingClientRect(), d = Math.abs((r.top + r.bottom) / 2 - mid);
+    if (d < bestD) { best = i; bestD = d; }
+  });
+  return queue.splice(best, 1)[0];
+}
+// A card's two GIFs (alone, and inside the effect) are the same length; once both have loaded,
+// restart them together so they play in step.
+function syncPair(box) {
+  const card = box.closest(".card");
+  if (!card) return;
+  const imgs = [...card.querySelectorAll(".img img")];
+  if (imgs.length < 2 || card.dataset.synced === imgs.map(i => i.src.split("?")[0]).join()) return;
+  card.dataset.synced = imgs.map(i => i.src.split("?")[0]).join();
+  const stamp = Date.now();
+  for (const img of imgs) img.src = img.src.split("?")[0] + "?play=" + stamp;
+}
+function pump() {
+  while (running < WORKERS && queue.length) {
+    running++;
+    const job = nearest();
+    if (!job.box.querySelector("img")) job.box.textContent = "rendering…";
+    fetch(`/api/kit/${DATA.kit}/render`, { method: "POST", body: JSON.stringify({ layer: job.layer, variant: job.variant, mode: job.mode }) })
+      .then(r => r.json()).then(d => {
+        if (d.gif) { const img = new Image(); img.src = d.gif; img.alt = `${job.layer} ${job.variant} ${job.mode}`; img.onload = () => { job.box.textContent = ""; job.box.append(img); syncPair(job.box); }; }
+        else job.box.textContent = d.error || "failed";
+      }).catch(e => { job.box.textContent = String(e); }).finally(() => { running--; pump(); });
+  }
+}
+const lazy = new IntersectionObserver(entries => {
+  for (const e of entries) {
+    if (e.isIntersecting && !e.target.dataset.done) {
+      e.target.dataset.done = "1";
+      if (!e.target.querySelector("img")) e.target.textContent = "queued";
+      queue.push({ box: e.target, layer: e.target.dataset.layer, variant: e.target.dataset.variant, mode: e.target.dataset.mode });
+    } else if (!e.isIntersecting) {
+      const i = queue.findIndex(j => j.box === e.target);
+      if (i >= 0) { queue.splice(i, 1); e.target.dataset.done = ""; if (!e.target.querySelector("img")) e.target.textContent = ""; }
+    }
+  }
+  pump();
+}, { rootMargin: "300px" });
+function staleInViews() {
+  queue.length = 0;
+  for (const box of document.querySelectorAll('.img[data-mode="in"]')) { box.dataset.done = ""; lazy.unobserve(box); lazy.observe(box); }
+}
+
+// ---------------------------------------------------------------- header and side list
+function drawHeader() {
+  const picked = DATA.layers.filter(l => current(l.name)).length;
+  document.getElementById("progress").textContent = `${picked} of ${DATA.layers.length} picked`;
+  const since = document.getElementById("since"); since.textContent = "";
+  let n = 0, c = 0;
+  for (const l of DATA.layers) for (const k of keys(l)) { const s = l.variants[k].status; if (s === "new") n++; if (s === "changed") c++; }
+  if (!DATA.since) { since.append($("span", "", "nothing marked seen yet")); return; }
+  since.append($("span", "", "since " + DATA.since + ":"));
+  if (n) since.append($("span", "chip new", `${n} new`));
+  if (c) since.append($("span", "chip changed", `${c} changed`));
+  if (!n && !c) since.append($("span", "", "nothing new"));
+  if (DATA.changes.removed.length) since.append($("span", "chip beat", `${DATA.changes.removed.length} removed: ${DATA.changes.removed.join(", ")}`));
+}
+function drawSide() {
+  const side = document.getElementById("side"); side.textContent = "";
+  let group = null, beat = null;
+  for (const l of DATA.layers) {
+    if (l.beat !== beat) { beat = l.beat; group = $("div"); group.append($("h4", "", beat || "other")); side.append(group); }
+    const a = $("a"); a.href = "#layer-" + l.name;
+    a.append($("span", "", l.name));
+    const marks = $("span", "marks");
+    const ch = changesIn(l);
+    if (ch.some(k => l.variants[k].status === "new")) marks.append($("span", "dot new"));
+    if (ch.some(k => l.variants[k].status === "changed")) marks.append($("span", "dot changed"));
+    if (current(l.name)) marks.append($("span", "pickname", current(l.name)));
+    a.append(marks); group.append(a);
+  }
+}
+
+// ---------------------------------------------------------------- rows
+function badge(status) { return status === "same" ? null : $("span", "chip " + status, status === "new" ? "NEW" : "CHANGED"); }
+function drawRows() {
+  const rows = document.getElementById("rows"); rows.textContent = "";
+  for (const layer of DATA.layers) {
+    const sec = $("section", "layer"); sec.id = "layer-" + layer.name; sec.dataset.layer = layer.name;
+    const head = $("header");
+    head.append($("h2", "", layer.name), $("span", "chip beat", layer.beat || "—"));
+    const kept = $("span", "chip kept"); head.append(kept);
+    head.append($("span", "grow"));
+    const seen = $("button", "", "Mark row seen");
+    seen.onclick = () => markSeen(layer.name);
+    head.append(seen);
+    sec.append(head);
+    const cards = $("div", "cards");
+    for (const key of keys(layer)) {
+      const v = layer.variants[key];
+      const card = $("div", "card"); card.dataset.variant = key;
+      const h = $("div", "head"); h.append($("b", "", key));
+      const b = badge(v.status); if (b) h.append(b);
+      card.append(h, $("p", "note", v.note + (v.count ? "" : " (no layer)")));
+      const pair = $("div", "pair");
+      for (const [mode, label] of [["solo", "alone"], ["in", "in the fire"]]) {
+        const fig = $("figure"); const box = $("div", "img");
+        Object.assign(box.dataset, { layer: layer.name, variant: key, mode });
+        fig.append(box, $("figcaption", "", label)); pair.append(fig); lazy.observe(box);
+      }
+      card.append(pair);
+      if (v.diff && v.diff.length) {
+        const ul = $("ul", "diff");
+        for (const line of v.diff) ul.append($("li", line.startsWith("+") ? "add" : "", line));
+        card.append(ul);
+      }
+      const foot = $("div", "foot");
+      const note = $("input"); note.placeholder = "note (optional)"; note.setAttribute("aria-label", `note for ${layer.name} ${key}`);
+      const keep = $("button", "", "Keep");
+      keep.onclick = () => {
+        keep.disabled = true;
+        fetch(`/api/kit/${DATA.kit}/pick`, { method: "POST", body: JSON.stringify({ layer: layer.name, variant: key, note: note.value }) })
+          .then(r => r.json()).then(d => { if (d.picks) { picks = d.picks; refreshRow(layer.name); drawHeader(); drawSide(); staleInViews(); } else keep.textContent = d.error || "failed"; })
+          .finally(() => { keep.disabled = false; });
+      };
+      foot.append(note, keep); card.append(foot);
+      cards.append(card);
+    }
+    sec.append(cards); rows.append(sec);
+    refreshRow(layer.name);
+  }
+  applyFilter();
+}
+function refreshRow(name) {
+  const layer = DATA.layers.find(l => l.name === name);
+  const sec = document.getElementById("layer-" + name);
+  const kept = current(name);
+  const keptChip = sec.querySelector(".chip.kept");
+  keptChip.textContent = kept ? `kept ${kept}` : "not picked"; keptChip.style.opacity = kept ? 1 : 0.5;
+  const ch = changesIn(layer);
+  sec.classList.toggle("has-changes", ch.length > 0);
+  sec.querySelector("header button").classList.toggle("hidden", ch.length === 0);
+  for (const card of sec.querySelectorAll(".card")) {
+    const v = layer.variants[card.dataset.variant];
+    const mine = card.dataset.variant === kept;
+    card.classList.toggle("picked", mine);
+    card.classList.toggle("new", v.status === "new");
+    card.classList.toggle("changed", v.status === "changed");
+    card.querySelector(".foot button").textContent = mine ? "Kept" : "Keep";
+    const chip = card.querySelector(".head .chip"); if (chip && v.status === "same") chip.remove();
+    const diff = card.querySelector(".diff"); if (diff && v.status === "same") diff.remove();
+  }
+}
+function markSeen(name) {
+  fetch(`/api/kit/${DATA.kit}/seen`, { method: "POST", body: JSON.stringify(name ? { layer: name, version: DATA.version } : { version: DATA.version }) })
+    .then(r => r.json()).then(d => {
+      if (!d.ok) {
+        const since = document.getElementById("since"); since.textContent = "";
+        since.append($("span", "chip changed", d.error || "could not mark seen"));
+        return;
+      }
+      for (const l of DATA.layers) if (!name || l.name === name) for (const k of keys(l)) { l.variants[k].status = "same"; l.variants[k].diff = []; }
+      if (!DATA.since) DATA.since = "now";
+      if (!name) DATA.changes.removed = [];
+      for (const l of DATA.layers) if (!name || l.name === name) refreshRow(l.name);
+      drawHeader(); drawSide(); applyFilter();
+    });
+}
+const only = document.getElementById("onlyChanges");
+function applyFilter() {
+  const on = only.getAttribute("aria-pressed") === "true";
+  for (const l of DATA.layers) document.getElementById("layer-" + l.name).classList.toggle("hidden", on && changesIn(l).length === 0);
+}
+only.onclick = () => { only.setAttribute("aria-pressed", only.getAttribute("aria-pressed") === "true" ? "false" : "true"); applyFilter(); };
+document.getElementById("seenAll").onclick = () => markSeen(null);
+drawHeader(); drawSide(); drawRows();
+</script>
+</body>
+</html>

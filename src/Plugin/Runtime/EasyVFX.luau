@@ -20,7 +20,7 @@
 	    EmitDuration, so effects stay compatible with other emit tools.
 	  * "Shape" layers (Configuration objects with a Kind attribute) are crisp,
 	    procedural pieces built from Beams and Neon parts: Ring, Slash, Lines, Bolt,
-	    Orb, Debris and Crater.
+	    Orb, Debris, Crater and Jet.
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -412,7 +412,9 @@ end
 -- Shape layers. Each returns how long it runs (delay included).
 ------------------------------------------------------------------------------------
 
-type Ctx = { root: Instance, origin: CFrame, quality: number, rng: Random, ignore: { Instance } }
+-- `roll` and `roll2` are random numbers drawn once per play that every shape shares, so shapes
+-- can turn together
+type Ctx = { root: Instance, origin: CFrame, quality: number, rng: Random, roll: number, roll2: number, ignore: { Instance } }
 
 local Shapes: { [string]: (cfg: Instance, ctx: Ctx) -> number } = {}
 
@@ -894,6 +896,62 @@ Shapes.Streak = function(cfg, ctx)
 				b.Transparency = NumberSequence.new(lerp(0.25, 1, fade), lerp(0.25, 1, fade))
 			end
 		end
+	end
+	step(0)
+	addAnim(delay, duration, function()
+		carrier.Parent = liveFolder()
+	end, step, function()
+		carrier:Destroy()
+	end)
+	return delay + duration
+end
+
+-- Jet: one textured beam shooting up out of Offset, turned by Tilt, the texture a whole
+-- jet stretched over it (TextureMode Stretch), base at Attachment0. It flashes in (Brightness
+-- times Flash, falling back over FlashFor of its life), then narrows from Width0 to Width1
+-- as it stretches from Length0 to Length1, and fades from FadeStart (the fire pit's jets).
+Shapes.Jet = function(cfg, ctx)
+	local delay = num(cfg, "Delay", 0)
+	local duration = num(cfg, "Duration", 0.1)
+	local from = vec(cfg, "Offset", Vector3.zero)
+	local length0 = num(cfg, "Length0", 4)
+	local length1 = num(cfg, "Length1", 8)
+	local width0 = num(cfg, "Width0", 3)
+	local width1 = num(cfg, "Width1", 1)
+	local flash = num(cfg, "Flash", 2)
+	local flashFor = math.max(0.01, num(cfg, "FlashFor", 0.3))
+	local style = readStyle(cfg)
+	-- Offset is where the base sits in the effect's own space; Tilt turns the jet about it. A set
+	-- of jets keeps its shape and changes as one each play, with the same random numbers for every
+	-- jet: Sway (degrees) tips the whole set within its own plane (about the effect's Z axis), and
+	-- Mirror 1 flips it left for right half the time. It never turns edge-on to the view, so the
+	-- jets never fold into each other
+	local sway = (ctx.roll - 0.5) * num(cfg, "Sway", 0)
+	local flip = if num(cfg, "Mirror", 0) > 0 and ctx.roll2 < 0.5 then math.pi else 0
+	local turn = CFrame.Angles(0, flip, 0) * CFrame.Angles(0, 0, math.rad(sway))
+	local carrier = newPart(ctx.origin * CFrame.new(from) * turn * rad(vec(cfg, "Tilt", Vector3.zero)))
+	local a0, a1 = newAttachment(carrier), newAttachment(carrier)
+	local b = Instance.new("Beam")
+	b.Archivable = false
+	b.Attachment0, b.Attachment1 = a0, a1
+	b.FaceCamera = true
+	b.Segments = 12
+	b.LightEmission = style.glow
+	b.LightInfluence = 0
+	b.Color = ColorSequence.new(style.color0)
+	b.ZOffset = style.zOffset
+	b.Texture = style.texture
+	b.TextureMode = Enum.TextureMode.Stretch
+	b.TextureLength = 1
+	b.Parent = carrier
+	local function step(alpha: number)
+		local grow = ease(alpha, style.ease)
+		a1.CFrame = CFrame.new(0, lerp(length0, length1, grow), 0)
+		local w = lerp(width0, width1, grow)
+		b.Width0, b.Width1 = w, w
+		b.Brightness = style.brightness * lerp(flash, 1, math.min(1, alpha / flashFor))
+		local fade = fadeAt(style, alpha)
+		b.Transparency = NumberSequence.new(fade)
 	end
 	step(0)
 	addAnim(delay, duration, function()
@@ -2008,13 +2066,20 @@ function EasyVFX.PlayLocal(target: Instance | string, at: CFrame?): number
 			table.insert(ignore, p.Character)
 		end
 	end
+	-- a VFX_Seed attribute plays the same random every time (the studio's previews use it, so a
+	-- layer alone and inside its effect turn the same way); without it, each play differs
+	local seed = root:GetAttribute("VFX_Seed")
 	local ctx: Ctx = {
 		root = root,
 		origin = originOf(root),
 		quality = math.clamp(EasyVFX.Quality, 0.25, 1),
-		rng = Random.new(),
+		rng = if type(seed) == "number" then Random.new(seed) else Random.new(),
+		roll = 0,
+		roll2 = 0,
 		ignore = ignore,
 	}
+	ctx.roll = ctx.rng:NextNumber()
+	ctx.roll2 = ctx.rng:NextNumber()
 	local timeScale = root:GetAttribute("VFX_TimeScale")
 	playScale = if type(timeScale) == "number" then math.clamp(timeScale, 0.05, 4) else 1
 
@@ -2268,6 +2333,12 @@ function EasyVFX.BindAnimation(track: AnimationTrack, character: Instance): { Di
 end
 
 -- Turns the always-on layers (looping emitters, beams, lights...) on or off.
+--- How many delayed emits, pulses and animations are still waiting or running: a play with a
+--- quiet lead-in (a fire's tell at 0.23 s) isn't over yet. tests/timeline.luau reads it.
+function EasyVFX.Pending(): number
+	return #active
+end
+
 function EasyVFX.SetEnabled(root: Instance, on: boolean)
 	for _, d in root:GetDescendants() do
 		if d:GetAttribute("EmitCount") == nil and d:GetAttribute("EmitDuration") == nil and d:GetAttribute("VFX_Layer") ~= nil then

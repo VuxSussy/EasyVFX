@@ -47,13 +47,15 @@ def _folder(mode, fps):
     return os.path.join(CACHE, "timeline", mode if fps == 30 else f"{mode}-{fps}")
 
 
-def export(presets=None, mode="hd", root=ROOT, out=None, fps=30):
+def export(presets=None, mode="hd", root=ROOT, out=None, fps=30, env=None):
     """Runs tests/timeline.luau in `root` and returns the folder it wrote. `fps` is the
     harness frame rate: 30 for the audit, 60 for the beat judge."""
     out = out or _folder(mode, fps)
     os.makedirs(out, exist_ok=True)
     args = [lune(), "run", "tests/timeline.luau", os.path.abspath(out), mode, ",".join(presets or [])]
-    env = {**os.environ, "EVFX_FPS": str(fps)}
+    env = {**os.environ, "EVFX_FPS": str(fps), **(env or {})}
+    # absolute, as Lune runs from the repo root
+    env["EVFX_KITS"] = ":".join(kit_dirs())
     done = subprocess.run(args, cwd=root, capture_output=True, text=True, env=env)
     if done.returncode != 0:
         sys.exit("evfx: timeline export failed\n" + done.stdout + done.stderr)
@@ -63,26 +65,43 @@ def export(presets=None, mode="hd", root=ROOT, out=None, fps=30):
     return out
 
 
-def load(preset, mode="hd", folder=None, fresh=False, fps=30):
+def load(preset, mode="hd", folder=None, fresh=False, fps=30, env=None):
     folder = folder or _folder(mode, fps)
     path = os.path.join(folder, preset + ".json")
     if fresh or not os.path.exists(path):
-        export([preset], mode, out=folder, fps=fps)
+        export([preset], mode, out=folder, fps=fps, env=env)
     if not os.path.exists(path):
         sys.exit(f"evfx: no preset named {preset}")
     with open(path, encoding="utf-8") as f:
         return json.load(f)
 
 
+def kit_dirs():
+    """The directories in EVFX_KITS (separated by ":"): a game's own effects, kept in its own repo
+    and loaded with Presets.register. Each holds kits/<kit>.luau, sheets/<preset>.json and
+    picks/kit_<kit>.json."""
+    return [os.path.abspath(d) for d in os.environ.get("EVFX_KITS", "").split(":") if d]
+
+
+def kit_sources():
+    """What the presets and kits are read from: Presets.luau, then every kit module in EVFX_KITS."""
+    out = [os.path.join(ROOT, "src", "Plugin", "Shared", "Presets.luau")]
+    for d in kit_dirs():
+        folder = os.path.join(d, "kits")
+        if os.path.isdir(folder):
+            out += sorted(os.path.join(folder, n) for n in os.listdir(folder) if n.endswith(".luau"))
+    return out
+
+
 def preset_ids():
-    """Every preset id, in library order, read from Presets.luau."""
-    path = os.path.join(ROOT, "src", "Plugin", "Shared", "Presets.luau")
+    """Every preset id, in library order, read from Presets.luau and the kits in EVFX_KITS."""
     ids = []
-    with open(path, encoding="utf-8") as f:
-        for line in f:
-            stripped = line.strip()
-            if stripped.startswith('id = "'):
-                ids.append(stripped.split('"')[1])
+    for path in kit_sources():
+        with open(path, encoding="utf-8") as f:
+            for line in f:
+                stripped = line.strip()
+                if stripped.startswith('id = "'):
+                    ids.append(stripped.split('"')[1])
     return ids
 
 
@@ -213,7 +232,12 @@ def views(timeline, size=(480, 320)):
     direction = norm((0.62, 0.42, 0.66))
     close = Camera(add(center, mul(direction, span * 0.95 + 2.5)), center, 70, size)
     far = Camera(add(holder, (14, 9, 18)), add(holder, (0, 2.5, 0)), 70, size)
-    return {"close": close, "far": far}
+    # a ground effect seen the way the fire pit's reference video sees it: about 30 degrees
+    # down, from 16 studs, through a narrow 30-degree lens, so near and far read about the same
+    # size and flat decals look flat (Phát, 2026-10-24)
+    target = add(holder, (0, -0.6, 0))
+    ground = Camera(add(target, mul(norm((0.05, 0.6, 1.0)), 16)), target, 30, size)
+    return {"close": close, "far": far, "ground": ground}
 
 
 # ------------------------------------------------------------------ particles
@@ -253,7 +277,8 @@ def _particle(e, origin_cf, volume, age, rng):
         cell = min(frames - 1, int(f * frames))
     elif grid > 1:
         rate = rng.uniform(*e.get("flipFramerate", [30, 30]))
-        cell = int(age * rate) % frames
+        start = rng.randrange(frames) if e.get("flipRandom") else 0
+        cell = (start + int(age * rate)) % frames
     else:
         cell = 0
     return {
@@ -276,12 +301,18 @@ def particles_at(timeline, t):
     """Every particle alive `t` seconds into the play, from bursts and streams."""
     out = []
     dt = timeline["frameTime"]
-    for index, b in enumerate(timeline["bursts"]):
+    # each burst and stream is seeded by what it is (its name, texture, time and place), not by
+    # where it falls in the timeline's list, so a layer gets the same particles alone as it does
+    # inside the whole effect (Phát: the two looked different)
+    seen = {}
+    for b in timeline["bursts"]:
+        ident = (b.get("name"), b.get("texture"), b["frame"], tuple(round(x, 2) for x in b["cframe"][:3]))
+        seen[ident] = seen.get(ident, 0) + 1
         age = t - b["frame"] * dt
         if age < 0:
             continue
         for n in range(int(b["count"])):
-            p = _particle(b, b["cframe"], b["volume"], age, _rng("b", index, n))
+            p = _particle(b, b["cframe"], b["volume"], age, _rng("b", ident, seen[ident], n))
             if p:
                 out.append(p)
     emitters = timeline["emitters"]
@@ -302,7 +333,8 @@ def particles_at(timeline, t):
                 last = math.floor(ft * rate)
                 for n in range(first, last + 1):
                     age = t - n / rate
-                    p = _particle(e, stream["cframe"], stream["volume"], age, _rng("s", key, n))
+                    ident = (e.get("name"), e.get("texture"), tuple(round(x, 2) for x in stream["cframe"][:3]))
+                    p = _particle(e, stream["cframe"], stream["volume"], age, _rng("s", ident, n))
                     if p:
                         out.append(p)
     return out
