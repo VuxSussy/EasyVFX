@@ -4,6 +4,10 @@ All notable changes to EasyVFX are listed here. Versions follow [Semantic Versio
 
 ## [Unreleased]
 
+### Loops that show at every graphics quality
+- The timeline recorder replays a looping preset's bursts every `VFX_Interval`, as the runtime does, so the preview draws a loop built from bursts the way the game plays it.
+- `docs/sharp-vfx.md` rule 1 and the `components` skill: a steady `Rate` draws nothing at the lowest graphics quality, so a loop players must always see is bursts on an interval.
+
 ### Projectile halo
 - `Projectile` takes `Halo = false` to drop the ForceField shell round its head, which reads as a black outline in a dark room (seen in Studio, 2026-10-26). The default keeps it, so existing presets don't change.
 

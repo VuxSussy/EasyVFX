@@ -374,6 +374,11 @@ local function record(preset)
 	-- the same random every recording, so a kit layer alone matches it inside its effect
 	root:SetAttribute("VFX_Seed", 1)
 	EasyVFX.PlayLocal(root)
+	-- a loop's bursts replay every VFX_Interval, as the runtime's watcher (and a game's own loop)
+	-- plays them; a loop built from bursts instead of a steady Rate draws at every graphics quality
+	local interval = root:GetAttribute("VFX_Interval")
+	local replay = loop and EasyVFX.HasBursts(root) and type(interval) == "number" and interval > 0
+	local nextReplay = if replay then interval else math.huge
 	local emitters, frames = {}, {}
 	local limit = math.floor((if loop then LOOP_SECONDS else MAX_SECONDS) / H.FRAME + 0.5)
 	local quiet = 0
@@ -384,6 +389,10 @@ local function record(preset)
 		end
 		for _, f in steps do
 			f(H.FRAME)
+		end
+		if (now - start) * H.FRAME >= nextReplay - 1e-6 then
+			EasyVFX.PlayLocal(root)
+			nextReplay += interval
 		end
 		local frame = capture(root, emitters)
 		frame.t = (now - start) * H.FRAME
