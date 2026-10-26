@@ -545,22 +545,30 @@ end
 
 LayerBuilders.beam = function(ctx, key, layer)
 	local params: Params = ctx.params
-	local a0 = attachment(ctx, key .. ":a", (layer.from or Vector3.zero) * params.size)
-	local a1 = attachment(ctx, key .. ":b", (layer.to or Vector3.new(0, 0, -10)) * params.size)
+	-- `curve0` and `curve1` (studs) bend the beam along each end's X axis, which `tilt0` and `tilt1`
+	-- (degrees) turn: with both curves set the beam runs in an S, a ribbon winding up a drop's
+	-- pillar whose texture scrolls along it (`packTexture`, `textureSpeed`)
+	local a0 = attachment(ctx, key .. ":a", (layer.from or Vector3.zero) * params.size, layer.tilt0)
+	local a1 = attachment(ctx, key .. ":b", (layer.to or Vector3.new(0, 0, -10)) * params.size, layer.tilt1)
 	local beam = getOrCreate(ctx.existing, ctx.wanted, key, "Beam", ctx.root) :: Beam
 	beam.Name = "Beam"
 	beam.Attachment0 = a0
 	beam.Attachment1 = a1
-	local width = (layer.width or 1) * params.size
-	beam.Width0 = width
-	beam.Width1 = width
+	-- `width0` and `width1` taper the beam from its start to its end (a drop's pillar narrowing
+	-- upward); without them both ends take `width`
+	local width = layer.width or 1
+	beam.Width0 = (layer.width0 or width) * params.size
+	beam.Width1 = (layer.width1 or width) * params.size
 	beam.Color = colorSequence(layer.color, params)
 	beam.Transparency = numberSequence(layer.transparency or 0, 1, 0, 1)
 	beam.LightEmission = math.clamp((layer.lightEmission or 1) * params.glow, 0, 1)
 	beam.LightInfluence = 0
 	beam.Brightness = (layer.brightness or 1) * params.glow
 	beam.FaceCamera = true
-	beam.Segments = 1
+	local curved = (layer.curve0 or 0) ~= 0 or (layer.curve1 or 0) ~= 0
+	beam.CurveSize0 = (layer.curve0 or 0) * params.size
+	beam.CurveSize1 = (layer.curve1 or 0) * params.size
+	beam.Segments = if curved then 24 else 1
 	ribbonTexture(ctx, layer, beam)
 	setStreaming(beam, ctx, function()
 		beam.Enabled = true

@@ -9,7 +9,31 @@ A texture is a fixed grid of pixels. Blow a 256 px particle up to half the scree
 - EasyVFX builds rings, slashes, needles, lightning, spirals and projectile trails from curved **Beams**, and flashes and cores from **Neon** parts.
 - Textures, when used, carry only *soft* detail (glow falloff, strands, noise). The silhouette comes from the geometry.
 
-## 2. Chained beams must share camera-facing attachments (no `FaceCamera`)
+## 2. One shape, one beam
+
+The pitfall an agent trips on most (Phát, 2026-10-26, after the fire pit and the wind kit): drawing one
+continuous shape out of many beams. Every joint is somewhere it can show a notch, a step, a restarted
+texture or a gradient band, and a chain of short straight beams reads as a broken line however well its
+joints are matched. Reach for one beam first:
+
+- **One curved beam covers an arc of up to about 200 degrees.** A cubic Bezier stays within about 2% of a
+  circle over a semicircle: set `CurveSize0` and `CurveSize1` to `4/3 · tan(arc / 4) · radius` along
+  each end's tangent (`Band`).
+- **One beam bends into an S** with both curve sizes along the same axis: a ribbon winding up a pillar
+  (a drop's beam layer, `curve0`, `curve1`).
+- **The texture does the flowing.** A still beam with its texture scrolling (`TextureSpeed`) reads as
+  moving wind or energy, with no joints and nothing to update each frame.
+- **Taper and fade in the beam's properties** (`Width0`, `Width1`, `Transparency`), never in a second
+  beam. A Beam has a width at each end only, so a band pinched at both ends needs either a fade at
+  both ends of one beam or two beams; prefer the fade.
+- **Volume is several whole beams overlapping**, each a little off in radius, height and speed, not one
+  shape cut into pieces.
+
+Chain beams only when one cannot follow the path at all (a helix of several turns, a zig-zag bolt), and
+then share their attachments as in rule 3. Count the beams per shape before building: more than one
+for one continuous stroke needs a reason.
+
+## 3. Chained beams must share camera-facing attachments (no `FaceCamera`)
 
 ![FaceCamera vs shared frames](beam-seams.png)
 
@@ -23,11 +47,11 @@ What EasyVFX does instead (`ribbonFrame` in the runtime):
 - Neighbouring beams share the attachment, so they meet exactly, and the ribbon still faces the camera.
 - For zig-zag lightning the tangent at a corner is the average of the two segments (a **miter joint**), so the bolt bends cleanly instead of overlapping.
 
-## 3. One gradient across a chain, not one per segment
+## 4. One gradient across a chain, not one per segment
 
 `ColorSequence.new(a, b)` on every segment restarts the gradient at each joint, which shows as color bands. Give each segment its slice of the overall gradient: `a:Lerp(b, f0)` to `a:Lerp(b, f1)`. The same goes for `Transparency` and `Width`: compute them from the position along the whole chain.
 
-## 4. Clean texture edges (edge padding)
+## 5. Clean texture edges (edge padding)
 
 Renderers (Blender Cycles included) write **black RGB into fully transparent pixels**. Roblox filters textures bilinearly and builds mipmaps from straight alpha, so that black bleeds into every soft edge. The result is a grey or dark rim, and a dirty, crunchy look once the effect is a bit away from the camera.
 
@@ -37,21 +61,21 @@ The EasyVFX pack measured 0.01–0.22 RGB in its transparent areas. `tools/fix_t
 python tools/fix_texture_edges.py pack/textures/*.png
 ```
 
-## 5. Spend texture resolution where it shows
+## 6. Spend texture resolution where it shows
 
 - Roblox images are at most **1024 × 1024**, and lower graphics settings load smaller mips.
 - A 4×4 flipbook on a 1024 sheet leaves **256 px per frame**. That is fine for small or fast bursts (impacts, sparks), but blurry on a big slow effect. Use `Grid2x2` (512 px frames) or a single texture for anything that fills the screen.
 - Strip textures for beams and trails only need detail across their width. A 1024 × 64 strip stretched along a beam stays crisp, because filtering along a smooth gradient is invisible.
 - Don't stretch a small soft particle to be huge. Make a bigger texture, or use an Orb part.
 
-## 6. Glow without mush
+## 7. Glow without mush
 
 - `LightEmission = 1`, `LightInfluence = 0` for additive, self-lit glow.
 - Use a white core plus a colored rim (two beams) instead of one flat color. The bright core reads as "hot" and keeps the edge defined.
 - `Brightness > 1` on beams and particles, together with a `Bloom` effect in Lighting, gives an anime-style glow without blurry textures. The plugin has a button that adds Bloom.
 - Use `ZOffset` to keep cores in front of rims so they don't flicker when they sort.
 
-## 7. Motion sells sharpness
+## 8. Motion sells sharpness
 
 - Fast in, slow out (`Out` easing). A white flash first, then the main color, then gone within about 0.35 s. Long, slow fades make effects look soft.
 - Sparks: square texture, `VelocityParallel` orientation and negative `Squash`, so they are needles, not dots.
@@ -60,6 +84,7 @@ python tools/fix_texture_edges.py pack/textures/*.png
 ## Checklist
 
 - [ ] Silhouettes come from Beams, Neon or meshes; textures only add soft detail.
+- [ ] One continuous shape is one beam (curved, textured, tapered in its properties); a chain only where one beam can't follow the path.
 - [ ] Chained beams use shared, camera-facing attachments (no `FaceCamera`).
 - [ ] Gradients run across the whole chain, not per segment.
 - [ ] Textures are edge-padded (`tools/fix_texture_edges.py`).
