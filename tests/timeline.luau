@@ -185,6 +185,7 @@ local function beamInfo(d: Beam)
 		texture = tostring(d.Texture),
 		textureMode = enumName(d.TextureMode),
 		textureLength = d.TextureLength,
+		textureSpeed = d.TextureSpeed,
 		transparency = numSeq(d.Transparency),
 		color = colSeq(d.Color),
 		lightEmission = d.LightEmission,

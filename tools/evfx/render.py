@@ -368,56 +368,51 @@ def _profile(name, steps):
     return column[idx]
 
 
-def _beam(canvas, beam):
+def _beam(canvas, beam, t=0.0):
     cam = canvas.cam
     p0, p3 = beam["p0"], beam["p3"]
     p1 = core.add(p0, core.mul(beam["a0"], beam["c0"]))
     p2 = core.sub(p3, core.mul(beam["a1"], beam["c1"]))
-    n = max(12, int(beam.get("segments", 10)))
-    pts = []
-    for k in range(n + 1):
-        t = k / n
-        world = core.bezier(p0, p1, p2, p3, t)
-        pr = cam.project(world)
-        if pr is None:
-            return
-        width = cam.pixels(beam["w0"] + (beam["w1"] - beam["w0"]) * t, pr[2]) / 2
-        pts.append((pr[0], pr[1], width, t))
+    # at least 32 steps along a beam, and one every 4 pixels on screen, so a transparency or colour
+    # gradient along it reads smooth: each step has one alpha, and a long beam showed them as bands
+    def sample(n):
+        out = []
+        for k in range(n + 1):
+            f = k / n
+            pr = cam.project(core.bezier(p0, p1, p2, p3, f))
+            if pr is None:
+                return None
+            width = cam.pixels(beam["w0"] + (beam["w1"] - beam["w0"]) * f, pr[2]) / 2
+            out.append((pr[0], pr[1], width, f))
+        return out
+
+    n = max(32, int(beam.get("segments", 10)))
+    pts = sample(n)
+    if pts is None:
+        return
+    length = sum(math.hypot(b[0] - a[0], b[1] - a[1]) for a, b in zip(pts, pts[1:]))
+    if length / n > 4:
+        pts = sample(min(240, int(length / 4)))
     light = min(1.0, beam.get("lightEmission", 0))
     if beam.get("texture", "").startswith("pack://") and texture(beam["texture"]) is not None and beam["texture"] in _images:
-        _beam_textured(canvas, beam, pts, light)
+        _beam_textured(canvas, beam, pts, light, t)
         return
-    strips = 6
-    profile = _profile(beam.get("texture", ""), strips)
-    for k in range(n):
-        x0, y0, w0, t0 = pts[k]
-        x1, y1, w1, t1 = pts[k + 1]
-        dx, dy = x1 - x0, y1 - y0
-        m = math.hypot(dx, dy) or 1
-        nx, ny = -dy / m, dx / m
-        tm = (t0 + t1) / 2
-        alpha = 1 - core.number_at(beam["transparency"], tm)
-        if alpha <= 0.002:
-            continue
-        brightness = beam.get("brightness", 1) if light > 0 else 1
-        color = [c * brightness for c in core.color_at(beam["color"], tm)]
-        for s in range(strips):
-            a, b = -1 + 2 * s / strips, -1 + 2 * (s + 1) / strips
-            quad = [
-                (x0 + nx * w0 * a, y0 + ny * w0 * a),
-                (x1 + nx * w1 * a, y1 + ny * w1 * a),
-                (x1 + nx * w1 * b, y1 + ny * w1 * b),
-                (x0 + nx * w0 * b, y0 + ny * w0 * b),
-            ]
-            _fill(canvas, quad, color, alpha * float(profile[s]), light)
+    # a plain beam (or one whose texture isn't in the pack) is drawn the textured way too, with its
+    # profile across the width as the mask: drawn as a grid of separate quads its overlapping edges
+    # added up twice and showed as seams (Phát, 2026-10-26: the drop's pillar looked broken)
+    column = _profile(beam.get("texture", ""), 32)
+    _beam_textured(canvas, beam, pts, light, t, mask=np.repeat(column[:, None], 4, axis=1))
 
 
-def _beam_textured(canvas, beam, pts, light):
+def _beam_textured(canvas, beam, pts, light, t=0.0, mask=None):
     """A beam with a pack texture, drawn as Roblox lays it: U along the beam (Stretch repeats it
     TextureLength times over the length; Wrap and Static every TextureLength studs), V across
-    its width. Each segment gets its own slice of the texture."""
-    name = beam["texture"]
-    mask, tint = texture(name), texture_colour(name)
+    its width. Each segment gets its own slice of the texture. TextureSpeed scrolls it toward
+    Attachment1, `t` seconds into the play."""
+    name = beam.get("texture", "")
+    tint = None
+    if mask is None:
+        mask, tint = texture(name), texture_colour(name)
     tw = mask.shape[1]
     reps = max(1e-3, beam.get("textureLength", 1) or 1)
     if beam.get("textureMode", "Stretch") != "Stretch":
@@ -433,7 +428,7 @@ def _beam_textured(canvas, beam, pts, light):
         alpha = 1 - core.number_at(beam["transparency"], tm)
         if alpha <= 0.002:
             continue
-        u0 = (t0 * reps) % 1
+        u0 = (t0 * reps - t * (beam.get("textureSpeed", 0) or 0)) % 1
         u1 = u0 + (t1 - t0) * reps
         c0, c1 = int(u0 * tw), min(tw, max(int(u0 * tw) + 1, int(math.ceil(min(1.0, u1) * tw))))
         quad = [(x0 - nx * w0, y0 - ny * w0), (x1 - nx * w1, y1 - ny * w1), (x1 + nx * w1, y1 + ny * w1), (x0 + nx * w0, y0 + ny * w0)]
@@ -623,7 +618,7 @@ def draw(timeline, t, cam, body=True):
         _particle(canvas, p)
     if frame:
         for beam in frame["beams"]:
-            _beam(canvas, beam)
+            _beam(canvas, beam, t)
     rgb = canvas.finish(frame["screens"] if frame else ())
     return rgb, {"particles": len(particles), "glow": canvas.glow, "body": body_mask, "frame": frame}
 

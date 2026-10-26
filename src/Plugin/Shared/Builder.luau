@@ -250,7 +250,25 @@ local function collectExisting(root: Instance): Existing
 	return existing
 end
 
+-- A running game under Server Authority refuses attribute strings over 50 characters
+-- (SetAttribute throws), and a grouped attachment's key (group, spot and tilt) runs longer.
+-- Such a key is stored as a stable FNV-1a hash of it, the same on every build.
+Builder.MAX_KEY = 50
+
+function Builder.layerKey(key: string): string
+	if #key <= Builder.MAX_KEY then
+		return key
+	end
+	local h = 2166136261
+	for i = 1, #key do
+		h = bit32.bxor(h, string.byte(key, i))
+		h = (bit32.lshift(h, 24) + h * 403) % 4294967296
+	end
+	return string.format("#%08x:%d", h, #key)
+end
+
 local function getOrCreate(existing: Existing, wanted: { [string]: boolean }, key: string, className: string, parent: Instance): Instance
+	key = Builder.layerKey(key)
 	wanted[key] = true
 	local found: Instance? = existing[key]
 	if found and found.ClassName ~= className then
@@ -545,22 +563,30 @@ end
 
 LayerBuilders.beam = function(ctx, key, layer)
 	local params: Params = ctx.params
-	local a0 = attachment(ctx, key .. ":a", (layer.from or Vector3.zero) * params.size)
-	local a1 = attachment(ctx, key .. ":b", (layer.to or Vector3.new(0, 0, -10)) * params.size)
+	-- `curve0` and `curve1` (studs) bend the beam along each end's X axis, which `tilt0` and `tilt1`
+	-- (degrees) turn: with both curves set the beam runs in an S, a ribbon winding up a drop's
+	-- pillar whose texture scrolls along it (`packTexture`, `textureSpeed`)
+	local a0 = attachment(ctx, key .. ":a", (layer.from or Vector3.zero) * params.size, layer.tilt0)
+	local a1 = attachment(ctx, key .. ":b", (layer.to or Vector3.new(0, 0, -10)) * params.size, layer.tilt1)
 	local beam = getOrCreate(ctx.existing, ctx.wanted, key, "Beam", ctx.root) :: Beam
-	beam.Name = "Beam"
+	beam.Name = layer.name or "Beam"
 	beam.Attachment0 = a0
 	beam.Attachment1 = a1
-	local width = (layer.width or 1) * params.size
-	beam.Width0 = width
-	beam.Width1 = width
+	-- `width0` and `width1` taper the beam from its start to its end (a drop's pillar narrowing
+	-- upward); without them both ends take `width`
+	local width = layer.width or 1
+	beam.Width0 = (layer.width0 or width) * params.size
+	beam.Width1 = (layer.width1 or width) * params.size
 	beam.Color = colorSequence(layer.color, params)
 	beam.Transparency = numberSequence(layer.transparency or 0, 1, 0, 1)
 	beam.LightEmission = math.clamp((layer.lightEmission or 1) * params.glow, 0, 1)
 	beam.LightInfluence = 0
 	beam.Brightness = (layer.brightness or 1) * params.glow
 	beam.FaceCamera = true
-	beam.Segments = 1
+	local curved = (layer.curve0 or 0) ~= 0 or (layer.curve1 or 0) ~= 0
+	beam.CurveSize0 = (layer.curve0 or 0) * params.size
+	beam.CurveSize1 = (layer.curve1 or 0) * params.size
+	beam.Segments = if curved then 24 else 1
 	ribbonTexture(ctx, layer, beam)
 	setStreaming(beam, ctx, function()
 		beam.Enabled = true

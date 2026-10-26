@@ -102,6 +102,15 @@ for _, preset in Presets.List do
 	if not ok then
 		continue
 	end
+	local long: string? = nil
+	for _, d in { root, table.unpack(root:GetDescendants()) } do
+		for name, value in d:GetAttributes() do
+			if type(value) == "string" and #value > Builder.MAX_KEY then
+				long = name .. " = " .. value
+			end
+		end
+	end
+	check(long == nil, preset.id .. " writes no attribute string a running game would refuse: " .. tostring(long))
 	check(root:HasTag("EasyVFX"), preset.id .. " tagged")
 	check(Builder.isRoot(root), preset.id .. " isRoot")
 	check(Builder.findRoot(root:GetDescendants()[1] or root) == root, preset.id .. " findRoot from child")
@@ -1202,6 +1211,16 @@ do
 		check(total > 0 and frozen > 0, "a hit-stop freezes the live particles (" .. frozen .. " of " .. total .. ")")
 		part:Destroy()
 	end
+end
+
+print("== Layer keys fit a running game's attribute limit")
+do
+	local long = "g:Ribbons" .. string.rep("0.25,1.5,-3^0,90,0", 6)
+	local key = Builder.layerKey(long)
+	check(#key <= Builder.MAX_KEY, "a long key is stored short (" .. key .. ")")
+	check(Builder.layerKey(long) == key, "the short key is the same on every build")
+	check(Builder.layerKey(long .. "x") ~= key, "two long keys stay apart")
+	check(Builder.layerKey("3:a") == "3:a", "a short key is kept as it is")
 end
 
 print("== Server mode forwards to clients")

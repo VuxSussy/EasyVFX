@@ -1533,6 +1533,36 @@
       "sha256": "80f3c7af3172b68ff7fb23b357b262b58027c55f0d5ad47e499005b77bee98bb",
       "use": "bars pulsing down a beam (scroll it fast)"
     },
+    "strip_soft_beam": {
+      "id": "strip/soft_beam",
+      "kind": "strip",
+      "size": [
+        1024,
+        256
+      ],
+      "grid": 1,
+      "frames": 1,
+      "role": "core",
+      "upload": true,
+      "rgb": "white",
+      "sha256": "5af01163c7b896b2d8c95d21fd5774d2bab991c024150bf944cf3a3e13f4a0e3",
+      "use": "a solid light beam (Ph\u00e1t, 2026-10-26: a drop's pillar): hot core and soft glow in one beam, even along its length; scroll it for a faint shimmer"
+    },
+    "strip_wind_band": {
+      "id": "strip/wind_band",
+      "kind": "strip",
+      "size": [
+        1024,
+        256
+      ],
+      "grid": 1,
+      "frames": 1,
+      "role": "base",
+      "upload": true,
+      "rgb": "white",
+      "sha256": "a34fe378ac67f5be36b33a5a6e6361cf22068985326e46bb0e02fdc291d5ff4a",
+      "use": "wind for a beam band (Ph\u00e1t, 2026-10-26): beam_hooks with an even zigzag of thin hooks, each curled end keeping its needle and its plain end rounded; tiling along U to scroll (TextureSpeed), or stretched once along a band (TextureMode Stretch); taper with Width0/Width1 and Transparency, not the texture"
+    },
     "strip_wind_stroke": {
       "id": "strip/wind_stroke",
       "kind": "strip",

@@ -1209,6 +1209,18 @@ def energy_streak(p, rng, size):
     return np.clip(np.maximum(core, body * 0.8), 0, 1) * _edges(y)
 
 
+@recipe("soft_beam", core=0.12, glow=0.5, shimmer=0.15)
+def soft_beam(p, rng, size):
+    """A light beam that is solid along its length: a hot core line in a soft glow, with a
+    faint shimmer along it that shows when it scrolls. Tiles along its length."""
+    x, y, w, h = _strip_grid(size)
+    seed = _seed(rng)
+    shimmer = 1 - p["shimmer"] * lib.perlin((h, w), (1, 6), seed)
+    core = np.exp(-((y / p["core"]) ** 2))
+    glow = np.exp(-((y / p["glow"]) ** 2)) * 0.55 * shimmer
+    return np.clip(np.maximum(core, glow), 0, 1) * _edges(y)
+
+
 @recipe("fire_band", height=1.0)
 def fire_band(p, rng, size):
     """A band of flame tongues rising from a base line, for fire beams and trails that
@@ -2693,7 +2705,7 @@ def _wave(x, w, rng, amp, terms=3):
     return out * amp
 
 
-@recipe("beam_hooks", bands=1, width=0.27, wobble=0.035, hooks=2, hook=0.17, long=2.2, halo=12)
+@recipe("beam_hooks", bands=1, width=0.27, wobble=0.035, hooks=2, hook=0.17, long=2.2, halo=12, jitter=0.15, girth=0.58, sink=0.42, slit=0.09, slitLong=0.4, slitAt=0.75, fillet=0.35, round=0, roundSide=0, roundKeep=0, stagger=0.5)
 def beam_hooks(p, rng, size):
     """One streak along a beam (Phát: one per texture, not three in one), tiling along its
     length (U), for TextureSpeed to scroll. The streak is the clear gap between dark bands
@@ -2703,12 +2715,29 @@ def beam_hooks(p, rng, size):
       hooks   hook teeth per edge along the strip; `hook` how far they reach in (share of the
               height), `long` how much longer than that they run along the edge
       halo    a soft falloff into the streak around each hook, pixels
+      jitter  how far each hook strays from even spacing (share of the spacing; 0 is an even zigzag)
+      stagger where the bottom edge's hooks sit between the top edge's (share of the spacing; 0.5
+              is halfway)
+      girth   a hook's half-thickness (share of its reach): small gives long thin cuts, as in a
+              brushed wind band (Phát's green wind set, 2026-10-26)
+      sink    how far into the edge the hook's middle sits (share of its reach)
+      slit    the half-thickness of the slit that frees a hook's curled end (share of its reach):
+              thin leaves a needle-sharp wedge between the curl and the band, thicker rounds it
+              (Phát, 2026-10-26); `slitLong` its half-length and `slitAt` where its middle sits
+              along the hook (shares of the hook's length), which set how long that needle runs
+      fillet  how wide the join between a hook and its band is blended (share of its reach): wider
+              smooths the white where the hook's other end meets the band (Phát, 2026-10-26)
+      round   rounds every corner of the finished shape by this radius, pixels at 1024 (0 is off);
+              `roundSide` 1 rounds only each hook's plain end, keeping the curled end's point
     Each hook is a lobe pushed out from the edge on a narrow neck, with a bite taken out of
     one side so it curls back toward its band, as a brush flick would leave it."""
     W, H = size, size // 4
     y, x = np.mgrid[0:H, 0:W].astype(np.float32)
     shape = np.zeros((H, W), np.float32)
     hooks_only = np.zeros((H, W), np.float32)
+    # where each hook's plain end (the one without the curl's needle) meets its band, for rounding
+    # only that side (`roundSide` 1)
+    plain = np.zeros((H, W), np.float32)
     n = int(p["bands"])
     span = H
     for b in range(n):
@@ -2726,8 +2755,8 @@ def beam_hooks(p, rng, size):
         clear = H - 2 * p["width"] * H * 1.1
         for side in (-1.0, 1.0):
             # the bottom edge's hooks sit halfway between the top edge's, as in the reference
-            offset = 0.0 if side < 0 else 0.5
-            xs = (np.arange(count) + offset + rng.uniform(-0.15, 0.15, count)) * W / count + start
+            offset = 0.0 if side < 0 else p["stagger"]
+            xs = (np.arange(count) + offset + rng.uniform(-1, 1, count) * p["jitter"]) * W / count + start
             for x0 in xs:
                 rr = min(r * rng.uniform(0.8, 1.2), clear * 0.62)
                 curl = rng.choice([-1.0, 1.0])
@@ -2735,14 +2764,17 @@ def beam_hooks(p, rng, size):
                 o = (dy - side * half) * side  # outward from the edge
                 # a lobe long along the edge, sunk into it, joined with a fillet
                 ln = rr * p["long"]
-                lobe = ((a / ln) ** 2 + ((o - rr * 0.42) / (rr * 0.58)) ** 2 - 1) * rr * 0.55
-                k = rr * 0.35
+                lobe = ((a / ln) ** 2 + ((o - rr * p["sink"]) / (rr * p["girth"])) ** 2 - 1) * rr * 0.55
+                k = rr * p["fillet"]
                 h = np.clip(0.5 + 0.5 * (d - lobe) / k, 0, 1)
                 d = d * (1 - h) + lobe * h - k * h * (1 - h)
                 # a thin slit under one end frees it from the band, so that end curls back
-                slit = (1 - ((a - curl * ln * 0.75) / (ln * 0.4)) ** 2 - ((o - rr * 0.02) / (rr * 0.09)) ** 2) * rr * 0.09
+                sw = p["slit"]
+                slit = (1 - ((a - curl * ln * p["slitAt"]) / (ln * p["slitLong"])) ** 2 - ((o - rr * 0.02) / (rr * sw)) ** 2) * rr * sw
                 d = np.maximum(d, slit)
                 teeth = np.minimum(teeth, lobe)
+                end = np.exp(-(((a + curl * ln * 0.7) / (ln * 0.6)) ** 2) - ((o - rr * 0.2) / rr) ** 2)
+                plain = np.maximum(plain, end)
         shape = np.maximum(shape, np.clip(-d + 0.5, 0, 1))
         hooks_only = np.maximum(hooks_only, np.clip(-teeth + 0.5, 0, 1) * np.clip(-d + 0.5, 0, 1))
     shape = np.maximum(shape, hooks_only)
@@ -2750,6 +2782,24 @@ def beam_hooks(p, rng, size):
         # blurs across the strip's left and right ends too, so it still tiles
         pad = int(r * 4) + 2
         return _blur_f(np.pad(a, ((0, 0), (pad, pad)), mode="wrap"), r)[:, pad:-pad]
+
+    # rounding (Phát, 2026-10-26): the hooks are ellipse formulas, not true distances, so a fillet
+    # can't round a long hook's joins evenly. Blurring the finished shape and cutting it again at
+    # half rounds every corner, the white's and the dark's, by the same radius in pixels; it wraps
+    # both ways, as the band does, so the strip still tiles
+    rad = p["round"] * size / 1024
+    if rad > 0:
+        pad = int(rad * 4) + 2
+        soft = _blur_f(np.pad(shape, pad, mode="wrap"), rad)[pad:-pad, pad:-pad]
+        # `roundSide` 1: only each hook's plain end, so the curled end keeps its point. The blur is
+        # blended in before the cut, not after, so the mixed stretch keeps one crisp edge instead of
+        # a grey double one
+        w = np.clip(plain * 1.6, 0, 1) if p["roundSide"] >= 1 else 1.0
+        field = shape * (1 - w) + soft * w
+        # `roundKeep` moves the cut toward the dark, so white thinner than the blur (the streak's
+        # narrow necks) survives a big radius instead of breaking the strip apart (Phát, 2026-10-26)
+        shape = np.clip((field - 0.5 - p["roundKeep"]) * 2.5 * rad + 0.5, 0, 1)
+        hooks_only = np.minimum(hooks_only, shape)
 
     halo = blur_wrap(hooks_only, p["halo"] * size / 1024) * 0.9
     edge = blur_wrap(shape, 1.5 * size / 1024)

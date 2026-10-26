@@ -1380,6 +1380,147 @@ Shapes.Spiral = function(cfg, ctx)
 	return delay + duration
 end
 
+-- Band: wide bands of textured wind (or energy) swinging round the centre: the ribbons that
+-- wrap a tornado, a swirl round a landing (Phát's wind kit, 2026-10-26). Each band is a curved
+-- Beam over an arc of at most 200 degrees, its texture one tile stretched along it
+-- (TextureMode Stretch; TextureLength repeats it), scrolling with TextureSpeed. A cubic Bezier
+-- stays within about 2% of a circle over a semicircle. Count bands share the layer, spread
+-- round the circle, each a little off in radius, height, width and speed, so together they
+-- have volume.
+--   Orient "Wrap": the width stands along the axis, a band round a column. "Flat": the width
+--   lies outward, a band on the ground (arcs of 120 degrees or less, or the ribbon twists).
+--   Radius0 -> Radius1 and Rise0 -> Rise1 (the head's height over the tail's, a helix) over
+--   Duration; Spin turns the set. Width is the band's widest; Taper is the tail's share of it
+--   and Head the head's. A Beam has a width at each end only, so a band pinched at both ends
+--   (Head below 1) is two Beams meeting at its middle, where both are widest: they share that
+--   attachment, so the curve and the width carry on through it, and each carries one tile of a
+--   texture that tiles, so the texture does too.
+Shapes.Band = function(cfg, ctx)
+	local count = math.clamp(math.floor(num(cfg, "Count", 2)), 1, 8)
+	local delay = num(cfg, "Delay", 0)
+	local duration = num(cfg, "Duration", 0.6)
+	local r0, r1 = num(cfg, "Radius0", 2), num(cfg, "Radius1", 4)
+	local arc = math.rad(math.clamp(num(cfg, "Arc", 160), 10, 200))
+	local rise0, rise1 = num(cfg, "Rise0", 0), num(cfg, "Rise1", 0)
+	local width = num(cfg, "Width", 1)
+	local taper = math.clamp(num(cfg, "Taper", 0.25), 0, 1)
+	local head = math.clamp(num(cfg, "Head", 1), 0, 1)
+	local pinched = head < 1
+	local spin = math.rad(num(cfg, "Spin", 360))
+	local jitter = math.clamp(num(cfg, "Jitter", 0.15), 0, 1)
+	local flat = str(cfg, "Orient", "Wrap") == "Flat"
+	local textureSpeed = num(cfg, "TextureSpeed", 0)
+	local textureLength = math.max(0.05, num(cfg, "TextureLength", 1))
+	local style = readStyle(cfg)
+	local base = ctx.origin * CFrame.new(vec(cfg, "Offset", Vector3.zero))
+	if bool(cfg, "Ground", false) then
+		base = snapToGround(base, ctx.ignore)
+	end
+	base *= rad(vec(cfg, "Tilt", Vector3.zero))
+
+	local carrier = newPart(base)
+	local bands = {}
+	for i = 1, count do
+		local speed = 1 + (ctx.rng:NextNumber() * 2 - 1) * jitter
+		local atts = { newAttachment(carrier), newAttachment(carrier) }
+		if pinched then
+			table.insert(atts, newAttachment(carrier))
+		end
+		local beams = {}
+		for k = 1, #atts - 1 do
+			local b = Instance.new("Beam")
+			b.Archivable = false
+			b.Attachment0, b.Attachment1 = atts[k], atts[k + 1]
+			b.FaceCamera = false
+			b.Segments = if pinched then 24 else 40
+			b.LightEmission = style.glow
+			b.LightInfluence = 0
+			b.Brightness = style.brightness
+			b.ZOffset = style.zOffset + i * 0.01
+			if style.texture ~= "" then
+				b.Texture = style.texture
+				b.TextureMode = Enum.TextureMode.Stretch
+				b.TextureLength = textureLength
+			end
+			b.TextureSpeed = textureSpeed * speed
+			b.Parent = carrier
+			beams[k] = b
+		end
+		table.insert(bands, {
+			atts = atts,
+			beams = beams,
+			phase = (i - 1) / count * 2 * math.pi + ctx.rng:NextNumber(-0.3, 0.3),
+			radius = 1 + (ctx.rng:NextNumber() * 2 - 1) * jitter,
+			lift = (ctx.rng:NextNumber() * 2 - 1) * jitter * width,
+			width = 1 + (ctx.rng:NextNumber() * 2 - 1) * jitter,
+			speed = speed,
+		})
+	end
+
+	-- a point on the band's circle at angle th and height h, and the way the band runs there
+	local function frame(r: number, th: number, h: number, dh: number): CFrame
+		local p = Vector3.new(math.cos(th) * r, h, math.sin(th) * r)
+		local along = Vector3.new(-math.sin(th) * r * arc, dh, math.cos(th) * r * arc).Unit
+		local across = if flat then Vector3.new(math.cos(th), 0, math.sin(th)) else Vector3.yAxis
+		across = (across - along * across:Dot(along)).Unit
+		return CFrame.fromMatrix(p, along, across, along:Cross(across))
+	end
+
+	local function step(alpha: number)
+		local e = ease(alpha, style.ease)
+		local fade = fadeAt(style, alpha)
+		for _, band in bands do
+			local r = lerp(r0, r1, e) * band.radius
+			local dh = lerp(rise0, rise1, e)
+			local th0 = band.phase + spin * e * band.speed
+			local spans = #band.beams
+			-- handles for a circle: KAPPA * tan(angle / 4) of the radius, lengthened by the rise
+			local c = KAPPA * math.tan(arc / spans / 4) * math.sqrt(r * r + (dh / arc) ^ 2)
+			for k, att in band.atts do
+				local f = (k - 1) / spans
+				att.CFrame = frame(r, th0 + arc * f, band.lift + dh * f, dh)
+			end
+			local w = width * band.width
+			for k, b in band.beams do
+				b.CurveSize0, b.CurveSize1 = c, c
+				if not pinched then
+					b.Width0, b.Width1 = w * taper, w
+					b.Transparency = NumberSequence.new({
+						NumberSequenceKeypoint.new(0, 1),
+						NumberSequenceKeypoint.new(0.3, lerp(fade, 1, 0.35)),
+						NumberSequenceKeypoint.new(0.85, fade),
+						NumberSequenceKeypoint.new(1, lerp(fade, 1, 0.6)),
+					})
+					b.Color = ColorSequence.new(style.color0, style.color1)
+				elseif k == 1 then
+					b.Width0, b.Width1 = w * taper, w
+					b.Transparency = NumberSequence.new({
+						NumberSequenceKeypoint.new(0, 1),
+						NumberSequenceKeypoint.new(0.6, lerp(fade, 1, 0.25)),
+						NumberSequenceKeypoint.new(1, fade),
+					})
+					b.Color = ColorSequence.new(style.color0, style.color0:Lerp(style.color1, 0.5))
+				else
+					b.Width0, b.Width1 = w, w * head
+					b.Transparency = NumberSequence.new({
+						NumberSequenceKeypoint.new(0, fade),
+						NumberSequenceKeypoint.new(0.6, lerp(fade, 1, 0.2)),
+						NumberSequenceKeypoint.new(1, 1),
+					})
+					b.Color = ColorSequence.new(style.color0:Lerp(style.color1, 0.5), style.color1)
+				end
+			end
+		end
+	end
+	step(0)
+	addAnim(delay, duration, function()
+		carrier.Parent = liveFolder()
+	end, step, function()
+		carrier:Destroy()
+	end)
+	return delay + duration
+end
+
 -- A glowing ball flying along an arc with a tapered ribbon behind it (fireballs,
 -- thrown energy, homing shots). Pair it with Ring/Lines layers whose Delay equals
 -- this Duration and whose Offset equals To for the hit.

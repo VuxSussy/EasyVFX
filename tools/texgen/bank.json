@@ -25,6 +25,7 @@
     "sheet/bolt_variants": {"recipe": "bolt_variants", "kind": "sheet", "size": 1024, "grid": 4, "seed": 23, "role": "sparks", "use": "lightning bolts, one random variant per particle"},
 
     "strip/energy_streak": {"recipe": "energy_streak", "kind": "strip", "size": 1024, "seed": 31, "role": "base", "use": "beams and trails that scroll (Wrap, TextureSpeed)"},
+    "strip/soft_beam": {"recipe": "soft_beam", "kind": "strip", "size": 1024, "seed": 35, "role": "core", "use": "a solid light beam (Phát, 2026-10-26: a drop's pillar): hot core and soft glow in one beam, even along its length; scroll it for a faint shimmer"},
     "strip/fire_band": {"recipe": "fire_band", "kind": "strip", "size": 1024, "seed": 32, "role": "base", "use": "fire beams and trails that scroll"},
     "strip/lightning_fringe": {"recipe": "lightning_fringe", "kind": "strip", "size": 1024, "seed": 33, "role": "sparks", "use": "electric fringe on a dash streak"},
     "strip/wind_stroke": {"recipe": "wind_stroke", "kind": "strip", "size": 1024, "seed": 34, "role": "sparks", "use": "wind and dash strokes"},
@@ -96,6 +97,7 @@
     "shape/hot_spot": {"recipe": "hot_spot", "kind": "shape", "size": 256, "seed": 106, "rgb": "ramp", "role": "glow", "use": "the hot spot under a fire: a soft disc, cream-yellow in the middle, orange, red at its round edge (flat, as light, white tint)"},
     "beam/flame_spire": {"recipe": "flame_spire", "kind": "beam", "size": 512, "seed": 108, "rgb": "ramp", "params": {"palette": "fire_red", "rim": 0, "core": 0.12}, "role": "base", "use": "one flame jet for a Beam, traced from the fire pit's left jet (f8, unwarped): a flat base at the left edge, two peaks pointing right and a small tip on one flank, in two tones (a red-orange edge, a cream core) (TextureMode Stretch, TextureLength 1, Attachment0 at the base); it flashes in, narrows and stretches out on the Beam's properties"},
     "strip/beam_hooks": {"recipe": "beam_hooks", "kind": "strip", "size": 1024, "seed": 98, "role": "base", "use": "one streak for a beam, its edges bitten by wide curled hooks, tiling along U to scroll (TextureSpeed); taper with Width0/Width1 and slow it with the Beam's properties, not the texture"},
+    "strip/wind_band": {"recipe": "beam_hooks", "kind": "strip", "size": 1024, "seed": 98, "params": {"long": 2.2, "jitter": 0, "stagger": 0.6, "girth": 0.4, "round": 20, "roundSide": 1, "roundKeep": 0.1}, "role": "base", "use": "wind for a beam band (Phát, 2026-10-26): beam_hooks with an even zigzag of thin hooks, each curled end keeping its needle and its plain end rounded; tiling along U to scroll (TextureSpeed), or stretched once along a band (TextureMode Stretch); taper with Width0/Width1 and Transparency, not the texture"},
     "shape/mold_fire_hook": {"recipe": "molded", "kind": "shape", "size": 512, "seed": 1, "params": {"mold": "fire_hook"}, "role": "base", "use": "molded by hand in the mold page (tools/texgen/molds/fire_hook.json), shaded in code"}
   }
 }
