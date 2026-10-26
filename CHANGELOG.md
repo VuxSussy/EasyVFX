@@ -4,6 +4,9 @@ All notable changes to EasyVFX are listed here. Versions follow [Semantic Versio
 
 ## [Unreleased]
 
+### Projectile halo
+- `Projectile` takes `Halo = false` to drop the ForceField shell round its head, which reads as a black outline in a dark room (seen in Studio, 2026-10-26). The default keeps it, so existing presets don't change.
+
 ### Claude Code plugin
 - `claude/easyvfx`: the skills `effect`, `story`, `components`, `preview` and `texture`, and a marketplace in `claude/` to load them.
 

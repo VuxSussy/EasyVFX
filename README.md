@@ -92,7 +92,7 @@ Roblox's built-in textures are soft, so EasyVFX builds its crisp parts from **ge
 | **Orb** | **Neon / ForceField** part that grows and fades (balls, pillars, beam cores) | explosion, level up, energy blast |
 | **Crater / Debris** | Rocks bursting up in a ring then sinking; rocks thrown on a ballistic path, colored and textured like the ground below | ground slam, explosion |
 | **Spiral** | Helix strands climbing and twisting, tapered at both ends | tornado, charge up |
-| **Projectile** | Neon/ForceField head flying along a Bezier arc with a tapered trail; hit layers fire at the end. `Tail = "Trail"` gives it a Roblox `Trail` whose length follows its speed (`TrailTime`) in place of the beam chain | fireball |
+| **Projectile** | Neon/ForceField head flying along a Bezier arc with a tapered trail; hit layers fire at the end. `Tail = "Trail"` gives it a Roblox `Trail` whose length follows its speed (`TrailTime`) in place of the beam chain; `Halo = false` drops the ForceField shell round the head | fireball |
 | **Shake** | Smooth-noise camera shake with distance falloff (client only, never the editor camera) | fireball, ground slam, explosion, lightning, impact frame |
 | **Impact** | Anime impact frame: a few frames of Flash / Mono / Invert color correction, never stacked | fireball, impact frame |
 | **Whirl** | A tilted disc of tapered brush-stroke arcs spinning at different speeds; `Strands` splits each stroke into thin lines | wind vortex |
