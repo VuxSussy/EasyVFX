@@ -1,0 +1,7 @@
+{
+  "name": "easyvfx",
+  "description": "Make Roblox VFX with EasyVFX: /easyvfx:effect runs one effect from story to picks; story, components, preview and texture are the steps it calls.",
+  "author": {
+    "name": "EasyVFX"
+  }
+}

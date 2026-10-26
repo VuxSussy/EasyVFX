@@ -369,7 +369,7 @@ def extend(timeline):
     if extra <= 0:
         return timeline
     last = frames[-1]
-    pad = [{**last, "t": last["t"] + (k + 1) * ft, "parts": [], "beams": [], "lights": [], "screens": [], "trails": 0} for k in range(extra)]
+    pad = [{**last, "t": last["t"] + (k + 1) * ft, "parts": [], "beams": [], "lights": [], "screens": [], "trails": 0, "trailPoints": []} for k in range(extra)]
     return {**timeline, "frames": frames + pad}
 
 

@@ -1,0 +1,14 @@
+{
+  "name": "easyvfx",
+  "description": "EasyVFX's Claude Code plugin, kept in the EasyVFX repository",
+  "owner": {
+    "name": "EasyVFX"
+  },
+  "plugins": [
+    {
+      "name": "easyvfx",
+      "source": "./easyvfx",
+      "description": "Make Roblox VFX with EasyVFX: story, layers on Roblox's own components, takes per layer, headless preview, textures"
+    }
+  ]
+}

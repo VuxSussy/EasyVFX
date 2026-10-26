@@ -4,6 +4,14 @@ All notable changes to EasyVFX are listed here. Versions follow [Semantic Versio
 
 ## [Unreleased]
 
+### Claude Code plugin
+- `claude/easyvfx`: the skills `effect`, `story`, `components`, `preview` and `texture`, and a marketplace in `claude/` to load them.
+
+### Native components first
+- `docs/sharp-vfx.md` rule 1: use Roblox's own component for each job (emitters, beams, trails, lights, highlights, post effects); a moving tail is a `Trail`, never a beam chain.
+- `Projectile` takes `Tail = "Trail"` and `TrailTime`: one Roblox `Trail` on the head, as long as its speed times `TrailTime`, in place of the 20-beam tail.
+- The timeline records each trail's attachment points every frame, and the evfx preview draws trails.
+
 ### Stylized generators (step 3)
 - `flame_stylized`: a looping flame from a fluid sim, cut into three hard value bands, with:
   - a solid base;
