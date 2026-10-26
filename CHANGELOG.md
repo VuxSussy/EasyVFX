@@ -4,6 +4,10 @@ All notable changes to EasyVFX are listed here. Versions follow [Semantic Versio
 
 ## [Unreleased]
 
+### Loops that show at every graphics quality
+- The timeline recorder replays a looping preset's bursts every `VFX_Interval`, as the runtime does, so the preview draws a loop built from bursts the way the game plays it.
+- `docs/sharp-vfx.md` rule 1 and the `components` skill: a steady `Rate` draws nothing at the lowest graphics quality, so a loop players must always see is bursts on an interval.
+
 ### Claude Code plugin
 - `claude/easyvfx`: the skills `effect`, `story`, `components`, `preview` and `texture`, and a marketplace in `claude/` to load them.
 

@@ -17,6 +17,12 @@ Roblox has one effect object for each kind of look ([Effects](https://github.com
 
 A `Trail`'s length is its attachments' speed times its `Lifetime`, so it is short while the thing is slow and long once it is fast, which is what makes a fall or a throw feel natural. A chain of beams has a fixed length unless it is rebuilt every frame. The arrival's falling drop first used `Projectile`'s 20-beam tail, then one `Trail` (`Tail = "Trail"`; Phát, 2026-10-26: "the 20 beam for trail is bad"). When a look needs more than a handful of one component, check whether another component does it in one.
 
+**A loop that must always show is made of bursts, not a steady `Rate`.** At the lowest graphics quality Roblox
+draws no `Rate` emission at all, while `Emit` bursts still draw (SE370's arrival waypoint vanished in a Studio take at
+quality Level01 and drew in full at Level21, 2026-10-26). Give such a layer `burst = N` and the preset an `interval`;
+the runtime replays a looping preset's bursts every `VFX_Interval`. Keep `Rate` for ambient detail that may thin out
+on low-end devices.
+
 **Read both sources before building on a component**, straight from Roblox's repository (no local copy, so it is never stale):
 
 - **The API reference**, for its shape: every property, its type, range and default. It is what the Studio MCP's

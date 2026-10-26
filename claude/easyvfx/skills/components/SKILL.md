@@ -25,6 +25,8 @@ Done when every layer names its component and the export's budget gates pass.
 
 ## Gotchas that cost a round
 
+- A steady `Rate` draws nothing at the lowest graphics quality; a loop players must always see is bursts replayed
+  every `interval` (sharp-vfx rule 1). Check a take at quality 1 as well as 21.
 - An emitter on an `Attachment` emits from a point: `Shape` and its size do nothing. Spread with motion instead
   (wide `spread`, `drag`, then `accel`).
 - `Squash` stretches along the velocity only with `orientation = "VelocityParallel"` (a teardrop, a streak).
