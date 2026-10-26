@@ -92,7 +92,7 @@ Roblox's built-in textures are soft, so EasyVFX builds its crisp parts from **ge
 | **Orb** | **Neon / ForceField** part that grows and fades (balls, pillars, beam cores) | explosion, level up, energy blast |
 | **Crater / Debris** | Rocks bursting up in a ring then sinking; rocks thrown on a ballistic path, colored and textured like the ground below | ground slam, explosion |
 | **Spiral** | Helix strands climbing and twisting, tapered at both ends | tornado, charge up |
-| **Projectile** | Neon/ForceField head flying along a Bezier arc with a tapered trail; hit layers fire at the end | fireball |
+| **Projectile** | Neon/ForceField head flying along a Bezier arc with a tapered trail; hit layers fire at the end. `Tail = "Trail"` gives it a Roblox `Trail` whose length follows its speed (`TrailTime`) in place of the beam chain | fireball |
 | **Shake** | Smooth-noise camera shake with distance falloff (client only, never the editor camera) | fireball, ground slam, explosion, lightning, impact frame |
 | **Impact** | Anime impact frame: a few frames of Flash / Mono / Invert color correction, never stacked | fireball, impact frame |
 | **Whirl** | A tilted disc of tapered brush-stroke arcs spinning at different speeds; `Strands` splits each stroke into thin lines | wind vortex |
@@ -224,6 +224,12 @@ Choosing the **From a script** trigger shows a ready-to-paste line with the corr
 **Animate anything with attributes.** Any instance inside an effect can carry a `NumberSequence` attribute named `<Property>Sequence`, for example `TransparencySequence`, `BrightnessSequence`, `Width0Sequence`, or `ScaleSequence` (part `Size` / `Model:ScaleTo`). When the effect plays, that property follows the curve over `EmitDuration` (or the emitter lifetime / `AnimDuration` / 1 s), then returns to its value. This is the same convention other Roblox emit tools use, so effects made there play here too.
 
 ---
+
+## 5b. Claude Code skills
+
+`claude/easyvfx` is a Claude Code plugin for making effects with these tools: `/easyvfx:effect` runs one effect from
+its story to the picks, and calls `easyvfx:story`, `easyvfx:components`, `easyvfx:preview` and `easyvfx:texture`.
+How to load it: [its README](claude/easyvfx/README.md).
 
 ## 6. Interface
 
