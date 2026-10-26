@@ -1532,6 +1532,9 @@ Shapes.Projectile = function(cfg, ctx)
 	local arcHeight = num(cfg, "ArcHeight", 4)
 	local headSize = num(cfg, "HeadSize", 1.2)
 	local width = num(cfg, "Width", 0.9)
+	-- Halo = false drops the ForceField shell round the head: in a dark room it reads as a black
+	-- outline (the arrival in the VFX room, 2026-10-26)
+	local haloOn = bool(cfg, "Halo", true)
 	local span = math.clamp(num(cfg, "TrailLength", 0.25), 0.02, 0.9)
 	local K = 10
 	local style = readStyle(cfg)
@@ -1585,7 +1588,7 @@ Shapes.Projectile = function(cfg, ctx)
 			core.Size = Vector3.one * (if arrived then 0.05 else headSize * 0.55)
 			halo.Size = Vector3.one * (if arrived then 0.05 else headSize)
 			core.Transparency = if arrived then 1 else style.fade0
-			halo.Transparency = if arrived then 1 else lerp(style.fade0, 1, 0.35)
+			halo.Transparency = if arrived or not haloOn then 1 else lerp(style.fade0, 1, 0.35)
 		end
 		step(0)
 		addAnim(delay, total, function()
@@ -1620,7 +1623,7 @@ Shapes.Projectile = function(cfg, ctx)
 		core.Size = Vector3.one * (if arrived then 0.05 else headSize * 0.55 * pulse)
 		halo.Size = Vector3.one * (if arrived then 0.05 else headSize * pulse)
 		core.Transparency = if arrived then 1 else style.fade0
-		halo.Transparency = if arrived then 1 else lerp(style.fade0, 1, 0.35)
+		halo.Transparency = if arrived or not haloOn then 1 else lerp(style.fade0, 1, 0.35)
 		local eye = eyeIn(carrier)
 		for j = 0, K do
 			local t = math.clamp(s - span * j / K, 0, 1)
