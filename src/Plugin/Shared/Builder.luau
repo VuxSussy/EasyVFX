@@ -250,7 +250,25 @@ local function collectExisting(root: Instance): Existing
 	return existing
 end
 
+-- A running game under Server Authority refuses attribute strings over 50 characters
+-- (SetAttribute throws), and a grouped attachment's key (group, spot and tilt) runs longer.
+-- Such a key is stored as a stable FNV-1a hash of it, the same on every build.
+Builder.MAX_KEY = 50
+
+function Builder.layerKey(key: string): string
+	if #key <= Builder.MAX_KEY then
+		return key
+	end
+	local h = 2166136261
+	for i = 1, #key do
+		h = bit32.bxor(h, string.byte(key, i))
+		h = (bit32.lshift(h, 24) + h * 403) % 4294967296
+	end
+	return string.format("#%08x:%d", h, #key)
+end
+
 local function getOrCreate(existing: Existing, wanted: { [string]: boolean }, key: string, className: string, parent: Instance): Instance
+	key = Builder.layerKey(key)
 	wanted[key] = true
 	local found: Instance? = existing[key]
 	if found and found.ClassName ~= className then
