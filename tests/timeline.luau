@@ -161,6 +161,31 @@ local function emitterInfo(e: ParticleEmitter)
 	}
 end
 
+local trailKeys = 0
+local function trailInfo(d: Trail)
+	local key = d:GetAttribute("EvfxTrail")
+	if typeof(key) ~= "number" then
+		trailKeys += 1
+		key = trailKeys
+		d:SetAttribute("EvfxTrail", key)
+	end
+	local a0, a1 = d.Attachment0 :: Attachment, d.Attachment1 :: Attachment
+	local w0 = select(1, worldOf(a0 :: any)) * a0.CFrame
+	local w1 = select(1, worldOf(a1 :: any)) * a1.CFrame
+	return {
+		id = key,
+		p0 = v3(w0.Position),
+		p1 = v3(w1.Position),
+		lifetime = d.Lifetime,
+		faceCamera = d.FaceCamera,
+		widthScale = numSeq(d.WidthScale),
+		transparency = numSeq(d.Transparency),
+		color = colSeq(d.Color),
+		lightEmission = d.LightEmission,
+		brightness = d.Brightness,
+	}
+end
+
 local function beamInfo(d: Beam)
 	local a0, a1 = d.Attachment0 :: Attachment, d.Attachment1 :: Attachment
 	local w0 = select(1, worldOf(a0 :: any)) * a0.CFrame
@@ -253,6 +278,9 @@ local function capture(root: Instance, emitters: { any })
 		lights = {},
 		screens = {},
 		trails = 0,
+		-- each enabled Trail's two attachment points this frame; the preview stitches a trail's
+		-- points over its Lifetime into the ribbon Roblox draws
+		trailPoints = {},
 		camera = cf(camera.CFrame),
 		fov = camera.FieldOfView,
 	}
@@ -269,6 +297,9 @@ local function capture(root: Instance, emitters: { any })
 		elseif d:IsA("Trail") then
 			if d.Enabled then
 				frame.trails += 1
+				if d.Attachment0 and d.Attachment1 then
+					table.insert(frame.trailPoints, trailInfo(d))
+				end
 			end
 		elseif d:IsA("ParticleEmitter") then
 			-- on, or streamed by the runtime (VFX_Streaming)

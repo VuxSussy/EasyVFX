@@ -600,6 +600,49 @@ def _hull(points):
     return lower[:-1] + upper[:-1]
 
 
+def _trails(canvas, timeline, t):
+    """Roblox Trails as Roblox draws them: each trail's two attachment points, sampled every
+    frame, stitched over its Lifetime into a camera-facing ribbon. Age 0 is the head; WidthScale,
+    Transparency and Color run over the age, so a fast head leaves a long trail and a slow one a
+    short one."""
+    cam = canvas.cam
+    history = {}
+    for frame in timeline["frames"]:
+        if frame["t"] > t + 1e-6:
+            break
+        for info in frame.get("trailPoints", ()):
+            if t - frame["t"] <= info["lifetime"] + 1e-6:
+                history.setdefault(info["id"], []).append((frame["t"], info))
+    for samples in history.values():
+        if len(samples) < 2:
+            continue
+        life = max(1e-3, samples[-1][1]["lifetime"])
+        points = []
+        for ft, info in samples:
+            mid = core.mul(core.add(info["p0"], info["p1"]), 0.5)
+            pr = cam.project(mid)
+            if pr is None:
+                continue
+            age = min(1.0, (t - ft) / life)
+            width = core.length(core.sub(info["p0"], info["p1"])) * core.number_at(info["widthScale"], age)
+            points.append((pr[0], pr[1], cam.pixels(width, pr[2]) / 2, age, info))
+        for (x0, y0, w0, g0, info), (x1, y1, w1, g1, _) in zip(points, points[1:]):
+            dx, dy = x1 - x0, y1 - y0
+            m = math.hypot(dx, dy)
+            if m < 0.5:
+                continue
+            nx, ny = -dy / m, dx / m
+            quad = [(x0 - nx * w0, y0 - ny * w0), (x1 - nx * w1, y1 - ny * w1), (x1 + nx * w1, y1 + ny * w1), (x0 + nx * w0, y0 + ny * w0)]
+            g = (g0 + g1) / 2
+            alpha = 1 - core.number_at(info["transparency"], g)
+            if alpha <= 0.002:
+                continue
+            light = min(1.0, info.get("lightEmission", 0))
+            bright = info.get("brightness", 1) if light > 0 else 1
+            color = np.asarray([c * bright for c in core.color_at(info["color"], g)], np.float32)
+            _fill(canvas, quad, color, alpha, light)
+
+
 def draw(timeline, t, cam, body=True):
     """The frame `t` seconds into the play, seen through `cam`. Returns (rgb, info)."""
     frame = core.frame_at(timeline, t)
@@ -619,6 +662,7 @@ def draw(timeline, t, cam, body=True):
     if frame:
         for beam in frame["beams"]:
             _beam(canvas, beam, t)
+    _trails(canvas, timeline, t)
     rgb = canvas.finish(frame["screens"] if frame else ())
     return rgb, {"particles": len(particles), "glow": canvas.glow, "body": body_mask, "frame": frame}
 

@@ -140,7 +140,8 @@ size, blend, depth. [The VFX grammar](vfx-grammar.md) has the roles, the measure
 ## What it can't see yet
 
 - **Meshes** from `pack/meshes` (tools/meshgen) are drawn with their texture; other MeshParts are still drawn as boxes.
-- **Trails and highlights** are counted, not drawn (a trail needs the attachment's path over time).
+- **Highlights** are counted, not drawn. Trails are drawn: the recorder keeps each trail's two attachment points every frame,
+  and the renderer stitches the points of its `Lifetime` into a ribbon, with `WidthScale`, `Transparency` and `Color` over its age.
 - **Studio's renderer**: lighting, Bloom, `LightInfluence` and texture filtering are approximated. Built-in
   `rbxasset://` textures (smoke, sparkles, fire) are stood in for by simple shapes; pack textures are read from
   `pack/textures`.

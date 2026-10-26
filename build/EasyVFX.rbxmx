@@ -2255,6 +2255,45 @@ Shapes.Projectile = function(cfg, ctx)
 	halo.Material = Enum.Material.ForceField
 	halo.Color = style.color0
 	halo.Parent = carrier
+	-- Tail = "Trail": a Roblox Trail on the head instead of the beam chain. Its length is the head's
+	-- speed times TrailTime, so it is short while the head is slow and long once it is fast, as a
+	-- falling drop's streak (Phát, 2026-10-26); it tapers and fades along its length
+	if str(cfg, "Tail", "Beams") == "Trail" then
+		local life = num(cfg, "TrailTime", 0.12)
+		local a0, a1 = Instance.new("Attachment"), Instance.new("Attachment")
+		a0.Position, a1.Position = Vector3.new(width / 2, 0, 0), Vector3.new(-width / 2, 0, 0)
+		a0.Parent, a1.Parent = core, core
+		local trail = Instance.new("Trail")
+		trail.Attachment0, trail.Attachment1 = a0, a1
+		trail.FaceCamera = true
+		trail.Lifetime = life
+		trail.MinLength = 0.05
+		trail.WidthScale = NumberSequence.new(1, 0)
+		trail.Transparency = NumberSequence.new(style.fade0, 1)
+		trail.Color = ColorSequence.new(style.color0, style.color1)
+		trail.LightEmission = style.glow
+		trail.LightInfluence = 0
+		trail.Brightness = style.brightness
+		trail.Parent = core
+		local total = duration + life
+		local function step(alpha: number)
+			local s = alpha * total / duration
+			local arrived = s >= 1
+			core.CFrame = cf * CFrame.new(at(ease(math.min(1, s), style.ease)))
+			halo.CFrame = core.CFrame
+			core.Size = Vector3.one * (if arrived then 0.05 else headSize * 0.55)
+			halo.Size = Vector3.one * (if arrived then 0.05 else headSize)
+			core.Transparency = if arrived then 1 else style.fade0
+			halo.Transparency = if arrived then 1 else lerp(style.fade0, 1, 0.35)
+		end
+		step(0)
+		addAnim(delay, total, function()
+			carrier.Parent = liveFolder()
+		end, step, function()
+			carrier:Destroy()
+		end)
+		return delay + total
+	end
 	local atts: { Attachment } = {}
 	local beams: { Beam } = {}
 	local cores: { Beam } = {}
