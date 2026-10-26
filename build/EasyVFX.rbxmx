@@ -4022,7 +4022,7 @@ LayerBuilders.beam = function(ctx, key, layer)
 	local a0 = attachment(ctx, key .. ":a", (layer.from or Vector3.zero) * params.size, layer.tilt0)
 	local a1 = attachment(ctx, key .. ":b", (layer.to or Vector3.new(0, 0, -10)) * params.size, layer.tilt1)
 	local beam = getOrCreate(ctx.existing, ctx.wanted, key, "Beam", ctx.root) :: Beam
-	beam.Name = "Beam"
+	beam.Name = layer.name or "Beam"
 	beam.Attachment0 = a0
 	beam.Attachment1 = a1
 	-- `width0` and `width1` taper the beam from its start to its end (a drop's pillar narrowing
