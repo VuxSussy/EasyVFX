@@ -45,6 +45,7 @@
     "source/ridged": {"recipe": "src_ridged", "kind": "source", "size": 512, "seed": 62, "upload": false, "use": "tiling ridged noise: veins, cracks"},
     "source/worley": {"recipe": "src_worley", "kind": "source", "size": 512, "seed": 63, "upload": false, "use": "tiling Worley edges: cracked ground, ice"},
     "shape/star8": {"recipe": "star8", "kind": "shape", "size": 512, "seed": 71, "role": "core", "use": "8-point flare of a heavy hit (Bloom Strike)"},
+    "shape/star_burst": {"recipe": "star_burst", "kind": "shape", "size": 512, "seed": 11, "role": "core", "use": "a filled star of uneven spikes with a hot core: the hit spark's flash (Phát's Zenless Zone Zero frames, 2026-10-29); tint it white-violet"},
     "shape/hollow_ring": {"recipe": "hollow_ring", "kind": "shape", "size": 128, "seed": 72, "role": "sparks", "use": "orbit rings around a sigil"},
     "shape/bokeh": {"recipe": "bokeh", "kind": "shape", "size": 128, "seed": 73, "role": "volume", "use": "soft depth discs behind a sigil"},
     "art/flower_sigil": {"recipe": "flower_sigil", "kind": "shape", "size": 512, "seed": 74, "role": "base", "use": "flower sigil of petal strokes (Bloom Strike)"},

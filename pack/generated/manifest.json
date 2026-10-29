@@ -1188,6 +1188,21 @@
       "sha256": "cfcfc7c369ed58bad65e5e71ad8db06dad2d7e4f6ad2b6ca97f52b854594c7c5",
       "use": "8-point flare of a heavy hit (Bloom Strike)"
     },
+    "shape_star_burst": {
+      "id": "shape/star_burst",
+      "kind": "shape",
+      "size": [
+        512,
+        512
+      ],
+      "grid": 1,
+      "frames": 1,
+      "role": "core",
+      "upload": true,
+      "rgb": "white",
+      "sha256": "799877f923f8d7614ab55ff09edf97cb48d51f2ac2dfbb755fc60be23bcb7e52",
+      "use": "a filled star of uneven spikes with a hot core: the hit spark's flash (Ph\u00e1t's Zenless Zone Zero frames, 2026-10-29); tint it white-violet"
+    },
     "shape_vortex_ring": {
       "id": "shape/vortex_ring",
       "kind": "shape",

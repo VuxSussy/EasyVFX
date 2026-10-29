@@ -4,6 +4,9 @@ All notable changes to EasyVFX are listed here. Versions follow [Semantic Versio
 
 ## [Unreleased]
 
+### Star burst texture
+- texgen `shape/star_burst`: a filled star of uneven spikes, soft at its edge and hot at its core, after Zenless Zone Zero's hit flash. Its spikes' lengths and angles come from the seed, so other seeds give other stars.
+
 ### Loops that show at every graphics quality
 - The timeline recorder replays a looping preset's bursts every `VFX_Interval`, as the runtime does, so the preview draws a loop built from bursts the way the game plays it.
 - `docs/sharp-vfx.md` rule 1 and the `components` skill: a steady `Rate` draws nothing at the lowest graphics quality, so a loop players must always see is bursts on an interval.
