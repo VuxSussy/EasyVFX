@@ -1593,6 +1593,30 @@ def star8(p, rng, size):
     return np.clip(out + core, 0, 1) * lib.vignette(u, v, 0.9, 0.99)
 
 
+@recipe("star_burst", points=7, long=0.98, short=0.45, base=0.28, width=0.8, minor=0.5, soft=0.04, core=0.2)
+def star_burst(p, rng, size):
+    """A filled star of uneven spikes, soft at its edge and hot at its core: the hit flash of
+    an anime brawler (Phát's Zenless Zone Zero frames, 2026-10-29). Each spike's length and
+    angle are drawn from the seed, so seeds give different stars."""
+    u, v = lib.grid(size)
+    r, a = lib.polar(u, v)
+    n = int(p["points"])
+    step = 2 * math.pi / n
+    reach = np.full_like(u, p["base"])
+    # the main spikes, then short minor ones between them for the ragged edge
+    spikes = []
+    for k in range(n):
+        spikes.append((k * step + rng.uniform(-0.3, 0.3) * step, rng.uniform(p["short"], p["long"]), p["width"]))
+        spikes.append(((k + 0.5) * step + rng.uniform(-0.15, 0.15) * step, p["base"] + p["minor"] * rng.uniform(0.3, 1) * (p["short"] - p["base"]), p["width"] * 0.6))
+    for ang, length, width in spikes:
+        d = np.abs((a - ang + math.pi) % (2 * math.pi) - math.pi)
+        t = np.clip(1 - d / (width * step), 0, 1)
+        reach = np.maximum(reach, p["base"] + (length - p["base"]) * t**2.8)
+    fill = 1 - lib.smooth(reach - p["soft"], reach + p["soft"] * 0.3, r)
+    core = np.exp(-((r / p["core"]) ** 2))
+    return np.clip(fill * (0.82 + 0.18 * core) + 0.25 * core, 0, 1) * lib.vignette(u, v, 0.9, 0.99)
+
+
 @recipe("hollow_ring", radius=0.6, line=0.07, glow=0.25)
 def hollow_ring(p, rng, size):
     """A small hollow ring with a soft glow: orbit rings that scatter around a sigil."""
