@@ -2573,6 +2573,54 @@ function EasyVFX.Pending(): number
 	return #active
 end
 
+-- Fades a looping effect in over `seconds` as it starts (VFX_FadeIn), instead of every piece
+-- showing at once: beams, trails and particles from clear to their own transparency, lights from
+-- dark to their brightness, parts through LocalTransparencyModifier (client-side only).
+local function faded(seq: NumberSequence, k: number): NumberSequence
+	local points = {}
+	for _, p in seq.Keypoints do
+		table.insert(points, NumberSequenceKeypoint.new(p.Time, 1 - (1 - p.Value) * k, p.Envelope))
+	end
+	return NumberSequence.new(points)
+end
+
+function EasyVFX.FadeIn(root: Instance, seconds: number)
+	if seconds <= 0 then
+		return
+	end
+	local items = {}
+	for _, d in root:GetDescendants() do
+		if d:IsA("Beam") or d:IsA("Trail") or d:IsA("ParticleEmitter") then
+			table.insert(items, { d, "Transparency", (d :: any).Transparency })
+		elseif d:IsA("Light") then
+			table.insert(items, { d, "Brightness", (d :: any).Brightness })
+		elseif d:IsA("BasePart") then
+			table.insert(items, { d, "LocalTransparencyModifier", 0 })
+		end
+	end
+	local function apply(k: number)
+		for _, item in items do
+			local d, prop, base = item[1], item[2], item[3]
+			if not d.Parent then
+				continue
+			end
+			if prop == "Transparency" then
+				d.Transparency = faded(base, k)
+			elseif prop == "Brightness" then
+				d.Brightness = base * k
+			else
+				d.LocalTransparencyModifier = 1 - k
+			end
+		end
+	end
+	apply(0)
+	addAnim(0, seconds, nil, function(alpha)
+		apply(alpha)
+	end, function()
+		apply(1)
+	end)
+end
+
 function EasyVFX.SetEnabled(root: Instance, on: boolean)
 	for _, d in root:GetDescendants() do
 		if d:GetAttribute("EmitCount") == nil and d:GetAttribute("EmitDuration") == nil and d:GetAttribute("VFX_Layer") ~= nil then
@@ -2753,8 +2801,13 @@ function EasyVFX.InitClient()
 		local running = true
 		task.spawn(function()
 			task.wait(math.random() * 0.3)
+			local first = true
 			while running and root.Parent do
 				local length = EasyVFX.PlayLocal(root)
+				if first then
+					first = false
+					EasyVFX.FadeIn(root, num(root, "VFX_FadeIn", 0))
+				end
 				task.wait(math.max(0.2, num(root, "VFX_Interval", math.max(1, length))))
 			end
 		end)

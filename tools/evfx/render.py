@@ -679,6 +679,15 @@ def draw(timeline, t, cam, body=True):
             _beam(canvas, beam, t)
     _trails(canvas, timeline, t)
     rgb = canvas.finish(frame["screens"] if frame else ())
+    fade = timeline.get("fadeIn")
+    if fade and t < fade:
+        # a loop fading in as it starts (EasyVFX.FadeIn): the effect over its empty stage, ramped up
+        stage = Canvas(cam)
+        _floor(stage, holder, ())
+        if body:
+            _body(stage, add_y(holder, 0.5))
+        k = max(0.0, t / fade)
+        rgb = stage.finish(()) * (1 - k) + rgb * k
     return rgb, {"particles": len(particles), "glow": canvas.glow, "body": body_mask, "frame": frame}
 
 

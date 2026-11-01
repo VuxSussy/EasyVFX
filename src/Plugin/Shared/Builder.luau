@@ -34,6 +34,7 @@ export type Params = {
 	glow: number,
 	trigger: string, -- Always | Loop | Touch | Click | Prompt | Script
 	interval: number,
+	fadeIn: number, -- seconds a loop takes to fade in when it starts; 0 shows it at once
 	cooldown: number,
 	duration: number,
 	promptText: string,
@@ -64,6 +65,7 @@ local ATTRS: { [string]: string } = {
 	glow = "VFX_Glow",
 	trigger = "VFX_Trigger",
 	interval = "VFX_Interval",
+	fadeIn = "VFX_FadeIn",
 	cooldown = "VFX_Cooldown",
 	duration = "VFX_Duration",
 	promptText = "VFX_PromptText",
@@ -100,6 +102,7 @@ function Builder.defaultParams(presetId: string): Params
 		glow = d.glow or 1,
 		trigger = d.trigger or (if preset.kind == "burst" then "Loop" else "Always"),
 		interval = d.interval or 2,
+		fadeIn = d.fadeIn or 0,
 		cooldown = d.cooldown or 1,
 		duration = d.duration or 2,
 		promptText = d.promptText or "Use",

@@ -444,6 +444,9 @@ local function record(preset)
 		-- a loop's bursts replay every loopInterval seconds for as long as it plays; the recording
 		-- holds only LOOP_SECONDS of them, and tools/evfx replays the first cycle past that
 		loopInterval = if replay then interval else nil,
+		-- a loop fades in over its first fadeIn seconds (EasyVFX.FadeIn); tools/evfx draws that fade
+		-- over the whole frame, so the recording keeps each piece's own values
+		fadeIn = if loop and (root:GetAttribute("VFX_FadeIn") or 0) > 0 then root:GetAttribute("VFX_FadeIn") else nil,
 		holder = cf(holder.CFrame),
 		cameraHome = cf(CAMERA_HOME),
 		fovHome = FOV_HOME,
