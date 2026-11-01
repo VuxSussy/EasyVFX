@@ -1762,6 +1762,33 @@
    ],
    "sha256": "6f214481251e70c06eec5f207f31fc248cfa6c3a66a55f156dc368d3e18924d2"
   },
+  "cc0_kp_spark_sheet": {
+   "id": "cc0/kp_spark_sheet",
+   "kind": "sheet",
+   "size": [
+    1024,
+    1024
+   ],
+   "grid": 2,
+   "frames": 4,
+   "role": "sparks",
+   "rgb": "white",
+   "upload": true,
+   "use": "the four loose lightning sparks on one 2x2 sheet: flat crackle over a portal, a random one each frame (FlipbookMode Random, FlipbookStartRandom) so it reads as live lightning (Ph\u00e1t, 2026-11-01)",
+   "source": "Particle Pack",
+   "author": "Kenney",
+   "licence": "CC0",
+   "url": "https://kenney.nl/assets/particle-pack",
+   "original": [
+    "PNG (Transparent)/spark_01.png",
+    "PNG (Transparent)/spark_02.png",
+    "PNG (Transparent)/spark_03.png",
+    "PNG (Transparent)/spark_04.png"
+   ],
+   "steadiness": 1.464,
+   "jumpy": true,
+   "sha256": "93d5d0e970dd52db822d1c29d004908705d80e236d292e3b2cac2c3c935ce0ef"
+  },
   "cc0_ks_black_smoke": {
    "id": "cc0/ks_black_smoke",
    "kind": "sheet",

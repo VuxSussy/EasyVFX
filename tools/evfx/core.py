@@ -297,6 +297,27 @@ def _particle(e, origin_cf, volume, age, rng):
     }
 
 
+def _bursts_until(timeline, t):
+    """Each burst with the frame it fires on. A loop's recording holds only its first seconds; its
+    first cycle (the bursts before loopInterval) replays every loopInterval for as long as asked,
+    as the runtime replays it, so a loop renders at any time."""
+    interval = timeline.get("loopInterval")
+    if not interval:
+        return [(b, b["frame"]) for b in timeline["bursts"]]
+    dt = timeline["frameTime"]
+    step = round(interval / dt)
+    cycle = [b for b in timeline["bursts"] if b["frame"] < step]
+    out = []
+    for k in range(int(t / interval) + 1):
+        for b in cycle:
+            if k and b.get("spinPhase"):
+                # a phase-locked burst starts where its spin has reached by then, as the runtime sets it
+                turned = b["rotSpeed"][0] * k * step * dt
+                b = dict(b, rotation=[(r + turned) % 360 for r in b["rotation"]])
+            out.append((b, b["frame"] + k * step))
+    return out
+
+
 def particles_at(timeline, t):
     """Every particle alive `t` seconds into the play, from bursts and streams."""
     out = []
@@ -305,10 +326,10 @@ def particles_at(timeline, t):
     # where it falls in the timeline's list, so a layer gets the same particles alone as it does
     # inside the whole effect (Phát: the two looked different)
     seen = {}
-    for b in timeline["bursts"]:
-        ident = (b.get("name"), b.get("texture"), b["frame"], tuple(round(x, 2) for x in b["cframe"][:3]))
+    for b, frame in _bursts_until(timeline, t):
+        ident = (b.get("name"), b.get("texture"), frame, tuple(round(x, 2) for x in b["cframe"][:3]))
         seen[ident] = seen.get(ident, 0) + 1
-        age = t - b["frame"] * dt
+        age = t - frame * dt
         if age < 0:
             continue
         for n in range(int(b["count"])):

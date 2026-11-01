@@ -4,6 +4,20 @@ All notable changes to EasyVFX are listed here. Versions follow [Semantic Versio
 
 ## [Unreleased]
 
+### Loop timing: phase-locked spin, repeats inside a cycle, fade-in
+- `spinPhase = true` on a burst emitter starts each burst's rotation where the spin has reached (`os.clock() * RotSpeed`), so discs replayed every pulse crossfade without jumping.
+- `every = s` on a loop's burst fires it again every s seconds inside each `VFX_Interval` cycle, so one effect can hold a fast pulse and a slower, uneven rhythm (lightning strikes).
+- The preset param `fadeIn` (`VFX_FadeIn`): a loop fades in over that many seconds as it starts (`EasyVFX.FadeIn`): beams, trails and particles from clear, lights from dark, parts through `LocalTransparencyModifier`.
+- The timeline records a whole loop cycle (up to 8 s), not just its first 2 s, and records `fadeIn`; evfx replays the cycle with each spin-phased burst turned on, and draws the fade.
+
+### Flat beams and sized parts
+- `faceCamera = false` lays a beam flat in the world: its width runs along its attachments' up axis, turned with `tilt0`/`tilt1` (measured in Studio). The recorder and evfx preview draw it.
+- A `part` layer takes `size` (a Vector3) and `offset`, for a flat panel anywhere in the effect.
+
+### Strips and sheets for a portal door
+- texgen `edge_band` (a hot line along one side of a band, wisps streaming; `mirror` puts it down the middle) and `smoke_streak` (an energy streak in warped smoke; `period`, `lo`, `hi`, `fade`, `rim`), with bank entries `strip/edge_band*`, `strip/smoke_streak*` and `strip/smoke_liquid*`; `spiral_web` and `electric_web` for swirling electric stripes.
+- `texgen cc0` packs Kenney's sparks 1 to 4 into `cc0_kp_spark_sheet`, a 2x2 sheet for flickering lightning (`FlipbookMode` Random).
+
 ### Star burst texture
 - texgen `shape/star_burst`: a filled star of uneven spikes, soft at its edge and hot at its core, after Zenless Zone Zero's hit flash. Its spikes' lengths and angles come from the seed, so other seeds give other stars.
 

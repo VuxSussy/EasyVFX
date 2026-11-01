@@ -69,6 +69,19 @@
    "use": "Kenney's particle sprites: circles, dirt, fire, flames, light, magic, muzzle flashes, scorches, scratches, slashes, smoke, sparks, stars, symbols, traces, twirls, windows"
   },
   {
+   "pack": "kenney_particles",
+   "glob": "PNG (Transparent)/spark_0[1-4].png",
+   "kind": "sequence-folder",
+   "name": "spark_sheet",
+   "frames": 4,
+   "size": 1024,
+   "rgb": "white",
+   "prefix": "kp",
+   "role": "sparks",
+   "as": "sheet",
+   "use": "the four loose lightning sparks on one 2x2 sheet: flat crackle over a portal, a random one each frame (FlipbookMode Random, FlipbookStartRandom) so it reads as live lightning (Phát, 2026-11-01)"
+  },
+  {
    "pack": "kenney_smoke",
    "glob": "PNG/Black smoke/*.png",
    "kind": "sequence-folder",

@@ -2315,6 +2315,13 @@ function EasyVFX.PlayLocal(target: Instance | string, at: CFrame?): number
 		end
 	end
 
+	local function emitNow(d: ParticleEmitter, n: number)
+		if d:GetAttribute("VFX_SpinPhase") == true then
+			local angle = (os.clock() * d.RotSpeed.Min) % 360
+			d.Rotation = NumberRange.new(angle)
+		end
+		d:Emit(n)
+	end
 	local length = playSequences(root, ctx)
 	for _, d in root:GetDescendants() do
 		length = math.max(length, playSequences(d, ctx))
@@ -2328,16 +2335,28 @@ function EasyVFX.PlayLocal(target: Instance | string, at: CFrame?): number
 			local count = d:GetAttribute("EmitCount")
 			if type(count) == "number" and count > 0 then
 				local n = math.max(1, math.floor(count * ctx.quality + 0.5))
-				if delay > 0 then
-					addAnim(delay, 0.016, function()
-						if alive(d) then
-							d:Emit(n)
-						end
-					end, function() end)
-				else
-					d:Emit(n)
+				-- VFX_Every: the burst fires again every this long until the loop's next cycle
+				local times = { delay }
+				local every, cycle = num(d, "VFX_Every", 0), num(root, "VFX_Interval", 0)
+				if every > 0 and cycle > 0 then
+					local next = delay + every
+					while next < cycle - 1e-3 do
+						table.insert(times, next)
+						next += every
+					end
 				end
-				length = math.max(length, delay + d.Lifetime.Max)
+				for _, fireAt in times do
+					if fireAt > 0 then
+						addAnim(fireAt, 0.016, function()
+							if alive(d) then
+								emitNow(d, n)
+							end
+						end, function() end)
+					else
+						emitNow(d, n)
+					end
+				end
+				length = math.max(length, times[#times] + d.Lifetime.Max)
 			end
 			if type(duration) == "number" and duration > 0 then
 				stream(d, delay, duration, ctx.quality)
@@ -2554,6 +2573,56 @@ function EasyVFX.Pending(): number
 	return #active
 end
 
+-- Fades a looping effect in over `seconds` as it starts (VFX_FadeIn), instead of every piece
+-- showing at once: beams, trails and particles from clear to their own transparency, lights from
+-- dark to their brightness, parts through LocalTransparencyModifier (client-side only).
+local function faded(seq: NumberSequence, k: number): NumberSequence
+	local points = {}
+	for _, p in seq.Keypoints do
+		table.insert(points, NumberSequenceKeypoint.new(p.Time, 1 - (1 - p.Value) * k, p.Envelope))
+	end
+	return NumberSequence.new(points)
+end
+
+type FadeItem = { inst: Instance, prop: string, base: any }
+
+function EasyVFX.FadeIn(root: Instance, seconds: number)
+	if seconds <= 0 then
+		return
+	end
+	local items: { FadeItem } = {}
+	for _, d in root:GetDescendants() do
+		if d:IsA("Beam") or d:IsA("Trail") or d:IsA("ParticleEmitter") then
+			table.insert(items, { inst = d :: Instance, prop = "Transparency", base = (d :: any).Transparency })
+		elseif d:IsA("Light") then
+			table.insert(items, { inst = d :: Instance, prop = "Brightness", base = (d :: any).Brightness })
+		elseif d:IsA("BasePart") then
+			table.insert(items, { inst = d :: Instance, prop = "LocalTransparencyModifier", base = 0 })
+		end
+	end
+	local function apply(k: number)
+		for _, item in items do
+			local d: any = item.inst
+			if not d.Parent then
+				continue
+			end
+			if item.prop == "Transparency" then
+				d.Transparency = faded(item.base, k)
+			elseif item.prop == "Brightness" then
+				d.Brightness = item.base * k
+			else
+				d.LocalTransparencyModifier = 1 - k
+			end
+		end
+	end
+	apply(0)
+	addAnim(0, seconds, nil, function(alpha)
+		apply(alpha)
+	end, function()
+		apply(1)
+	end)
+end
+
 function EasyVFX.SetEnabled(root: Instance, on: boolean)
 	for _, d in root:GetDescendants() do
 		if d:GetAttribute("EmitCount") == nil and d:GetAttribute("EmitDuration") == nil and d:GetAttribute("VFX_Layer") ~= nil then
@@ -2734,8 +2803,13 @@ function EasyVFX.InitClient()
 		local running = true
 		task.spawn(function()
 			task.wait(math.random() * 0.3)
+			local first = true
 			while running and root.Parent do
 				local length = EasyVFX.PlayLocal(root)
+				if first then
+					first = false
+					EasyVFX.FadeIn(root, num(root, "VFX_FadeIn", 0))
+				end
 				task.wait(math.max(0.2, num(root, "VFX_Interval", math.max(1, length))))
 			end
 		end)

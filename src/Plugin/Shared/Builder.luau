@@ -34,6 +34,7 @@ export type Params = {
 	glow: number,
 	trigger: string, -- Always | Loop | Touch | Click | Prompt | Script
 	interval: number,
+	fadeIn: number, -- seconds a loop takes to fade in when it starts; 0 shows it at once
 	cooldown: number,
 	duration: number,
 	promptText: string,
@@ -64,6 +65,7 @@ local ATTRS: { [string]: string } = {
 	glow = "VFX_Glow",
 	trigger = "VFX_Trigger",
 	interval = "VFX_Interval",
+	fadeIn = "VFX_FadeIn",
 	cooldown = "VFX_Cooldown",
 	duration = "VFX_Duration",
 	promptText = "VFX_PromptText",
@@ -100,6 +102,7 @@ function Builder.defaultParams(presetId: string): Params
 		glow = d.glow or 1,
 		trigger = d.trigger or (if preset.kind == "burst" then "Loop" else "Always"),
 		interval = d.interval or 2,
+		fadeIn = d.fadeIn or 0,
 		cooldown = d.cooldown or 1,
 		duration = d.duration or 2,
 		promptText = d.promptText or "Use",
@@ -438,12 +441,18 @@ LayerBuilders.particles = function(ctx, key, layer)
 	e.ZOffset = layer.zOffset or 0
 	e.LockedToPart = layer.locked == true
 	e.WindAffectsDrag = layer.windDrag == true
+	-- a replayed burst starts at the angle its spin has reached on the clock, so a loop's next
+	-- particle lands where the last one has turned to and their crossfade never jumps
+	e:SetAttribute("VFX_SpinPhase", if layer.spinPhase then true else nil)
 	if layer.burst then
 		e.Rate = 20
 		e.Enabled = false
 		e:SetAttribute("EmitCount", math.max(1, math.floor(layer.burst * params.amount + 0.5)))
 		e:SetAttribute("EmitDelay", if layer.delay then layer.delay * params.lifetime else nil)
 		e:SetAttribute("EmitDuration", nil)
+		-- `every` (seconds): a loop's burst fires again every this long inside each cycle
+		-- (VFX_Interval), so one effect can hold a fast pulse and a slower, uneven rhythm
+		e:SetAttribute("VFX_Every", if type(layer.every) == "number" and layer.every > 0 then layer.every else nil)
 	else
 		e.Rate = math.min(Builder.MAX_RATE, (layer.rate or 10) * params.amount)
 		setStreaming(e, ctx, function()
@@ -582,7 +591,9 @@ LayerBuilders.beam = function(ctx, key, layer)
 	beam.LightEmission = math.clamp((layer.lightEmission or 1) * params.glow, 0, 1)
 	beam.LightInfluence = 0
 	beam.Brightness = (layer.brightness or 1) * params.glow
-	beam.FaceCamera = true
+	-- `faceCamera = false` lays the beam flat in the world: its width runs along its attachments'
+	-- up axis (set with `tilt0`/`tilt1`), a band round a doorway's depth
+	beam.FaceCamera = layer.faceCamera ~= false
 	local curved = (layer.curve0 or 0) ~= 0 or (layer.curve1 or 0) ~= 0
 	beam.CurveSize0 = (layer.curve0 or 0) * params.size
 	beam.CurveSize1 = (layer.curve1 or 0) * params.size
@@ -753,9 +764,14 @@ LayerBuilders.part = function(ctx, key, layer)
 	part.Shape = enumItem(Enum.PartType, layer.shape, Enum.PartType.Ball) :: any
 	part.Material = enumItem(Enum.Material, layer.material, Enum.Material.Neon) :: any
 	part.Color = resolveColor(layer.color or "p", params)
-	local d = math.max(root.Size.X, root.Size.Y, root.Size.Z) * (layer.scale or 1) * params.size
-	part.Size = Vector3.new(d, d, d)
-	part.CFrame = root.CFrame
+	-- an explicit size makes any box (a flat panel in a doorway); otherwise a cube as big as the effect
+	if typeof(layer.size) == "Vector3" then
+		part.Size = layer.size * params.size
+	else
+		local d = math.max(root.Size.X, root.Size.Y, root.Size.Z) * (layer.scale or 1) * params.size
+		part.Size = Vector3.new(d, d, d)
+	end
+	part.CFrame = root.CFrame * CFrame.new(if typeof(layer.offset) == "Vector3" then layer.offset * params.size else Vector3.zero)
 	part.Anchored = false
 	part.Massless = true
 	part.CanCollide = false

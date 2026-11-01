@@ -1209,6 +1209,35 @@ def energy_streak(p, rng, size):
     return np.clip(np.maximum(core, body * 0.8), 0, 1) * _edges(y)
 
 
+@recipe("smoke_streak", core=0.06, body=0.75, smoke=0.6, warp=0.25, streak=0.5, rim=0, period=4, lo=0.3, hi=0.85, fade=0.8)
+def smoke_streak(p, rng, size):
+    """The energy streak in smoke: a crisp white core line down the middle, long noisy streaks
+    along it, and warped smoke billowing out to both sides with a ragged edge. On a flat beam
+    centred on a doorway's depth, the core is the doorway's edge and the smoke its glow
+    (Phát's frame reference, 2026-11-01). `rim` adds a faint line at each side. Tiles along
+    its length. `period` sets the smoke's scale (fewer is bigger billows), `lo` and `hi` its
+    contrast (closer together is sharper wisps), `fade` where it fades out to its top and bottom
+    edges."""
+    x, y, w, h = _strip_grid(size)
+    seed = _seed(rng)
+    pulse = lib.perlin((h, w), (1, 4), seed + 2)
+    core = np.exp(-((y / p["core"]) ** 2)) * (0.8 + 0.2 * pulse)
+    streaks = lib.normalize(lib.perlin((h, w), (6, 3), seed) * 0.6 + lib.perlin((h, w), (12, 6), seed + 1) * 0.4)
+    streaks = np.exp(-((y / (p["body"] * 0.5)) ** 2)) * lib.smooth(0.45, 0.8, streaks * (0.6 + 0.7 * pulse))
+    # smoke: fbm stretched along the strip, domain-warped so it curls, thresholded soft
+    du, dv = lib.fbm((h, w), 3, 4, seed=seed + 5), lib.fbm((h, w), 3, 4, seed=seed + 6)
+    puff = lib.warp(lib.fbm((h, w), int(p["period"]), 5, seed=seed + 3), du, dv, p["warp"])
+    # a ragged outline: how far out the smoke reaches varies along the strip
+    reach = p["body"] * (0.55 + 0.6 * lib.fbm((h, w), 2, 3, seed=seed + 7))
+    outline = 1 - lib.smooth(0.0, 1.0, np.abs(y) / reach)
+    smoke = lib.smooth(p["lo"], p["hi"], puff) * outline ** 0.8
+    rim = p["rim"] * np.exp(-(((np.abs(y) - 0.78) / 0.03) ** 2)) * (0.5 + 0.5 * puff)
+    glow = core + streaks * p["streak"] + smoke * p["smoke"] + rim
+    # `fade`: where the strip starts fading to its top and bottom edges; lower for smoke that
+    # fills the strip, so it still clears them
+    return np.clip(glow, 0, 1) * (1 - lib.smooth(p["fade"], 0.97, np.abs(y)))
+
+
 @recipe("soft_beam", core=0.12, glow=0.5, shimmer=0.15)
 def soft_beam(p, rng, size):
     """A light beam that is solid along its length: a hot core line in a soft glow, with a
@@ -1615,6 +1644,86 @@ def star_burst(p, rng, size):
     fill = 1 - lib.smooth(reach - p["soft"], reach + p["soft"] * 0.3, r)
     core = np.exp(-((r / p["core"]) ** 2))
     return np.clip(fill * (0.82 + 0.18 * core) + 0.25 * core, 0, 1) * lib.vignette(u, v, 0.9, 0.99)
+
+
+@recipe("electric_web", cells=6, width=0.035, wobble=0.12, breakup=0.45, glow=0.35, reach=0.92, strip=0)
+def electric_web(p, rng, size):
+    """A web of crackling electric lines, the edges of wobbling cells, broken in places and fading
+    to the rim: the lightning that crawls over a portal (Phát's reference, 2026-11-01). With
+    `strip` it tiles left to right and fades only at the top and bottom, to scroll along a beam."""
+    u, v = lib.grid(size)
+    r = np.sqrt(u * u + v * v)
+    edge = lib.worley((size, size), int(p["cells"]), seed=_seed(rng), second=True)
+    du = lib.fbm((size, size), 3, 4, seed=_seed(rng))
+    dv = lib.fbm((size, size), 3, 4, seed=_seed(rng))
+    edge = lib.warp(edge, du, dv, p["wobble"])
+    line = np.exp(-((edge / p["width"]) ** 2))
+    halo = p["glow"] * np.exp(-((edge / (p["width"] * 4)) ** 2))
+    keep = lib.smooth(p["breakup"] - 0.15, p["breakup"] + 0.15, lib.fbm((size, size), 4, 4, seed=_seed(rng)))
+    if p["strip"]:
+        fade = 1 - lib.smooth(0.55, 0.92, np.abs(v))
+    else:
+        fade = 1 - lib.smooth(p["reach"] * 0.55, p["reach"], r)
+    return np.clip((line + halo) * keep * fade, 0, 1)
+
+
+@recipe("spiral_web", cells=5, width=0.03, wobble=0.1, breakup=0.4, glow=0.4, around=6, pull=1.4, twist=1.0, core=0.12, base=0.18, disc=0, swirl=0.35)
+def spiral_web(p, rng, size):
+    """The electric web wound into a spiral round the middle, over a faint even base: turned
+    slowly, its lines seem to pour into the centre (a portal's face, Phát's reference, 2026-11-01).
+    The web is laid on log-polar coordinates, so every ring of it is the same web smaller."""
+    u, v = lib.grid(size)
+    r, a = lib.polar(u, v)
+    edge = lib.worley((size, size), int(p["cells"]), seed=_seed(rng), second=True)
+    du = lib.fbm((size, size), 3, 4, seed=_seed(rng))
+    dv = lib.fbm((size, size), 3, 4, seed=_seed(rng))
+    edge = lib.warp(edge, du, dv, p["wobble"])
+    line = np.exp(-((edge / p["width"]) ** 2)) + p["glow"] * np.exp(-((edge / (p["width"] * 4)) ** 2))
+    keep = lib.smooth(p["breakup"] - 0.15, p["breakup"] + 0.15, lib.fbm((size, size), 4, 4, seed=_seed(rng)))
+    web = line * keep
+    turn = a / (2 * math.pi)
+    s = (turn * p["around"]) % 1.0
+    t = (np.log(np.maximum(r, 1e-3)) * p["pull"] - turn * p["twist"]) % 1.0
+    wound = lib.sample(web, s * size, t * size)
+    hole = lib.smooth(p["core"] * 0.5, p["core"] * 1.5, r)
+    if not p["disc"]:
+        return np.clip(wound * hole + p["base"], 0, 1)
+    # a round disc: a noisy swirl of light brighter in places, soft at its rim
+    cloud = lib.fbm((size, size), 3, 5, seed=_seed(rng))
+    cloud = lib.sample(cloud, ((turn + r * p["swirl"]) % 1.0) * size, (r % 1.0) * size)
+    rim = 1 - lib.smooth(0.72, 0.97, r)
+    return np.clip((wound * (0.5 + cloud) + p["base"] * cloud * 1.6) * rim * hole, 0, 1)
+
+
+@recipe("edge_band", edge=0.18, line=0.025, fall=0.7, wisp=0.45, period=6, mirror=0)
+def edge_band(p, rng, size):
+    """A band of light seen edge-on: a hot line along one side, its glow falling off across the
+    band, soft wisps streaming along it. On a beam laid flat round a doorway's depth (FaceCamera
+    off), the line is the doorway's front edge (Phát's reference, 2026-11-01). With `mirror` it is
+    mirrored about the middle: one hot line down the middle, the glow falling off toward both
+    sides, so a band centred on a doorway glows out to the front and the back."""
+    u, v = lib.grid(size)
+    t = (v + 1) / 2
+    if p["mirror"]:
+        # mirrored about the middle: the hot line down the middle, the glow falling off toward both sides
+        t = np.abs(t - 0.5)
+    line = np.exp(-(((t - p["edge"]) / p["line"]) ** 2))
+    fall = np.clip(1 - (t - p["edge"]) / p["fall"], 0, 1) ** 1.6 * (t > p["edge"])
+    # wisps from a noise field a quarter as wide as the strip, read once across it, so the strip
+    # tiles left to right: `period` cells across the band, a quarter as many along it
+    seed, w = _seed(rng), max(4, size // 4)
+    streak = np.zeros((size, w), np.float32)
+    amp, norm = 1.0, 0.0
+    for o in range(4):
+        cells = int(p["period"]) * 2**o
+        streak += amp * lib.perlin((size, w), (cells, max(1, cells // 4)), seed + o * 101)
+        norm += amp
+        amp *= 0.5
+    streak = lib.normalize(streak / norm)
+    streak = lib.sample(streak, (np.arange(size)[None, :] * w / size) % w + np.zeros((size, 1)), (t * size * 2) % size)
+    glow = fall * (1 - p["wisp"] + p["wisp"] * streak)
+    edges = 1 - lib.smooth(0.9, 0.99, np.abs(v))
+    return np.clip((line + glow * 0.75) * edges, 0, 1)
 
 
 @recipe("hollow_ring", radius=0.6, line=0.07, glow=0.25)

@@ -993,6 +993,21 @@
       "sha256": "8cd2817d943d5db3ba7abc7a88a992e781bf802789c454768962f6efffa9e6ac",
       "use": "glint before a hit, or the lens-flare cross at impact (additive, FacingCamera)"
     },
+    "shape_electric_web": {
+      "id": "shape/electric_web",
+      "kind": "shape",
+      "size": [
+        512,
+        512
+      ],
+      "grid": 1,
+      "frames": 1,
+      "role": "sparks",
+      "upload": true,
+      "rgb": "white",
+      "sha256": "85f6537814ababc731d3d59bd72a44d5e67fd2ac658a8ddfb73ca01b5a23549d",
+      "use": "a web of crackling electric lines that fades to its rim: lightning crawling over a portal (Ph\u00e1t's reference, 2026-11-01); flicker two at random turns"
+    },
     "shape_godray_fan": {
       "id": "shape/godray_fan",
       "kind": "shape",
@@ -1203,6 +1218,36 @@
       "sha256": "799877f923f8d7614ab55ff09edf97cb48d51f2ac2dfbb755fc60be23bcb7e52",
       "use": "a filled star of uneven spikes with a hot core: the hit spark's flash (Ph\u00e1t's Zenless Zone Zero frames, 2026-10-29); tint it white-violet"
     },
+    "shape_swirl_cloud": {
+      "id": "shape/swirl_cloud",
+      "kind": "shape",
+      "size": [
+        1024,
+        1024
+      ],
+      "grid": 1,
+      "frames": 1,
+      "role": "volume",
+      "upload": true,
+      "rgb": "white",
+      "sha256": "405cb72f30170dab071fd1947272a16c29971ac39c798a7c0c8f406fa7f4baa0",
+      "use": "a soft swirling cloud with a dark eye, filling a disc: the body under a portal's electric stripes (Ph\u00e1t, 2026-11-01)"
+    },
+    "shape_swirl_disc": {
+      "id": "shape/swirl_disc",
+      "kind": "shape",
+      "size": [
+        1024,
+        1024
+      ],
+      "grid": 1,
+      "frames": 1,
+      "role": "volume",
+      "upload": true,
+      "rgb": "white",
+      "sha256": "e90051e66f35f21bafac507a20423d0b9362cd97306aca6d95f41067fcdf0d07",
+      "use": "sparse streaks of electric light swirling round a disc, no fill, soft at its rim: a portal's turning face, flat in the door's plane and spun with RotSpeed (Ph\u00e1t, 2026-11-01)"
+    },
     "shape_vortex_ring": {
       "id": "shape/vortex_ring",
       "kind": "shape",
@@ -1398,6 +1443,21 @@
       "sha256": "9c1bd3a3e46634f85423e35893d6c6bcf7094d8fd3731b385c71ec711a8a0ca3",
       "use": "tiling ridged noise: veins, cracks"
     },
+    "source_spiral_web": {
+      "id": "source/spiral_web",
+      "kind": "source",
+      "size": [
+        1024,
+        1024
+      ],
+      "grid": 1,
+      "frames": 1,
+      "role": "volume",
+      "upload": true,
+      "rgb": "white",
+      "sha256": "5eb84d533637d1c2d62adb7a86cf40179b7683bcf24de71826764b398f71953d",
+      "use": "the electric web wound into a spiral over a faint base, filling the square: a portal door's face in a SurfaceGui ImageLabel clipped to the door, turned slowly so the web pours into the middle (Ph\u00e1t, 2026-11-01)"
+    },
     "source_worley": {
       "id": "source/worley",
       "kind": "source",
@@ -1457,6 +1517,51 @@
       "rgb": "white",
       "sha256": "614e0203237816ad2e5e1ee9c88094562a52148029f4d62406fa09db7affed2b",
       "use": "glow for mesh/dome (u around, v top to rim)"
+    },
+    "strip_edge_band": {
+      "id": "strip/edge_band",
+      "kind": "strip",
+      "size": [
+        512,
+        512
+      ],
+      "grid": 1,
+      "frames": 1,
+      "role": "core",
+      "upload": true,
+      "rgb": "white",
+      "sha256": "0048ffdff73f73874967347b9a9ca0d3f74c6bce175bce7d94c6040db39fb0bd",
+      "use": "a band of light seen edge-on: a hot line on one side fading across the band, wisps streaming along it; a beam laid flat (FaceCamera off) round a doorway's depth, the line its front edge (Ph\u00e1t, 2026-11-01)"
+    },
+    "strip_edge_band_mirror": {
+      "id": "strip/edge_band_mirror",
+      "kind": "strip",
+      "size": [
+        512,
+        512
+      ],
+      "grid": 1,
+      "frames": 1,
+      "role": "core",
+      "upload": true,
+      "rgb": "white",
+      "sha256": "4f4487b6c2eb440ce885b52b04a72df6a0579c1c3a9b67339f4055f804ab1542",
+      "use": "the edge band mirrored about its middle: one hot line down the middle, the glow falling toward both sides; a flat beam centred on a doorway, twice the band's depth, glowing at the front and the back (Ph\u00e1t, 2026-11-01)"
+    },
+    "strip_electric_web": {
+      "id": "strip/electric_web",
+      "kind": "strip",
+      "size": [
+        512,
+        512
+      ],
+      "grid": 1,
+      "frames": 1,
+      "role": "sparks",
+      "upload": true,
+      "rgb": "white",
+      "sha256": "187ef71e6364ec8256d81c85122fbfb7acfb0f1726bcc51931095ee04062f1a8",
+      "use": "the electric web as a strip that tiles along its length: scroll it on a beam (TextureSpeed) so the lightning flows, the portal's swirl pulling in (Ph\u00e1t, 2026-11-01)"
     },
     "strip_energy_streak": {
       "id": "strip/energy_streak",
@@ -1547,6 +1652,126 @@
       "rgb": "white",
       "sha256": "80f3c7af3172b68ff7fb23b357b262b58027c55f0d5ad47e499005b77bee98bb",
       "use": "bars pulsing down a beam (scroll it fast)"
+    },
+    "strip_smoke_liquid": {
+      "id": "strip/smoke_liquid",
+      "kind": "strip",
+      "size": [
+        1024,
+        256
+      ],
+      "grid": 1,
+      "frames": 1,
+      "role": "volume",
+      "upload": true,
+      "rgb": "white",
+      "sha256": "5d6d2a610069ead2b5d28187f6507405e05ce8c2fa371942cccd7375b7f4b9ed",
+      "use": "smoke_streak with no core line, the smoke filling the strip: a liquid that scrolls across a portal's panel (Ph\u00e1t, 2026-11-01)"
+    },
+    "strip_smoke_liquid_billow": {
+      "id": "strip/smoke_liquid_billow",
+      "kind": "strip",
+      "size": [
+        1024,
+        256
+      ],
+      "grid": 1,
+      "frames": 1,
+      "role": "volume",
+      "upload": true,
+      "rgb": "white",
+      "sha256": "4dd011d02e43fbf37589e566349bf5dcb233ff6f0dc57841e7293e35f4932e08",
+      "use": "smoke_liquid, big slow billows: a portal panel's scrolling liquid (Ph\u00e1t, 2026-11-01)"
+    },
+    "strip_smoke_liquid_curl": {
+      "id": "strip/smoke_liquid_curl",
+      "kind": "strip",
+      "size": [
+        1024,
+        256
+      ],
+      "grid": 1,
+      "frames": 1,
+      "role": "volume",
+      "upload": true,
+      "rgb": "white",
+      "sha256": "e2d3beda5791a194273467d80ad82d29a910095931bdc32afe95f4bad938762e",
+      "use": "smoke_liquid, curlier, finer eddies: a portal panel's scrolling liquid (Ph\u00e1t, 2026-11-01)"
+    },
+    "strip_smoke_liquid_veil": {
+      "id": "strip/smoke_liquid_veil",
+      "kind": "strip",
+      "size": [
+        1024,
+        256
+      ],
+      "grid": 1,
+      "frames": 1,
+      "role": "volume",
+      "upload": true,
+      "rgb": "white",
+      "sha256": "9de074e0e4a7bae0341cfc061d63e7def68e6358aef42b31059a5ce31ff8beb7",
+      "use": "smoke_liquid, a soft even veil, streaky: a portal panel's scrolling liquid (Ph\u00e1t, 2026-11-01)"
+    },
+    "strip_smoke_liquid_wisp": {
+      "id": "strip/smoke_liquid_wisp",
+      "kind": "strip",
+      "size": [
+        1024,
+        256
+      ],
+      "grid": 1,
+      "frames": 1,
+      "role": "volume",
+      "upload": true,
+      "rgb": "white",
+      "sha256": "bb074c64f99a84c24b9a1d0fccdbf65d647a9a8df9217654b6790ea9137cbf9a",
+      "use": "smoke_liquid, sharp thin wisps with dark gaps: a portal panel's scrolling liquid (Ph\u00e1t, 2026-11-01)"
+    },
+    "strip_smoke_streak": {
+      "id": "strip/smoke_streak",
+      "kind": "strip",
+      "size": [
+        1024,
+        256
+      ],
+      "grid": 1,
+      "frames": 1,
+      "role": "core",
+      "upload": true,
+      "rgb": "white",
+      "sha256": "26ee59d596ce672ed30bd294a629b0b5ba722682fbaafb9c832b0aee308a454f",
+      "use": "the energy streak in smoke: a crisp core line down the middle, streaks along it, warped smoke billowing out to both sides; a flat beam centred on a doorway's depth (Ph\u00e1t's frame reference, 2026-11-01)"
+    },
+    "strip_smoke_streak_rim": {
+      "id": "strip/smoke_streak_rim",
+      "kind": "strip",
+      "size": [
+        1024,
+        256
+      ],
+      "grid": 1,
+      "frames": 1,
+      "role": "core",
+      "upload": true,
+      "rgb": "white",
+      "sha256": "e16d539bb5761df4c035a88789ba963497407915fa115b061a90f708839e7628",
+      "use": "smoke_streak with a faint line at each side, so the band's front and back read defined"
+    },
+    "strip_smoke_streak_thick": {
+      "id": "strip/smoke_streak_thick",
+      "kind": "strip",
+      "size": [
+        1024,
+        256
+      ],
+      "grid": 1,
+      "frames": 1,
+      "role": "core",
+      "upload": true,
+      "rgb": "white",
+      "sha256": "20e54426df1ad328caa1521f97f1c0b10c43e03e8de3f82580a6713a537f913a",
+      "use": "smoke_streak with more smoke and fewer streaks"
     },
     "strip_soft_beam": {
       "id": "strip/soft_beam",

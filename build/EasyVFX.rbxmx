@@ -3014,6 +3014,13 @@ function EasyVFX.PlayLocal(target: Instance | string, at: CFrame?): number
 		end
 	end
 
+	local function emitNow(d: ParticleEmitter, n: number)
+		if d:GetAttribute("VFX_SpinPhase") == true then
+			local angle = (os.clock() * d.RotSpeed.Min) % 360
+			d.Rotation = NumberRange.new(angle)
+		end
+		d:Emit(n)
+	end
 	local length = playSequences(root, ctx)
 	for _, d in root:GetDescendants() do
 		length = math.max(length, playSequences(d, ctx))
@@ -3027,16 +3034,28 @@ function EasyVFX.PlayLocal(target: Instance | string, at: CFrame?): number
 			local count = d:GetAttribute("EmitCount")
 			if type(count) == "number" and count > 0 then
 				local n = math.max(1, math.floor(count * ctx.quality + 0.5))
-				if delay > 0 then
-					addAnim(delay, 0.016, function()
-						if alive(d) then
-							d:Emit(n)
-						end
-					end, function() end)
-				else
-					d:Emit(n)
+				-- VFX_Every: the burst fires again every this long until the loop's next cycle
+				local times = { delay }
+				local every, cycle = num(d, "VFX_Every", 0), num(root, "VFX_Interval", 0)
+				if every > 0 and cycle > 0 then
+					local next = delay + every
+					while next < cycle - 1e-3 do
+						table.insert(times, next)
+						next += every
+					end
 				end
-				length = math.max(length, delay + d.Lifetime.Max)
+				for _, fireAt in times do
+					if fireAt > 0 then
+						addAnim(fireAt, 0.016, function()
+							if alive(d) then
+								emitNow(d, n)
+							end
+						end, function() end)
+					else
+						emitNow(d, n)
+					end
+				end
+				length = math.max(length, times[#times] + d.Lifetime.Max)
 			end
 			if type(duration) == "number" and duration > 0 then
 				stream(d, delay, duration, ctx.quality)
@@ -3253,6 +3272,56 @@ function EasyVFX.Pending(): number
 	return #active
 end
 
+-- Fades a looping effect in over `seconds` as it starts (VFX_FadeIn), instead of every piece
+-- showing at once: beams, trails and particles from clear to their own transparency, lights from
+-- dark to their brightness, parts through LocalTransparencyModifier (client-side only).
+local function faded(seq: NumberSequence, k: number): NumberSequence
+	local points = {}
+	for _, p in seq.Keypoints do
+		table.insert(points, NumberSequenceKeypoint.new(p.Time, 1 - (1 - p.Value) * k, p.Envelope))
+	end
+	return NumberSequence.new(points)
+end
+
+type FadeItem = { inst: Instance, prop: string, base: any }
+
+function EasyVFX.FadeIn(root: Instance, seconds: number)
+	if seconds <= 0 then
+		return
+	end
+	local items: { FadeItem } = {}
+	for _, d in root:GetDescendants() do
+		if d:IsA("Beam") or d:IsA("Trail") or d:IsA("ParticleEmitter") then
+			table.insert(items, { inst = d :: Instance, prop = "Transparency", base = (d :: any).Transparency })
+		elseif d:IsA("Light") then
+			table.insert(items, { inst = d :: Instance, prop = "Brightness", base = (d :: any).Brightness })
+		elseif d:IsA("BasePart") then
+			table.insert(items, { inst = d :: Instance, prop = "LocalTransparencyModifier", base = 0 })
+		end
+	end
+	local function apply(k: number)
+		for _, item in items do
+			local d: any = item.inst
+			if not d.Parent then
+				continue
+			end
+			if item.prop == "Transparency" then
+				d.Transparency = faded(item.base, k)
+			elseif item.prop == "Brightness" then
+				d.Brightness = item.base * k
+			else
+				d.LocalTransparencyModifier = 1 - k
+			end
+		end
+	end
+	apply(0)
+	addAnim(0, seconds, nil, function(alpha)
+		apply(alpha)
+	end, function()
+		apply(1)
+	end)
+end
+
 function EasyVFX.SetEnabled(root: Instance, on: boolean)
 	for _, d in root:GetDescendants() do
 		if d:GetAttribute("EmitCount") == nil and d:GetAttribute("EmitDuration") == nil and d:GetAttribute("VFX_Layer") ~= nil then
@@ -3433,8 +3502,13 @@ function EasyVFX.InitClient()
 		local running = true
 		task.spawn(function()
 			task.wait(math.random() * 0.3)
+			local first = true
 			while running and root.Parent do
 				local length = EasyVFX.PlayLocal(root)
+				if first then
+					first = false
+					EasyVFX.FadeIn(root, num(root, "VFX_FadeIn", 0))
+				end
 				task.wait(math.max(0.2, num(root, "VFX_Interval", math.max(1, length))))
 			end
 		end)
@@ -3529,6 +3603,7 @@ export type Params = {
 	glow: number,
 	trigger: string, -- Always | Loop | Touch | Click | Prompt | Script
 	interval: number,
+	fadeIn: number, -- seconds a loop takes to fade in when it starts; 0 shows it at once
 	cooldown: number,
 	duration: number,
 	promptText: string,
@@ -3559,6 +3634,7 @@ local ATTRS: { [string]: string } = {
 	glow = "VFX_Glow",
 	trigger = "VFX_Trigger",
 	interval = "VFX_Interval",
+	fadeIn = "VFX_FadeIn",
 	cooldown = "VFX_Cooldown",
 	duration = "VFX_Duration",
 	promptText = "VFX_PromptText",
@@ -3595,6 +3671,7 @@ function Builder.defaultParams(presetId: string): Params
 		glow = d.glow or 1,
 		trigger = d.trigger or (if preset.kind == "burst" then "Loop" else "Always"),
 		interval = d.interval or 2,
+		fadeIn = d.fadeIn or 0,
 		cooldown = d.cooldown or 1,
 		duration = d.duration or 2,
 		promptText = d.promptText or "Use",
@@ -3933,12 +4010,18 @@ LayerBuilders.particles = function(ctx, key, layer)
 	e.ZOffset = layer.zOffset or 0
 	e.LockedToPart = layer.locked == true
 	e.WindAffectsDrag = layer.windDrag == true
+	-- a replayed burst starts at the angle its spin has reached on the clock, so a loop's next
+	-- particle lands where the last one has turned to and their crossfade never jumps
+	e:SetAttribute("VFX_SpinPhase", if layer.spinPhase then true else nil)
 	if layer.burst then
 		e.Rate = 20
 		e.Enabled = false
 		e:SetAttribute("EmitCount", math.max(1, math.floor(layer.burst * params.amount + 0.5)))
 		e:SetAttribute("EmitDelay", if layer.delay then layer.delay * params.lifetime else nil)
 		e:SetAttribute("EmitDuration", nil)
+		-- `every` (seconds): a loop's burst fires again every this long inside each cycle
+		-- (VFX_Interval), so one effect can hold a fast pulse and a slower, uneven rhythm
+		e:SetAttribute("VFX_Every", if type(layer.every) == "number" and layer.every > 0 then layer.every else nil)
 	else
 		e.Rate = math.min(Builder.MAX_RATE, (layer.rate or 10) * params.amount)
 		setStreaming(e, ctx, function()
@@ -4077,7 +4160,9 @@ LayerBuilders.beam = function(ctx, key, layer)
 	beam.LightEmission = math.clamp((layer.lightEmission or 1) * params.glow, 0, 1)
 	beam.LightInfluence = 0
 	beam.Brightness = (layer.brightness or 1) * params.glow
-	beam.FaceCamera = true
+	-- `faceCamera = false` lays the beam flat in the world: its width runs along its attachments'
+	-- up axis (set with `tilt0`/`tilt1`), a band round a doorway's depth
+	beam.FaceCamera = layer.faceCamera ~= false
 	local curved = (layer.curve0 or 0) ~= 0 or (layer.curve1 or 0) ~= 0
 	beam.CurveSize0 = (layer.curve0 or 0) * params.size
 	beam.CurveSize1 = (layer.curve1 or 0) * params.size
@@ -4248,9 +4333,14 @@ LayerBuilders.part = function(ctx, key, layer)
 	part.Shape = enumItem(Enum.PartType, layer.shape, Enum.PartType.Ball) :: any
 	part.Material = enumItem(Enum.Material, layer.material, Enum.Material.Neon) :: any
 	part.Color = resolveColor(layer.color or "p", params)
-	local d = math.max(root.Size.X, root.Size.Y, root.Size.Z) * (layer.scale or 1) * params.size
-	part.Size = Vector3.new(d, d, d)
-	part.CFrame = root.CFrame
+	-- an explicit size makes any box (a flat panel in a doorway); otherwise a cube as big as the effect
+	if typeof(layer.size) == "Vector3" then
+		part.Size = layer.size * params.size
+	else
+		local d = math.max(root.Size.X, root.Size.Y, root.Size.Z) * (layer.scale or 1) * params.size
+		part.Size = Vector3.new(d, d, d)
+	end
+	part.CFrame = root.CFrame * CFrame.new(if typeof(layer.offset) == "Vector3" then layer.offset * params.size else Vector3.zero)
 	part.Anchored = false
 	part.Massless = true
 	part.CanCollide = false
@@ -5342,14 +5432,15 @@ return Bridge
 
 	Layer types
 	  particles  ParticleEmitter. `burst = n` makes it a one-shot (EmitCount), otherwise
-	             it streams with `rate`. `at` = "part" (whole effect volume),
+	             it streams with `rate`. In a loop, `every = s` fires the burst again every s
+	             seconds inside each cycle. `at` = "part" (whole effect volume),
 	             "center", or a Vector3 offset in studs.
 	  shape      Crisp procedural piece played by the runtime (Ring, Slash, Lines, Bolt,
 	             Orb, Debris, Crater, Jet). `attrs` are written as attributes.
 	  light      PointLight. `flash = seconds` makes it a quick fading flash.
 	  beam       Static Beam between two offsets (lasers).
 	  trail      Trail along the longest side of the effect part (weapon swings).
-	  part       Static visible part (shield bubble, energy core).
+	  part       Static visible part (shield bubble, energy core); `size` (a Vector3) makes it any box, `offset` moves it.
 	  highlight  Outline glow on the object the effect is attached to.
 
 	Colors: "p" = main color, "s" = second color, "w" = white, "k" = soot black,

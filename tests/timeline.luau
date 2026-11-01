@@ -148,6 +148,7 @@ local function emitterInfo(e: ParticleEmitter)
 		drag = e.Drag,
 		rotation = { e.Rotation.Min, e.Rotation.Max },
 		rotSpeed = { e.RotSpeed.Min, e.RotSpeed.Max },
+		spinPhase = e:GetAttribute("VFX_SpinPhase") == true,
 		orientation = enumName(e.Orientation),
 		direction = enumName(e.EmissionDirection),
 		shape = enumName(e.Shape),
@@ -199,8 +200,10 @@ local function beamInfo(d: Beam)
 	return {
 		p0 = v3(w0.Position),
 		a0 = v3(w0.RightVector),
+		u0 = v3(w0.UpVector),
 		p3 = v3(w1.Position),
 		a1 = v3(w1.RightVector),
+		u1 = v3(w1.UpVector),
 		c0 = d.CurveSize0,
 		c1 = d.CurveSize1,
 		w0 = d.Width0,
@@ -380,7 +383,9 @@ local function record(preset)
 	local replay = loop and EasyVFX.HasBursts(root) and type(interval) == "number" and interval > 0
 	local nextReplay = if replay then interval else math.huge
 	local emitters, frames = {}, {}
-	local limit = math.floor((if loop then LOOP_SECONDS else MAX_SECONDS) / H.FRAME + 0.5)
+	-- a loop records at least one whole cycle, so bursts late in a long cycle are in it
+	local loopSeconds = if replay then math.min(MAX_SECONDS, math.max(LOOP_SECONDS, interval + 0.2)) else LOOP_SECONDS
+	local limit = math.floor((if loop then loopSeconds else MAX_SECONDS) / H.FRAME + 0.5)
 	local quiet = 0
 	local done = false
 	H.onFrame = function(now: number)
@@ -421,6 +426,8 @@ local function record(preset)
 		local info = emitterInfo(rec.emitter)
 		info.count = rec.count
 		info.frame = rec.frame - start
+		-- the angle it had when it fired (a spinPhase layer sets it per burst)
+		info.rotation = rec.rotation
 		info.cframe = cf(rec.cframe)
 		info.volume = v3(rec.size)
 		table.insert(bursts, info)
@@ -434,6 +441,12 @@ local function record(preset)
 		mode = mode,
 		seed = SEED,
 		frameTime = H.FRAME,
+		-- a loop's bursts replay every loopInterval seconds for as long as it plays; the recording
+		-- holds only LOOP_SECONDS of them, and tools/evfx replays the first cycle past that
+		loopInterval = if replay then interval else nil,
+		-- a loop fades in over its first fadeIn seconds (EasyVFX.FadeIn); tools/evfx draws that fade
+		-- over the whole frame, so the recording keeps each piece's own values
+		fadeIn = if loop and (root:GetAttribute("VFX_FadeIn") or 0) > 0 then root:GetAttribute("VFX_FadeIn") else nil,
 		holder = cf(holder.CFrame),
 		cameraHome = cf(CAMERA_HOME),
 		fovHome = FOV_HOME,

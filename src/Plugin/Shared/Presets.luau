@@ -4,14 +4,15 @@
 
 	Layer types
 	  particles  ParticleEmitter. `burst = n` makes it a one-shot (EmitCount), otherwise
-	             it streams with `rate`. `at` = "part" (whole effect volume),
+	             it streams with `rate`. In a loop, `every = s` fires the burst again every s
+	             seconds inside each cycle. `at` = "part" (whole effect volume),
 	             "center", or a Vector3 offset in studs.
 	  shape      Crisp procedural piece played by the runtime (Ring, Slash, Lines, Bolt,
 	             Orb, Debris, Crater, Jet). `attrs` are written as attributes.
 	  light      PointLight. `flash = seconds` makes it a quick fading flash.
 	  beam       Static Beam between two offsets (lasers).
 	  trail      Trail along the longest side of the effect part (weapon swings).
-	  part       Static visible part (shield bubble, energy core).
+	  part       Static visible part (shield bubble, energy core); `size` (a Vector3) makes it any box, `offset` moves it.
 	  highlight  Outline glow on the object the effect is attached to.
 
 	Colors: "p" = main color, "s" = second color, "w" = white, "k" = soot black,
