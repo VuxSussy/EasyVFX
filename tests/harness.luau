@@ -322,7 +322,7 @@ function Harness.install()
 			elseif parent and parent:IsA("BasePart") then
 				cf, size = parent.CFrame, parent.Size
 			end
-			table.insert(Harness.emitLog, { emitter = inst, count = n or 16, frame = Harness.frame, cframe = cf, size = size })
+			table.insert(Harness.emitLog, { emitter = inst, count = n or 16, frame = Harness.frame, cframe = cf, size = size, rotation = { inst.Rotation.Min, inst.Rotation.Max } })
 		end
 	end)
 	roblox.implementMethod("Workspace", "Raycast", function(_ws, origin, _dir, _params)

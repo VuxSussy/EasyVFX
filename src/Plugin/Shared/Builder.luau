@@ -438,6 +438,9 @@ LayerBuilders.particles = function(ctx, key, layer)
 	e.ZOffset = layer.zOffset or 0
 	e.LockedToPart = layer.locked == true
 	e.WindAffectsDrag = layer.windDrag == true
+	-- a replayed burst starts at the angle its spin has reached on the clock, so a loop's next
+	-- particle lands where the last one has turned to and their crossfade never jumps
+	e:SetAttribute("VFX_SpinPhase", if layer.spinPhase then true else nil)
 	if layer.burst then
 		e.Rate = 20
 		e.Enabled = false
@@ -753,9 +756,14 @@ LayerBuilders.part = function(ctx, key, layer)
 	part.Shape = enumItem(Enum.PartType, layer.shape, Enum.PartType.Ball) :: any
 	part.Material = enumItem(Enum.Material, layer.material, Enum.Material.Neon) :: any
 	part.Color = resolveColor(layer.color or "p", params)
-	local d = math.max(root.Size.X, root.Size.Y, root.Size.Z) * (layer.scale or 1) * params.size
-	part.Size = Vector3.new(d, d, d)
-	part.CFrame = root.CFrame
+	-- an explicit size makes any box (a flat panel in a doorway); otherwise a cube as big as the effect
+	if typeof(layer.size) == "Vector3" then
+		part.Size = layer.size * params.size
+	else
+		local d = math.max(root.Size.X, root.Size.Y, root.Size.Z) * (layer.scale or 1) * params.size
+		part.Size = Vector3.new(d, d, d)
+	end
+	part.CFrame = root.CFrame * CFrame.new(if typeof(layer.offset) == "Vector3" then layer.offset * params.size else Vector3.zero)
 	part.Anchored = false
 	part.Massless = true
 	part.CanCollide = false

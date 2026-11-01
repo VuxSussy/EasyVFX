@@ -1617,6 +1617,55 @@ def star_burst(p, rng, size):
     return np.clip(fill * (0.82 + 0.18 * core) + 0.25 * core, 0, 1) * lib.vignette(u, v, 0.9, 0.99)
 
 
+@recipe("electric_web", cells=6, width=0.035, wobble=0.12, breakup=0.45, glow=0.35, reach=0.92, strip=0)
+def electric_web(p, rng, size):
+    """A web of crackling electric lines, the edges of wobbling cells, broken in places and fading
+    to the rim: the lightning that crawls over a portal (Phát's reference, 2026-11-01). With
+    `strip` it tiles left to right and fades only at the top and bottom, to scroll along a beam."""
+    u, v = lib.grid(size)
+    r = np.sqrt(u * u + v * v)
+    edge = lib.worley((size, size), int(p["cells"]), seed=_seed(rng), second=True)
+    du = lib.fbm((size, size), 3, 4, seed=_seed(rng))
+    dv = lib.fbm((size, size), 3, 4, seed=_seed(rng))
+    edge = lib.warp(edge, du, dv, p["wobble"])
+    line = np.exp(-((edge / p["width"]) ** 2))
+    halo = p["glow"] * np.exp(-((edge / (p["width"] * 4)) ** 2))
+    keep = lib.smooth(p["breakup"] - 0.15, p["breakup"] + 0.15, lib.fbm((size, size), 4, 4, seed=_seed(rng)))
+    if p["strip"]:
+        fade = 1 - lib.smooth(0.55, 0.92, np.abs(v))
+    else:
+        fade = 1 - lib.smooth(p["reach"] * 0.55, p["reach"], r)
+    return np.clip((line + halo) * keep * fade, 0, 1)
+
+
+@recipe("spiral_web", cells=5, width=0.03, wobble=0.1, breakup=0.4, glow=0.4, around=6, pull=1.4, twist=1.0, core=0.12, base=0.18, disc=0, swirl=0.35)
+def spiral_web(p, rng, size):
+    """The electric web wound into a spiral round the middle, over a faint even base: turned
+    slowly, its lines seem to pour into the centre (a portal's face, Phát's reference, 2026-11-01).
+    The web is laid on log-polar coordinates, so every ring of it is the same web smaller."""
+    u, v = lib.grid(size)
+    r, a = lib.polar(u, v)
+    edge = lib.worley((size, size), int(p["cells"]), seed=_seed(rng), second=True)
+    du = lib.fbm((size, size), 3, 4, seed=_seed(rng))
+    dv = lib.fbm((size, size), 3, 4, seed=_seed(rng))
+    edge = lib.warp(edge, du, dv, p["wobble"])
+    line = np.exp(-((edge / p["width"]) ** 2)) + p["glow"] * np.exp(-((edge / (p["width"] * 4)) ** 2))
+    keep = lib.smooth(p["breakup"] - 0.15, p["breakup"] + 0.15, lib.fbm((size, size), 4, 4, seed=_seed(rng)))
+    web = line * keep
+    turn = a / (2 * math.pi)
+    s = (turn * p["around"]) % 1.0
+    t = (np.log(np.maximum(r, 1e-3)) * p["pull"] - turn * p["twist"]) % 1.0
+    wound = lib.sample(web, s * size, t * size)
+    hole = lib.smooth(p["core"] * 0.5, p["core"] * 1.5, r)
+    if not p["disc"]:
+        return np.clip(wound * hole + p["base"], 0, 1)
+    # a round disc: a noisy swirl of light brighter in places, soft at its rim
+    cloud = lib.fbm((size, size), 3, 5, seed=_seed(rng))
+    cloud = lib.sample(cloud, ((turn + r * p["swirl"]) % 1.0) * size, (r % 1.0) * size)
+    rim = 1 - lib.smooth(0.72, 0.97, r)
+    return np.clip((wound * (0.5 + cloud) + p["base"] * cloud * 1.6) * rim * hole, 0, 1)
+
+
 @recipe("hollow_ring", radius=0.6, line=0.07, glow=0.25)
 def hollow_ring(p, rng, size):
     """A small hollow ring with a soft glow: orbit rings that scatter around a sigil."""

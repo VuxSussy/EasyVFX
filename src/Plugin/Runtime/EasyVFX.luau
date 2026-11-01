@@ -2315,6 +2315,13 @@ function EasyVFX.PlayLocal(target: Instance | string, at: CFrame?): number
 		end
 	end
 
+	local function emitNow(d: ParticleEmitter, n: number)
+		if d:GetAttribute("VFX_SpinPhase") == true then
+			local angle = (os.clock() * d.RotSpeed.Min) % 360
+			d.Rotation = NumberRange.new(angle)
+		end
+		d:Emit(n)
+	end
 	local length = playSequences(root, ctx)
 	for _, d in root:GetDescendants() do
 		length = math.max(length, playSequences(d, ctx))
@@ -2331,11 +2338,11 @@ function EasyVFX.PlayLocal(target: Instance | string, at: CFrame?): number
 				if delay > 0 then
 					addAnim(delay, 0.016, function()
 						if alive(d) then
-							d:Emit(n)
+							emitNow(d, n)
 						end
 					end, function() end)
 				else
-					d:Emit(n)
+					emitNow(d, n)
 				end
 				length = math.max(length, delay + d.Lifetime.Max)
 			end

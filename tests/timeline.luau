@@ -148,6 +148,7 @@ local function emitterInfo(e: ParticleEmitter)
 		drag = e.Drag,
 		rotation = { e.Rotation.Min, e.Rotation.Max },
 		rotSpeed = { e.RotSpeed.Min, e.RotSpeed.Max },
+		spinPhase = e:GetAttribute("VFX_SpinPhase") == true,
 		orientation = enumName(e.Orientation),
 		direction = enumName(e.EmissionDirection),
 		shape = enumName(e.Shape),
@@ -421,6 +422,8 @@ local function record(preset)
 		local info = emitterInfo(rec.emitter)
 		info.count = rec.count
 		info.frame = rec.frame - start
+		-- the angle it had when it fired (a spinPhase layer sets it per burst)
+		info.rotation = rec.rotation
 		info.cframe = cf(rec.cframe)
 		info.volume = v3(rec.size)
 		table.insert(bursts, info)
@@ -434,6 +437,9 @@ local function record(preset)
 		mode = mode,
 		seed = SEED,
 		frameTime = H.FRAME,
+		-- a loop's bursts replay every loopInterval seconds for as long as it plays; the recording
+		-- holds only LOOP_SECONDS of them, and tools/evfx replays the first cycle past that
+		loopInterval = if replay then interval else nil,
 		holder = cf(holder.CFrame),
 		cameraHome = cf(CAMERA_HOME),
 		fovHome = FOV_HOME,
