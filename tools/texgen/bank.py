@@ -123,6 +123,19 @@ def _atlas(cells, grid):
     return out
 
 
+# Roblox lays a beam's texture with the image's height along the beam (its top at Attachment1)
+# and its width across it (measured in Studio, 2026-11-01). A strip is authored lying down, its
+# length left to right, so a beam texture's file holds it turned onto its anti-diagonal: the file
+# is what gets uploaded, and read() turns it back for the recipes and checks.
+BEAM_KINDS = ("strip", "beam")
+
+
+def beam_file(rgba):
+    """A beam texture as authored (length left to right) to its file (length up the image), and
+    back: a reflection across the anti-diagonal, its own inverse."""
+    return np.ascontiguousarray(np.swapaxes(rgba, 0, 1)[::-1, ::-1])
+
+
 def png_bytes(rgba):
     buf = io.BytesIO()
     Image.fromarray(rgba, "RGBA").save(buf, "PNG", optimize=True)
@@ -149,7 +162,8 @@ def read(tex_id):
     path = os.path.join(OUT, filename(tex_id))
     if not os.path.exists(path):
         return None
-    return np.asarray(Image.open(path).convert("RGBA"))
+    rgba = np.asarray(Image.open(path).convert("RGBA"))
+    return beam_file(rgba) if e["kind"] in BEAM_KINDS else rgba
 
 
 def write(results):
@@ -176,7 +190,8 @@ def write(results):
                     "sha256": hashlib.sha256(data).hexdigest(), "use": f"frame {k} of {meta['id']}",
                 }
             continue
-        data = png_bytes(rgba)
+        on_file = beam_file(rgba) if e["kind"] in BEAM_KINDS else rgba
+        data = png_bytes(on_file)
         name = filename(meta["id"])
         with open(os.path.join(OUT, name), "wb") as f:
             f.write(data)

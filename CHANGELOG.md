@@ -4,6 +4,12 @@ All notable changes to EasyVFX are listed here. Versions follow [Semantic Versio
 
 ## [Unreleased]
 
+### Beam textures turned the way Roblox reads them
+- Roblox lays a beam's texture with the image's height along the beam (its top at Attachment1) and its width across it (its left edge on the attachments' up side for a flat beam; for one facing the camera, the view direction crossed with the beam's), measured in Studio. Strips were authored and uploaded lying down, so in a game they ran across their beams.
+- texgen keeps authoring strip and beam textures lying down, and writes their files turned onto the anti-diagonal (`bank.beam_file`), so the file in `pack/generated` is the one to upload; `bank.read` turns it back for the recipes and checks.
+- The evfx preview draws a beam's texture as Roblox does, from the file as uploaded, so a texture uploaded the wrong way round shows wrong in the preview too.
+- Already uploaded beam textures (a drop's `strip_soft_beam` and `strip_energy_streak`, and others made before this) need uploading again from the turned files.
+
 ### Loop timing: phase-locked spin, repeats inside a cycle, fade-in
 - `spinPhase = true` on a burst emitter starts each burst's rotation where the spin has reached (`os.clock() * RotSpeed`), so discs replayed every pulse crossfade without jumping.
 - `every = s` on a loop's burst fires it again every s seconds inside each `VFX_Interval` cycle, so one effect can hold a fast pulse and a slower, uneven rhythm (lightning strikes).
