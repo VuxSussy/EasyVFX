@@ -4,6 +4,9 @@ All notable changes to EasyVFX are listed here. Versions follow [Semantic Versio
 
 ## [Unreleased]
 
+### Particles drawn at their real size in the preview
+- Roblox draws a particle twice its `Size` across (measured in Studio: a `Size` 4 ring sprite spanned 5.1 studs, its image's ring being 64% of the sprite). The evfx preview drew it `Size` across, so every effect tuned in the preview played twice as big in a game. The preview now draws it at twice `Size`; effects tuned before this look twice as big in the preview, as they do in a game.
+
 ### Beam textures turned the way Roblox reads them
 - Roblox lays a beam's texture with the image's height along the beam (its top at Attachment1) and its width across it (its left edge on the attachments' up side for a flat beam; for one facing the camera, the view direction crossed with the beam's), measured in Studio. Strips were authored and uploaded lying down, so in a game they ran across their beams.
 - texgen keeps authoring strip and beam textures lying down, and writes their files turned onto the anti-diagonal (`bank.beam_file`), so the file in `pack/generated` is the one to upload; `bank.read` turns it back for the recipes and checks.

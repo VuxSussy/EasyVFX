@@ -306,7 +306,9 @@ def _particle(canvas, p):
         sx, sy = size / (1 + squash), size * (1 + squash)
     else:
         sx, sy = size * (1 - squash), size / (1 - squash)
-    hx, hy = core.mul(right, sx / 2), core.mul(up, sy / 2)
+    # Roblox draws a particle twice its Size across (measured in Studio, 2026-11-01: a Size 4 ring
+    # sprite spanned 5.1 studs where its image's ring is 64% of the sprite), so the half-extent is Size
+    hx, hy = core.mul(right, sx), core.mul(up, sy)
     corners = [
         core.add(core.sub(pos, hx), hy),
         core.add(core.add(pos, hx), hy),
