@@ -1530,7 +1530,7 @@
       "role": "core",
       "upload": true,
       "rgb": "white",
-      "sha256": "ee00553924dd12d0d38852148200c8424f0722441d91ba559cf6a8d45e543fb5",
+      "sha256": "0048ffdff73f73874967347b9a9ca0d3f74c6bce175bce7d94c6040db39fb0bd",
       "use": "a band of light seen edge-on: a hot line on one side fading across the band, wisps streaming along it; a beam laid flat (FaceCamera off) round a doorway's depth, the line its front edge (Ph\u00e1t, 2026-11-01)"
     },
     "strip_edge_band_mirror": {
@@ -1545,7 +1545,7 @@
       "role": "core",
       "upload": true,
       "rgb": "white",
-      "sha256": "2b950848347ead67624b21b52670530fa84590fa0d988c880d35c7c9b5c1e636",
+      "sha256": "4f4487b6c2eb440ce885b52b04a72df6a0579c1c3a9b67339f4055f804ab1542",
       "use": "the edge band mirrored about its middle: one hot line down the middle, the glow falling toward both sides; a flat beam centred on a doorway, twice the band's depth, glowing at the front and the back (Ph\u00e1t, 2026-11-01)"
     },
     "strip_electric_web": {
@@ -1665,7 +1665,7 @@
       "role": "volume",
       "upload": true,
       "rgb": "white",
-      "sha256": "4560bc81c4f4859a5e14ac833e1255b32fe108f1d51367558504504384349607",
+      "sha256": "5d6d2a610069ead2b5d28187f6507405e05ce8c2fa371942cccd7375b7f4b9ed",
       "use": "smoke_streak with no core line, the smoke filling the strip: a liquid that scrolls across a portal's panel (Ph\u00e1t, 2026-11-01)"
     },
     "strip_smoke_liquid_billow": {
@@ -1680,7 +1680,7 @@
       "role": "volume",
       "upload": true,
       "rgb": "white",
-      "sha256": "73366699cd700b3b7b4f09acbfed60e9187bfb6d139f73bcc9b37a0e64d0f7e4",
+      "sha256": "4dd011d02e43fbf37589e566349bf5dcb233ff6f0dc57841e7293e35f4932e08",
       "use": "smoke_liquid, big slow billows: a portal panel's scrolling liquid (Ph\u00e1t, 2026-11-01)"
     },
     "strip_smoke_liquid_curl": {
@@ -1695,7 +1695,7 @@
       "role": "volume",
       "upload": true,
       "rgb": "white",
-      "sha256": "2164ab10b44ae113c13b74b2307a81beed6a99cd1c82dff7b7c33a2f133876d4",
+      "sha256": "e2d3beda5791a194273467d80ad82d29a910095931bdc32afe95f4bad938762e",
       "use": "smoke_liquid, curlier, finer eddies: a portal panel's scrolling liquid (Ph\u00e1t, 2026-11-01)"
     },
     "strip_smoke_liquid_veil": {
@@ -1710,7 +1710,7 @@
       "role": "volume",
       "upload": true,
       "rgb": "white",
-      "sha256": "bce0b43c806b83cd6e3ca3391d75c0e335d252bfb40e6e3511ff950f8c43a6a9",
+      "sha256": "9de074e0e4a7bae0341cfc061d63e7def68e6358aef42b31059a5ce31ff8beb7",
       "use": "smoke_liquid, a soft even veil, streaky: a portal panel's scrolling liquid (Ph\u00e1t, 2026-11-01)"
     },
     "strip_smoke_liquid_wisp": {
@@ -1725,7 +1725,7 @@
       "role": "volume",
       "upload": true,
       "rgb": "white",
-      "sha256": "3df64388ad04c73e5dca244ed890c15b8a9aea903f5cea81657a5b642f09e841",
+      "sha256": "bb074c64f99a84c24b9a1d0fccdbf65d647a9a8df9217654b6790ea9137cbf9a",
       "use": "smoke_liquid, sharp thin wisps with dark gaps: a portal panel's scrolling liquid (Ph\u00e1t, 2026-11-01)"
     },
     "strip_smoke_streak": {

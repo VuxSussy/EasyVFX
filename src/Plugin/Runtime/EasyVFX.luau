@@ -2339,15 +2339,15 @@ function EasyVFX.PlayLocal(target: Instance | string, at: CFrame?): number
 				local times = { delay }
 				local every, cycle = num(d, "VFX_Every", 0), num(root, "VFX_Interval", 0)
 				if every > 0 and cycle > 0 then
-					local at = delay + every
-					while at < cycle - 1e-3 do
-						table.insert(times, at)
-						at += every
+					local next = delay + every
+					while next < cycle - 1e-3 do
+						table.insert(times, next)
+						next += every
 					end
 				end
-				for _, at in times do
-					if at > 0 then
-						addAnim(at, 0.016, function()
+				for _, fireAt in times do
+					if fireAt > 0 then
+						addAnim(fireAt, 0.016, function()
 							if alive(d) then
 								emitNow(d, n)
 							end
@@ -2584,30 +2584,32 @@ local function faded(seq: NumberSequence, k: number): NumberSequence
 	return NumberSequence.new(points)
 end
 
+type FadeItem = { inst: Instance, prop: string, base: any }
+
 function EasyVFX.FadeIn(root: Instance, seconds: number)
 	if seconds <= 0 then
 		return
 	end
-	local items = {}
+	local items: { FadeItem } = {}
 	for _, d in root:GetDescendants() do
 		if d:IsA("Beam") or d:IsA("Trail") or d:IsA("ParticleEmitter") then
-			table.insert(items, { d, "Transparency", (d :: any).Transparency })
+			table.insert(items, { inst = d :: Instance, prop = "Transparency", base = (d :: any).Transparency })
 		elseif d:IsA("Light") then
-			table.insert(items, { d, "Brightness", (d :: any).Brightness })
+			table.insert(items, { inst = d :: Instance, prop = "Brightness", base = (d :: any).Brightness })
 		elseif d:IsA("BasePart") then
-			table.insert(items, { d, "LocalTransparencyModifier", 0 })
+			table.insert(items, { inst = d :: Instance, prop = "LocalTransparencyModifier", base = 0 })
 		end
 	end
 	local function apply(k: number)
 		for _, item in items do
-			local d, prop, base = item[1], item[2], item[3]
+			local d: any = item.inst
 			if not d.Parent then
 				continue
 			end
-			if prop == "Transparency" then
-				d.Transparency = faded(base, k)
-			elseif prop == "Brightness" then
-				d.Brightness = base * k
+			if item.prop == "Transparency" then
+				d.Transparency = faded(item.base, k)
+			elseif item.prop == "Brightness" then
+				d.Brightness = item.base * k
 			else
 				d.LocalTransparencyModifier = 1 - k
 			end
