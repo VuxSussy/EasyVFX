@@ -370,28 +370,6 @@ def _profile(name, steps):
     return column[idx]
 
 
-def _tangent(p0, p1, p2, p3, f):
-    """The Bezier curve's direction at `f`."""
-    g = 1 - f
-    d = core.add(
-        core.add(core.mul(core.sub(p1, p0), 3 * g * g), core.mul(core.sub(p2, p1), 6 * g * f)),
-        core.mul(core.sub(p3, p2), 3 * f * f),
-    )
-    return core.norm(d)
-
-
-def _turned(v, a, b):
-    """`v` turned by the rotation that takes direction `a` onto direction `b` (Rodrigues)."""
-    axis = core.cross(a, b)
-    s = math.sqrt(core.dot(axis, axis))
-    c = core.dot(a, b)
-    if s < 1e-6:
-        return v if c > 0 else core.mul(v, -1)
-    k = core.mul(axis, 1 / s)
-    kv = core.cross(k, v)
-    return core.add(core.add(core.mul(v, c), core.mul(kv, s)), core.mul(k, core.dot(k, v) * (1 - c)))
-
-
 def _beam(canvas, beam, t=0.0):
     cam = canvas.cam
     p0, p3 = beam["p0"], beam["p3"]
@@ -422,13 +400,11 @@ def _beam(canvas, beam, t=0.0):
                 # FaceCamera off: the width lies along the attachments' up axis (Studio, 2026-11-01),
                 # so the beam is a flat strip in the world, seen edge-on from the side
                 at = point(f)
-                if beam.get("c0") or beam.get("c1"):
-                    # on a curve the width turns with it, as Roblox draws it (Studio, 2026-11-01: a
-                    # half circle whose ends' ups point opposite ways kept its full width): carry
-                    # Attachment0's up round by the turn from the start's direction to this point's
-                    up = _turned(beam["u0"], _tangent(p0, p1, p2, p3, 0), _tangent(p0, p1, p2, p3, f))
-                else:
-                    up = core.norm(core.add(core.mul(beam["u0"], 1 - f), core.mul(beam["u1"], f)))
+                # Roblox blends the two ends' ups and keeps the width's length (Studio, 2026-11-01: a
+                # quarter-ring beam whose ends' ups are 90 degrees apart filled a quarter disc; a
+                # half ring, its ends' ups opposite, pinched to nothing in the middle)
+                mixed = core.add(core.mul(beam["u0"], 1 - f), core.mul(beam["u1"], f))
+                up = core.norm(mixed) if core.dot(mixed, mixed) > 1e-6 else (0.0, 0.0, 0.0)
                 hi = cam.project(core.add(at, core.mul(up, w / 2)))
                 lo = cam.project(core.sub(at, core.mul(up, w / 2)))
                 if hi is None or lo is None:
