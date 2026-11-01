@@ -399,18 +399,29 @@ def _beam(canvas, beam, t=0.0):
     p2 = core.sub(p3, core.mul(beam["a1"], beam["c1"]))
     # at least 32 steps along a beam, and one every 4 pixels on screen, so a transparency or colour
     # gradient along it reads smooth: each step has one alpha, and a long beam showed them as bands
+    segs = beam.get("segments") or 0
+
+    def point(f):
+        # Roblox draws the curve as `Segments` straight runs between its points at even steps
+        if not segs or segs >= 24:
+            return core.bezier(p0, p1, p2, p3, f)
+        k = min(segs - 1, int(f * segs))
+        a, b = core.bezier(p0, p1, p2, p3, k / segs), core.bezier(p0, p1, p2, p3, (k + 1) / segs)
+        g = f * segs - k
+        return core.add(core.mul(a, 1 - g), core.mul(b, g))
+
     def sample(n):
         out = []
         for k in range(n + 1):
             f = k / n
-            pr = cam.project(core.bezier(p0, p1, p2, p3, f))
+            pr = cam.project(point(f))
             if pr is None:
                 return None
             w = beam["w0"] + (beam["w1"] - beam["w0"]) * f
             if beam.get("faceCamera", True) is False and "u0" in beam:
                 # FaceCamera off: the width lies along the attachments' up axis (Studio, 2026-11-01),
                 # so the beam is a flat strip in the world, seen edge-on from the side
-                at = core.bezier(p0, p1, p2, p3, f)
+                at = point(f)
                 if beam.get("c0") or beam.get("c1"):
                     # on a curve the width turns with it, as Roblox draws it (Studio, 2026-11-01: a
                     # half circle whose ends' ups point opposite ways kept its full width): carry

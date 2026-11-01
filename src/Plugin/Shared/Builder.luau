@@ -610,7 +610,9 @@ LayerBuilders.beam = function(ctx, key, layer)
 	local curved = (layer.curve0 or 0) ~= 0 or (layer.curve1 or 0) ~= 0
 	beam.CurveSize0 = (layer.curve0 or 0) * params.size
 	beam.CurveSize1 = (layer.curve1 or 0) * params.size
-	beam.Segments = if curved then 24 else 1
+	-- `segments`: how many straight runs Roblox draws the curve as; a few make a polyline with sharp
+	-- corners where the curve passes a third, two thirds... of the way (a jagged edge from one beam)
+	beam.Segments = if type(layer.segments) == "number" then math.clamp(math.floor(layer.segments), 1, 50) elseif curved then 24 else 1
 	ribbonTexture(ctx, layer, beam)
 	setStreaming(beam, ctx, function()
 		beam.Enabled = true

@@ -5,6 +5,7 @@ All notable changes to EasyVFX are listed here. Versions follow [Semantic Versio
 ## [Unreleased]
 
 ### Curved flat beams
+- A beam layer takes `segments`, how many straight runs Roblox draws it as (default 24 when curved, 1 when straight). With 3, one beam is a polyline through its ends and the points a third and two thirds of the way along its curve, so setting its control points puts sharp corners anywhere (measured in Studio): a jagged edge from a third as many beams. The recorder keeps `Segments` and the preview draws the straight runs.
 - A beam layer takes `frame0` and `frame1` (`{ right, up }`) to set each attachment's frame outright, in place of `tilt0`/`tilt1`: a curved flat beam needs its right axis along the curve (where `curve0`/`curve1` reach) and its up across it. One beam draws a half circle; two a ring.
 - The evfx preview turns a curved flat beam's width with the curve, as Roblox does (measured in Studio: a half circle whose ends' ups point opposite ways kept its full width), where it averaged the two ends' ups and lost the width mid-curve.
 
