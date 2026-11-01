@@ -417,14 +417,21 @@ def _beam(canvas, beam, t=0.0):
 
 
 def _beam_textured(canvas, beam, pts, light, t=0.0, mask=None):
-    """A beam with a pack texture, drawn as Roblox lays it: U along the beam (Stretch repeats it
-    TextureLength times over the length; Wrap and Static every TextureLength studs), V across
-    its width. Each segment gets its own slice of the texture. TextureSpeed scrolls it toward
-    Attachment1, `t` seconds into the play."""
+    """A beam with a pack texture, drawn as Roblox lays it (measured in Studio, 2026-11-01): the
+    image's height runs along the beam, its top at Attachment1 (Stretch repeats it TextureLength
+    times over the length; Wrap and Static every TextureLength studs), and its width across it,
+    its left edge on the beam's + side (the attachments' up for a flat beam; for one facing the
+    camera, the view direction crossed with the beam's). Each segment gets its own slice of the
+    texture. TextureSpeed scrolls it toward Attachment1, `t` seconds into the play."""
     name = beam.get("texture", "")
     tint = None
     if mask is None:
-        mask, tint = texture(name), texture_colour(name)
+        # the file as Roblox reads it, turned to lie along the beam: columns from Attachment0 to
+        # Attachment1, rows from the - side to the + side
+        mask = np.ascontiguousarray(np.flip(texture(name)).T)
+        tint = texture_colour(name)
+        if tint is not None:
+            tint = np.ascontiguousarray(np.flip(tint, (0, 1)).transpose(1, 0, 2))
     tw = mask.shape[1]
     reps = max(1e-3, beam.get("textureLength", 1) or 1)
     if beam.get("textureMode", "Stretch") != "Stretch":
