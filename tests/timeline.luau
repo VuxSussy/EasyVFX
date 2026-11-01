@@ -206,6 +206,7 @@ local function beamInfo(d: Beam)
 		u1 = v3(w1.UpVector),
 		c0 = d.CurveSize0,
 		c1 = d.CurveSize1,
+		segments = d.Segments,
 		w0 = d.Width0,
 		w1 = d.Width1,
 		faceCamera = d.FaceCamera,

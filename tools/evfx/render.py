@@ -377,19 +377,34 @@ def _beam(canvas, beam, t=0.0):
     p2 = core.sub(p3, core.mul(beam["a1"], beam["c1"]))
     # at least 32 steps along a beam, and one every 4 pixels on screen, so a transparency or colour
     # gradient along it reads smooth: each step has one alpha, and a long beam showed them as bands
+    segs = beam.get("segments") or 0
+
+    def point(f):
+        # Roblox draws the curve as `Segments` straight runs between its points at even steps
+        if not segs or segs >= 24:
+            return core.bezier(p0, p1, p2, p3, f)
+        k = min(segs - 1, int(f * segs))
+        a, b = core.bezier(p0, p1, p2, p3, k / segs), core.bezier(p0, p1, p2, p3, (k + 1) / segs)
+        g = f * segs - k
+        return core.add(core.mul(a, 1 - g), core.mul(b, g))
+
     def sample(n):
         out = []
         for k in range(n + 1):
             f = k / n
-            pr = cam.project(core.bezier(p0, p1, p2, p3, f))
+            pr = cam.project(point(f))
             if pr is None:
                 return None
             w = beam["w0"] + (beam["w1"] - beam["w0"]) * f
             if beam.get("faceCamera", True) is False and "u0" in beam:
                 # FaceCamera off: the width lies along the attachments' up axis (Studio, 2026-11-01),
                 # so the beam is a flat strip in the world, seen edge-on from the side
-                at = core.bezier(p0, p1, p2, p3, f)
-                up = core.norm(core.add(core.mul(beam["u0"], 1 - f), core.mul(beam["u1"], f)))
+                at = point(f)
+                # Roblox blends the two ends' ups and keeps the width's length (Studio, 2026-11-01: a
+                # quarter-ring beam whose ends' ups are 90 degrees apart filled a quarter disc; a
+                # half ring, its ends' ups opposite, pinched to nothing in the middle)
+                mixed = core.add(core.mul(beam["u0"], 1 - f), core.mul(beam["u1"], f))
+                up = core.norm(mixed) if core.dot(mixed, mixed) > 1e-6 else (0.0, 0.0, 0.0)
                 hi = cam.project(core.add(at, core.mul(up, w / 2)))
                 lo = cam.project(core.sub(at, core.mul(up, w / 2)))
                 if hi is None or lo is None:

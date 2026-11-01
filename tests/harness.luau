@@ -96,20 +96,28 @@ function Harness.tick()
 	end
 end
 
--- Random datatype (not provided by Lune).
+-- Random datatype (not provided by Lune). A seeded one is its own stream, as in Roblox (the numbers
+-- differ from Roblox's, but a seed always gives the same ones); without a seed it draws from math.random.
 local RandomMeta = {}
 RandomMeta.__index = RandomMeta
+function RandomMeta:_next(): number
+	if self.state == nil then
+		return math.random()
+	end
+	self.state = (self.state * 48271) % 2147483647
+	return (self.state - 1) / 2147483646
+end
 function RandomMeta:NextNumber(a: number?, b: number?)
 	a = a or 0
 	b = b or 1
-	return a + (b - a) * math.random()
+	return a + (b - a) * self:_next()
 end
 function RandomMeta:NextInteger(a: number, b: number)
-	return math.random(a, b)
+	return math.min(b, a + math.floor(self:_next() * (b - a + 1)))
 end
 local Random = {
-	new = function(_seed: number?)
-		return setmetatable({}, RandomMeta)
+	new = function(seed: number?)
+		return setmetatable({ state = if seed then (math.floor(seed) % 2147483646) + 1 else nil }, RandomMeta)
 	end,
 }
 
