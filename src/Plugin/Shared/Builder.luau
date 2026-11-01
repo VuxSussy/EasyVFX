@@ -292,11 +292,22 @@ local function getOrCreate(existing: Existing, wanted: { [string]: boolean }, ke
 	return inst
 end
 
-local function attachment(ctx: any, key: string, position: Vector3, tilt: Vector3?, randomTilt: number?): Attachment
+local function attachment(
+	ctx: any,
+	key: string,
+	position: Vector3,
+	tilt: Vector3?,
+	randomTilt: number?,
+	frame: { right: Vector3, up: Vector3 }?
+): Attachment
 	local a = getOrCreate(ctx.existing, ctx.wanted, key, "Attachment", ctx.root) :: Attachment
 	a.Name = "VFX_Point"
 	local cf = CFrame.new(position)
-	if tilt then
+	if frame then
+		-- an exact frame: its right axis is where a curved beam bends toward, its up the width of a
+		-- flat one
+		cf = CFrame.fromMatrix(position, frame.right.Unit, frame.up.Unit)
+	elseif tilt then
 		cf *= CFrame.Angles(math.rad(tilt.X), math.rad(tilt.Y), math.rad(tilt.Z))
 	end
 	a.CFrame = cf
@@ -575,8 +586,10 @@ LayerBuilders.beam = function(ctx, key, layer)
 	-- `curve0` and `curve1` (studs) bend the beam along each end's X axis, which `tilt0` and `tilt1`
 	-- (degrees) turn: with both curves set the beam runs in an S, a ribbon winding up a drop's
 	-- pillar whose texture scrolls along it (`packTexture`, `textureSpeed`)
-	local a0 = attachment(ctx, key .. ":a", (layer.from or Vector3.zero) * params.size, layer.tilt0)
-	local a1 = attachment(ctx, key .. ":b", (layer.to or Vector3.new(0, 0, -10)) * params.size, layer.tilt1)
+	-- `frame0` and `frame1` ({ right, up }) set each end's frame outright, in place of `tilt0`/`tilt1`:
+	-- a curved flat beam needs its right axis along the curve and its up across it
+	local a0 = attachment(ctx, key .. ":a", (layer.from or Vector3.zero) * params.size, layer.tilt0, nil, layer.frame0)
+	local a1 = attachment(ctx, key .. ":b", (layer.to or Vector3.new(0, 0, -10)) * params.size, layer.tilt1, nil, layer.frame1)
 	local beam = getOrCreate(ctx.existing, ctx.wanted, key, "Beam", ctx.root) :: Beam
 	beam.Name = layer.name or "Beam"
 	beam.Attachment0 = a0

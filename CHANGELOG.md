@@ -4,6 +4,10 @@ All notable changes to EasyVFX are listed here. Versions follow [Semantic Versio
 
 ## [Unreleased]
 
+### Curved flat beams
+- A beam layer takes `frame0` and `frame1` (`{ right, up }`) to set each attachment's frame outright, in place of `tilt0`/`tilt1`: a curved flat beam needs its right axis along the curve (where `curve0`/`curve1` reach) and its up across it. One beam draws a half circle; two a ring.
+- The evfx preview turns a curved flat beam's width with the curve, as Roblox does (measured in Studio: a half circle whose ends' ups point opposite ways kept its full width), where it averaged the two ends' ups and lost the width mid-curve.
+
 ### Particles drawn at their real size in the preview
 - Roblox draws a particle twice its `Size` across (measured in Studio: a `Size` 4 ring sprite spanned 5.1 studs, its image's ring being 64% of the sprite). The evfx preview drew it `Size` across, so every effect tuned in the preview played twice as big in a game. The preview now draws it at twice `Size`; effects tuned before this look twice as big in the preview, as they do in a game.
 
