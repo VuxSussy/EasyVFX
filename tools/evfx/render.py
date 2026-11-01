@@ -382,7 +382,19 @@ def _beam(canvas, beam, t=0.0):
             pr = cam.project(core.bezier(p0, p1, p2, p3, f))
             if pr is None:
                 return None
-            width = cam.pixels(beam["w0"] + (beam["w1"] - beam["w0"]) * f, pr[2]) / 2
+            w = beam["w0"] + (beam["w1"] - beam["w0"]) * f
+            if beam.get("faceCamera", True) is False and "u0" in beam:
+                # FaceCamera off: the width lies along the attachments' up axis (Studio, 2026-11-01),
+                # so the beam is a flat strip in the world, seen edge-on from the side
+                at = core.bezier(p0, p1, p2, p3, f)
+                up = core.norm(core.add(core.mul(beam["u0"], 1 - f), core.mul(beam["u1"], f)))
+                hi = cam.project(core.add(at, core.mul(up, w / 2)))
+                lo = cam.project(core.sub(at, core.mul(up, w / 2)))
+                if hi is None or lo is None:
+                    return None
+                out.append((pr[0], pr[1], 0, f, (hi[0] - lo[0]) / 2, (hi[1] - lo[1]) / 2))
+                continue
+            width = cam.pixels(w, pr[2]) / 2
             out.append((pr[0], pr[1], width, f))
         return out
 
@@ -419,11 +431,14 @@ def _beam_textured(canvas, beam, pts, light, t=0.0, mask=None):
         reps = math.dist(beam["p0"], beam["p3"]) / reps
     brightness = beam.get("brightness", 1) if light > 0 else 1
     for k in range(len(pts) - 1):
-        x0, y0, w0, t0 = pts[k]
-        x1, y1, w1, t1 = pts[k + 1]
+        x0, y0, w0, t0 = pts[k][:4]
+        x1, y1, w1, t1 = pts[k + 1][:4]
         dx, dy = x1 - x0, y1 - y0
         m = math.hypot(dx, dy) or 1
         nx, ny = -dy / m, dx / m
+        # a flat beam carries its own half-width vector on screen per point
+        e0 = pts[k][4:] if len(pts[k]) > 4 else (nx * w0, ny * w0)
+        e1 = pts[k + 1][4:] if len(pts[k + 1]) > 4 else (nx * w1, ny * w1)
         tm = (t0 + t1) / 2
         alpha = 1 - core.number_at(beam["transparency"], tm)
         if alpha <= 0.002:
@@ -431,7 +446,7 @@ def _beam_textured(canvas, beam, pts, light, t=0.0, mask=None):
         u0 = (t0 * reps - t * (beam.get("textureSpeed", 0) or 0)) % 1
         u1 = u0 + (t1 - t0) * reps
         c0, c1 = int(u0 * tw), min(tw, max(int(u0 * tw) + 1, int(math.ceil(min(1.0, u1) * tw))))
-        quad = [(x0 - nx * w0, y0 - ny * w0), (x1 - nx * w1, y1 - ny * w1), (x1 + nx * w1, y1 + ny * w1), (x0 + nx * w0, y0 + ny * w0)]
+        quad = [(x0 - e0[0], y0 - e0[1]), (x1 - e1[0], y1 - e1[1]), (x1 + e1[0], y1 + e1[1]), (x0 + e0[0], y0 + e0[1])]
         warped = _warp(mask[:, c0:c1], quad, canvas.w, canvas.h)
         if warped is None:
             continue
@@ -632,7 +647,7 @@ def _trails(canvas, timeline, t):
             if m < 0.5:
                 continue
             nx, ny = -dy / m, dx / m
-            quad = [(x0 - nx * w0, y0 - ny * w0), (x1 - nx * w1, y1 - ny * w1), (x1 + nx * w1, y1 + ny * w1), (x0 + nx * w0, y0 + ny * w0)]
+            quad = [(x0 - e0[0], y0 - e0[1]), (x1 - e1[0], y1 - e1[1]), (x1 + e1[0], y1 + e1[1]), (x0 + e0[0], y0 + e0[1])]
             g = (g0 + g1) / 2
             alpha = 1 - core.number_at(info["transparency"], g)
             if alpha <= 0.002:

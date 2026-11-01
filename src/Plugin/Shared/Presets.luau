@@ -4,7 +4,8 @@
 
 	Layer types
 	  particles  ParticleEmitter. `burst = n` makes it a one-shot (EmitCount), otherwise
-	             it streams with `rate`. `at` = "part" (whole effect volume),
+	             it streams with `rate`. In a loop, `every = s` fires the burst again every s
+	             seconds inside each cycle. `at` = "part" (whole effect volume),
 	             "center", or a Vector3 offset in studs.
 	  shape      Crisp procedural piece played by the runtime (Ring, Slash, Lines, Bolt,
 	             Orb, Debris, Crater, Jet). `attrs` are written as attributes.

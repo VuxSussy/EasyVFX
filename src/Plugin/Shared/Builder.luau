@@ -447,6 +447,9 @@ LayerBuilders.particles = function(ctx, key, layer)
 		e:SetAttribute("EmitCount", math.max(1, math.floor(layer.burst * params.amount + 0.5)))
 		e:SetAttribute("EmitDelay", if layer.delay then layer.delay * params.lifetime else nil)
 		e:SetAttribute("EmitDuration", nil)
+		-- `every` (seconds): a loop's burst fires again every this long inside each cycle
+		-- (VFX_Interval), so one effect can hold a fast pulse and a slower, uneven rhythm
+		e:SetAttribute("VFX_Every", if type(layer.every) == "number" and layer.every > 0 then layer.every else nil)
 	else
 		e.Rate = math.min(Builder.MAX_RATE, (layer.rate or 10) * params.amount)
 		setStreaming(e, ctx, function()
@@ -585,7 +588,9 @@ LayerBuilders.beam = function(ctx, key, layer)
 	beam.LightEmission = math.clamp((layer.lightEmission or 1) * params.glow, 0, 1)
 	beam.LightInfluence = 0
 	beam.Brightness = (layer.brightness or 1) * params.glow
-	beam.FaceCamera = true
+	-- `faceCamera = false` lays the beam flat in the world: its width runs along its attachments'
+	-- up axis (set with `tilt0`/`tilt1`), a band round a doorway's depth
+	beam.FaceCamera = layer.faceCamera ~= false
 	local curved = (layer.curve0 or 0) ~= 0 or (layer.curve1 or 0) ~= 0
 	beam.CurveSize0 = (layer.curve0 or 0) * params.size
 	beam.CurveSize1 = (layer.curve1 or 0) * params.size

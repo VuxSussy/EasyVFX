@@ -2335,16 +2335,28 @@ function EasyVFX.PlayLocal(target: Instance | string, at: CFrame?): number
 			local count = d:GetAttribute("EmitCount")
 			if type(count) == "number" and count > 0 then
 				local n = math.max(1, math.floor(count * ctx.quality + 0.5))
-				if delay > 0 then
-					addAnim(delay, 0.016, function()
-						if alive(d) then
-							emitNow(d, n)
-						end
-					end, function() end)
-				else
-					emitNow(d, n)
+				-- VFX_Every: the burst fires again every this long until the loop's next cycle
+				local times = { delay }
+				local every, cycle = num(d, "VFX_Every", 0), num(root, "VFX_Interval", 0)
+				if every > 0 and cycle > 0 then
+					local at = delay + every
+					while at < cycle - 1e-3 do
+						table.insert(times, at)
+						at += every
+					end
 				end
-				length = math.max(length, delay + d.Lifetime.Max)
+				for _, at in times do
+					if at > 0 then
+						addAnim(at, 0.016, function()
+							if alive(d) then
+								emitNow(d, n)
+							end
+						end, function() end)
+					else
+						emitNow(d, n)
+					end
+				end
+				length = math.max(length, times[#times] + d.Lifetime.Max)
 			end
 			if type(duration) == "number" and duration > 0 then
 				stream(d, delay, duration, ctx.quality)

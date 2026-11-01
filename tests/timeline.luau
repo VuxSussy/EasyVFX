@@ -200,8 +200,10 @@ local function beamInfo(d: Beam)
 	return {
 		p0 = v3(w0.Position),
 		a0 = v3(w0.RightVector),
+		u0 = v3(w0.UpVector),
 		p3 = v3(w1.Position),
 		a1 = v3(w1.RightVector),
+		u1 = v3(w1.UpVector),
 		c0 = d.CurveSize0,
 		c1 = d.CurveSize1,
 		w0 = d.Width0,
@@ -381,7 +383,9 @@ local function record(preset)
 	local replay = loop and EasyVFX.HasBursts(root) and type(interval) == "number" and interval > 0
 	local nextReplay = if replay then interval else math.huge
 	local emitters, frames = {}, {}
-	local limit = math.floor((if loop then LOOP_SECONDS else MAX_SECONDS) / H.FRAME + 0.5)
+	-- a loop records at least one whole cycle, so bursts late in a long cycle are in it
+	local loopSeconds = if replay then math.min(MAX_SECONDS, math.max(LOOP_SECONDS, interval + 0.2)) else LOOP_SECONDS
+	local limit = math.floor((if loop then loopSeconds else MAX_SECONDS) / H.FRAME + 0.5)
 	local quiet = 0
 	local done = false
 	H.onFrame = function(now: number)
