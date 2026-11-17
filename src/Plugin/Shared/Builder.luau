@@ -604,6 +604,10 @@ LayerBuilders.beam = function(ctx, key, layer)
 	beam.LightEmission = math.clamp((layer.lightEmission or 1) * params.glow, 0, 1)
 	beam.LightInfluence = 0
 	beam.Brightness = (layer.brightness or 1) * params.glow
+	-- `zOffset` shifts where Roblox sorts the beam among the effect's other see-through layers, as on
+	-- a particle: a panel built of several flat beams sorted piece by piece against the sprites
+	-- over it, so seen at a slant one piece drew in front of a swirl and the next behind it
+	beam.ZOffset = layer.zOffset or 0
 	-- `faceCamera = false` lays the beam flat in the world: its width runs along its attachments'
 	-- up axis (set with `tilt0`/`tilt1`), a band round a doorway's depth
 	beam.FaceCamera = layer.faceCamera ~= false
