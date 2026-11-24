@@ -168,7 +168,7 @@ def kits():
     mtime = max(os.path.getmtime(p) for p in core.kit_sources())
     with LOCK:
         if _kits["mtime"] != mtime:
-            env = {**os.environ, "EVFX_KITS": ":".join(core.kit_dirs())}
+            env = {**os.environ, "EVFX_KITS": os.pathsep.join(core.kit_dirs())}
             done = subprocess.run([core.lune(), "run", "tests/kits.luau"], cwd=core.ROOT, capture_output=True, text=True, env=env)
             if done.returncode != 0:
                 raise RuntimeError("tests/kits.luau failed: " + done.stderr[-400:])

@@ -165,7 +165,7 @@ A game keeps its own tuned effects in its own repo. Lay them out like this:
 | `picks/kit_<kit>.json` | The studio's picks. |
 
 The plugin loads every ModuleScript in `ServerStorage.EasyVFX_Kits` before the panel opens. The tools load the
-directories listed in `EVFX_KITS`, separated by `:`:
+directories listed in `EVFX_KITS`, separated by `:` (`;` on Windows):
 
 ```bash
 EVFX_KITS=../game/art/vfx/easyvfx python3 tools/evfx serve

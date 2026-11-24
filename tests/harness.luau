@@ -360,14 +360,15 @@ function Harness.require(path: string)
 end
 
 -- The kits a game keeps in its own repo (Presets.register): every `.luau` in the `kits` folder of
--- each directory in EVFX_KITS (separated by ":"), run with the plugin's globals and given
+-- each directory in EVFX_KITS (separated by ":", or ";" on Windows), run with the plugin's globals and given
 -- Presets.Library, the way the plugin loads ServerStorage.EasyVFX_Kits
 function Harness.loadKits(Presets: any)
 	local dirs = process.env.EVFX_KITS
 	if dirs == nil or dirs == "" then
 		return
 	end
-	for dir in string.gmatch(dirs, "[^:]+") do
+	local sep = if process.os == "windows" then ";" else ":"
+	for dir in string.gmatch(dirs, "[^" .. sep .. "]+") do
 		local folder = dir .. "/kits"
 		local names = fs.readDir(folder)
 		table.sort(names)
