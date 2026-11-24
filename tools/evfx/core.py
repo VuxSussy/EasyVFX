@@ -55,7 +55,7 @@ def export(presets=None, mode="hd", root=ROOT, out=None, fps=30, env=None):
     args = [lune(), "run", "tests/timeline.luau", os.path.abspath(out), mode, ",".join(presets or [])]
     env = {**os.environ, "EVFX_FPS": str(fps), **(env or {})}
     # absolute, as Lune runs from the repo root
-    env["EVFX_KITS"] = ":".join(kit_dirs())
+    env["EVFX_KITS"] = os.pathsep.join(kit_dirs())
     done = subprocess.run(args, cwd=root, capture_output=True, text=True, env=env)
     if done.returncode != 0:
         sys.exit("evfx: timeline export failed\n" + done.stdout + done.stderr)
@@ -77,10 +77,10 @@ def load(preset, mode="hd", folder=None, fresh=False, fps=30, env=None):
 
 
 def kit_dirs():
-    """The directories in EVFX_KITS (separated by ":"): a game's own effects, kept in its own repo
+    """The directories in EVFX_KITS (separated by os.pathsep: ":" on macOS and Linux, ";" on Windows): a game's own effects, kept in its own repo
     and loaded with Presets.register. Each holds kits/<kit>.luau, sheets/<preset>.json and
     picks/kit_<kit>.json."""
-    return [os.path.abspath(d) for d in os.environ.get("EVFX_KITS", "").split(":") if d]
+    return [os.path.abspath(d) for d in os.environ.get("EVFX_KITS", "").split(os.pathsep) if d]
 
 
 def kit_sources():

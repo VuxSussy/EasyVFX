@@ -671,6 +671,7 @@ def _trails(canvas, timeline, t):
             if m < 0.5:
                 continue
             nx, ny = -dy / m, dx / m
+            e0, e1 = (nx * w0, ny * w0), (nx * w1, ny * w1)
             quad = [(x0 - e0[0], y0 - e0[1]), (x1 - e1[0], y1 - e1[1]), (x1 + e1[0], y1 + e1[1]), (x0 + e0[0], y0 + e0[1])]
             g = (g0 + g1) / 2
             alpha = 1 - core.number_at(info["transparency"], g)
